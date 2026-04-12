@@ -1,0 +1,834 @@
+2026-03-17 11:20:03,313 DEBUG - Starting WinSW in console mode
+2026-03-17 11:20:03,365 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-17 11:20:03,378 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-17 11:20:04,017 DEBUG - Starting WinSW in service mode
+2026-03-17 11:20:04,215 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-17 11:20:04,251 INFO  - Started process 11024
+2026-03-17 11:20:04,264 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-17 11:20:04,316 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-17 11:27:01,304 DEBUG - Starting WinSW in console mode
+2026-03-17 11:27:01,351 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-17 11:27:01,364 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-17 11:27:01,365 INFO  - Stopping IRISAIBackendWaitress
+2026-03-17 11:27:01,365 DEBUG - ProcessKill 11024
+2026-03-17 11:27:01,369 DEBUG - Stopping process 11024...
+2026-03-17 11:27:06,623 DEBUG - Process 11024 canceled with code 1.
+2026-03-17 11:27:06,628 INFO  - Finished IRISAIBackendWaitress
+2026-03-17 11:29:50,205 DEBUG - Starting WinSW in console mode
+2026-03-17 11:29:50,253 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-17 11:29:50,268 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' has already stopped.
+2026-03-17 16:40:19,306 DEBUG - Starting WinSW in console mode
+2026-03-17 16:40:19,353 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-17 16:40:20,014 DEBUG - Starting WinSW in service mode
+2026-03-17 16:40:20,054 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' started successfully.
+2026-03-17 16:40:20,212 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-17 16:40:20,247 INFO  - Started process 4388
+2026-03-17 16:40:20,262 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-17 16:41:21,880 DEBUG - Starting WinSW in console mode
+2026-03-17 16:41:21,927 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-17 16:41:21,938 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-17 16:41:21,939 INFO  - Stopping IRISAIBackendWaitress
+2026-03-17 16:41:21,940 DEBUG - ProcessKill 4388
+2026-03-17 16:41:21,943 DEBUG - Stopping process 4388...
+2026-03-17 16:41:22,457 DEBUG - Process 4388 canceled with code 0.
+2026-03-17 16:41:22,462 INFO  - Finished IRISAIBackendWaitress
+2026-03-17 16:41:30,565 DEBUG - Starting WinSW in console mode
+2026-03-17 16:41:30,618 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-17 16:41:30,631 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-17 16:41:31,276 DEBUG - Starting WinSW in service mode
+2026-03-17 16:41:31,470 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-17 16:41:31,505 INFO  - Started process 8716
+2026-03-17 16:41:31,519 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-17 16:41:31,576 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-17 18:22:07,615 DEBUG - Starting WinSW in console mode
+2026-03-17 18:22:07,668 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-17 18:22:07,965 INFO  - Stopping IRISAIBackendWaitress
+2026-03-17 18:22:07,966 DEBUG - ProcessKill 8716
+2026-03-17 18:22:07,972 DEBUG - Stopping process 8716...
+2026-03-17 18:22:09,894 DEBUG - Process 8716 canceled with code 0.
+2026-03-17 18:22:09,899 INFO  - Finished IRISAIBackendWaitress
+2026-03-17 18:22:09,934 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-17 18:22:10,576 DEBUG - Starting WinSW in service mode
+2026-03-17 18:22:10,770 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-17 18:22:10,808 INFO  - Started process 11288
+2026-03-17 18:22:10,822 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-17 18:22:10,865 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-17 18:23:37,596 DEBUG - Starting WinSW in console mode
+2026-03-17 18:23:37,643 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-17 18:23:37,654 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-17 18:23:37,655 INFO  - Stopping IRISAIBackendWaitress
+2026-03-17 18:23:37,655 DEBUG - ProcessKill 11288
+2026-03-17 18:23:37,659 DEBUG - Stopping process 11288...
+2026-03-17 18:23:38,526 DEBUG - Process 11288 canceled with code 0.
+2026-03-17 18:23:38,530 INFO  - Finished IRISAIBackendWaitress
+2026-03-17 18:59:35,429 DEBUG - Starting WinSW in console mode
+2026-03-17 18:59:35,482 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-17 18:59:35,496 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-17 18:59:36,128 DEBUG - Starting WinSW in service mode
+2026-03-17 18:59:36,330 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-17 18:59:36,365 INFO  - Started process 3668
+2026-03-17 18:59:36,379 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-17 18:59:36,421 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-18 20:34:14,879 DEBUG - Starting WinSW in service mode
+2026-03-18 20:34:15,076 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-18 20:34:15,112 INFO  - Started process 7928
+2026-03-18 20:34:15,126 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-18 20:34:28,876 DEBUG - Starting WinSW in service mode
+2026-03-18 20:34:29,072 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-18 20:34:29,106 INFO  - Started process 3100
+2026-03-18 20:34:29,119 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-18 20:34:54,001 DEBUG - Starting WinSW in service mode
+2026-03-18 20:34:54,195 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-18 20:34:54,229 INFO  - Started process 3680
+2026-03-18 20:34:54,242 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-18 20:35:06,689 DEBUG - Starting WinSW in service mode
+2026-03-18 20:35:06,882 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-18 20:35:06,917 INFO  - Started process 15052
+2026-03-18 20:35:06,931 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-18 20:35:13,645 DEBUG - Starting WinSW in service mode
+2026-03-18 20:35:13,844 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-18 20:35:13,878 INFO  - Started process 15208
+2026-03-18 20:35:13,891 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-18 20:37:17,829 DEBUG - Starting WinSW in console mode
+2026-03-18 20:37:17,877 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-18 20:37:17,888 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-18 20:37:17,889 INFO  - Stopping IRISAIBackendWaitress
+2026-03-18 20:37:17,890 DEBUG - ProcessKill 15208
+2026-03-18 20:37:17,893 DEBUG - Stopping process 15208...
+2026-03-18 20:37:18,574 DEBUG - Process 15208 canceled with code 0.
+2026-03-18 20:37:18,582 INFO  - Finished IRISAIBackendWaitress
+2026-03-19 00:04:43,284 DEBUG - Starting WinSW in console mode
+2026-03-19 00:04:43,337 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-19 00:04:43,353 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-19 00:04:44,011 DEBUG - Starting WinSW in service mode
+2026-03-19 00:04:44,205 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-19 00:04:44,261 INFO  - Started process 6028
+2026-03-19 00:04:44,274 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-19 00:04:44,298 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-19 15:38:16,572 DEBUG - Starting WinSW in service mode
+2026-03-19 15:38:16,794 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-19 15:38:16,847 INFO  - Started process 4876
+2026-03-19 15:38:16,861 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-20 18:03:51,122 DEBUG - Starting WinSW in console mode
+2026-03-20 18:03:51,176 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-20 18:03:51,445 INFO  - Stopping IRISAIBackendWaitress
+2026-03-20 18:03:51,451 DEBUG - ProcessKill 4876
+2026-03-20 18:03:51,482 DEBUG - Stopping process 4876...
+2026-03-20 18:03:52,516 DEBUG - Process 4876 canceled with code 0.
+2026-03-20 18:03:52,521 INFO  - Finished IRISAIBackendWaitress
+2026-03-20 18:03:52,665 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-20 18:03:53,317 DEBUG - Starting WinSW in service mode
+2026-03-20 18:03:53,532 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-20 18:03:53,591 INFO  - Started process 11280
+2026-03-20 18:03:53,605 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-20 18:03:53,851 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-21 11:19:33,703 DEBUG - Starting WinSW in console mode
+2026-03-21 11:19:33,755 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-21 11:19:34,068 INFO  - Stopping IRISAIBackendWaitress
+2026-03-21 11:19:34,089 DEBUG - ProcessKill 11280
+2026-03-21 11:19:34,133 DEBUG - Stopping process 11280...
+2026-03-21 11:19:36,107 DEBUG - Process 11280 canceled with code 0.
+2026-03-21 11:19:36,116 INFO  - Finished IRISAIBackendWaitress
+2026-03-21 11:19:36,178 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-21 11:19:36,817 DEBUG - Starting WinSW in service mode
+2026-03-21 11:19:37,012 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-21 11:19:37,045 INFO  - Started process 15072
+2026-03-21 11:19:37,059 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-21 11:19:37,105 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-21 11:47:00,884 DEBUG - Starting WinSW in console mode
+2026-03-21 11:47:00,937 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-21 11:47:00,947 INFO  - Stopping IRISAIBackendWaitress
+2026-03-21 11:47:00,948 DEBUG - ProcessKill 15072
+2026-03-21 11:47:00,951 DEBUG - Stopping process 15072...
+2026-03-21 11:47:01,434 DEBUG - Process 15072 canceled with code 0.
+2026-03-21 11:47:01,438 INFO  - Finished IRISAIBackendWaitress
+2026-03-21 11:47:01,465 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-21 11:47:02,092 DEBUG - Starting WinSW in service mode
+2026-03-21 11:47:02,286 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-21 11:47:02,320 INFO  - Started process 3928
+2026-03-21 11:47:02,333 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-21 11:47:02,390 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-21 12:23:25,901 DEBUG - Starting WinSW in console mode
+2026-03-21 12:23:25,953 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-21 12:23:25,963 INFO  - Stopping IRISAIBackendWaitress
+2026-03-21 12:23:25,963 DEBUG - ProcessKill 3928
+2026-03-21 12:23:25,967 DEBUG - Stopping process 3928...
+2026-03-21 12:23:26,741 DEBUG - Process 3928 canceled with code 0.
+2026-03-21 12:23:26,745 INFO  - Finished IRISAIBackendWaitress
+2026-03-21 12:23:26,970 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-21 12:23:27,609 DEBUG - Starting WinSW in service mode
+2026-03-21 12:23:27,803 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-21 12:23:27,836 INFO  - Started process 14660
+2026-03-21 12:23:27,850 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-21 12:23:27,909 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-21 17:40:45,895 DEBUG - Starting WinSW in console mode
+2026-03-21 17:40:45,952 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-21 17:40:45,963 INFO  - Stopping IRISAIBackendWaitress
+2026-03-21 17:40:45,963 DEBUG - ProcessKill 14660
+2026-03-21 17:40:45,967 DEBUG - Stopping process 14660...
+2026-03-21 17:40:46,550 DEBUG - Process 14660 canceled with code 0.
+2026-03-21 17:40:46,555 INFO  - Finished IRISAIBackendWaitress
+2026-03-21 17:40:46,727 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-21 17:40:47,359 DEBUG - Starting WinSW in service mode
+2026-03-21 17:40:47,554 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-21 17:40:51,966 INFO  - Started process 14416
+2026-03-21 17:40:51,979 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-21 17:40:52,230 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 13:56:02,841 DEBUG - Starting WinSW in console mode
+2026-03-23 13:56:02,899 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 13:56:03,203 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 13:56:03,234 DEBUG - ProcessKill 14416
+2026-03-23 13:56:03,243 DEBUG - Stopping process 14416...
+2026-03-23 13:56:05,708 DEBUG - Process 14416 canceled with code 0.
+2026-03-23 13:56:05,715 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 13:56:05,826 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 13:56:06,482 DEBUG - Starting WinSW in service mode
+2026-03-23 13:56:06,676 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 13:56:06,717 INFO  - Started process 12344
+2026-03-23 13:56:06,730 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 13:56:06,773 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 14:06:23,621 DEBUG - Starting WinSW in console mode
+2026-03-23 14:06:23,675 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 14:06:23,685 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 14:06:23,686 DEBUG - ProcessKill 12344
+2026-03-23 14:06:23,690 DEBUG - Stopping process 12344...
+2026-03-23 14:06:23,868 DEBUG - Process 12344 canceled with code 0.
+2026-03-23 14:06:23,872 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 14:06:23,936 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 14:06:24,572 DEBUG - Starting WinSW in service mode
+2026-03-23 14:06:24,766 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 14:06:24,801 INFO  - Started process 13656
+2026-03-23 14:06:24,814 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 14:06:24,852 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 14:06:55,073 DEBUG - Starting WinSW in console mode
+2026-03-23 14:06:55,120 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 14:06:55,131 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-23 14:06:55,132 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 14:06:55,133 DEBUG - ProcessKill 13656
+2026-03-23 14:06:55,136 DEBUG - Stopping process 13656...
+2026-03-23 14:06:55,617 DEBUG - Process 13656 canceled with code 0.
+2026-03-23 14:06:55,621 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 14:07:02,476 DEBUG - Starting WinSW in console mode
+2026-03-23 14:07:02,523 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 14:07:03,170 DEBUG - Starting WinSW in service mode
+2026-03-23 14:07:03,211 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' started successfully.
+2026-03-23 14:07:03,367 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 14:07:03,401 INFO  - Started process 8060
+2026-03-23 14:07:03,414 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 14:22:52,553 DEBUG - Starting WinSW in console mode
+2026-03-23 14:22:52,599 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 14:22:52,611 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-23 14:22:52,612 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 14:22:52,613 DEBUG - ProcessKill 8060
+2026-03-23 14:22:52,616 DEBUG - Stopping process 8060...
+2026-03-23 14:22:53,299 DEBUG - Process 8060 canceled with code 0.
+2026-03-23 14:22:53,303 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 14:23:00,664 DEBUG - Starting WinSW in console mode
+2026-03-23 14:23:00,717 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 14:23:00,730 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 14:23:01,371 DEBUG - Starting WinSW in service mode
+2026-03-23 14:23:01,564 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 14:23:01,598 INFO  - Started process 5436
+2026-03-23 14:23:01,612 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 14:23:01,652 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 15:03:03,637 DEBUG - Starting WinSW in console mode
+2026-03-23 15:03:03,688 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 15:03:03,700 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 15:03:03,700 DEBUG - ProcessKill 5436
+2026-03-23 15:03:03,703 DEBUG - Stopping process 5436...
+2026-03-23 15:03:04,562 DEBUG - Process 5436 canceled with code 0.
+2026-03-23 15:03:04,566 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 15:03:04,706 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 15:03:05,343 DEBUG - Starting WinSW in service mode
+2026-03-23 15:03:05,538 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 15:03:05,574 INFO  - Started process 6516
+2026-03-23 15:03:05,588 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 15:03:05,628 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 16:23:03,406 DEBUG - Starting WinSW in console mode
+2026-03-23 16:23:03,458 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:23:03,468 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 16:23:03,469 DEBUG - ProcessKill 6516
+2026-03-23 16:23:03,473 DEBUG - Stopping process 6516...
+2026-03-23 16:23:03,882 DEBUG - Process 6516 canceled with code 0.
+2026-03-23 16:23:03,887 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 16:23:03,971 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:23:04,613 DEBUG - Starting WinSW in service mode
+2026-03-23 16:23:04,808 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 16:23:04,846 INFO  - Started process 11084
+2026-03-23 16:23:04,859 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 16:23:04,895 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 16:25:07,085 DEBUG - Starting WinSW in console mode
+2026-03-23 16:25:07,132 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:25:07,143 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-23 16:25:07,144 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 16:25:07,145 DEBUG - ProcessKill 11084
+2026-03-23 16:25:07,148 DEBUG - Stopping process 11084...
+2026-03-23 16:25:07,566 DEBUG - Process 11084 canceled with code 0.
+2026-03-23 16:25:07,570 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 16:25:12,967 DEBUG - Starting WinSW in console mode
+2026-03-23 16:25:13,014 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:25:13,651 DEBUG - Starting WinSW in service mode
+2026-03-23 16:25:13,691 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' started successfully.
+2026-03-23 16:25:13,847 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 16:25:13,881 INFO  - Started process 7028
+2026-03-23 16:25:13,894 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 16:29:50,815 DEBUG - Starting WinSW in console mode
+2026-03-23 16:29:50,867 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:29:50,878 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 16:29:50,878 DEBUG - ProcessKill 7028
+2026-03-23 16:29:50,882 DEBUG - Stopping process 7028...
+2026-03-23 16:29:52,009 DEBUG - Process 7028 canceled with code 0.
+2026-03-23 16:29:52,013 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 16:29:52,151 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:29:52,793 DEBUG - Starting WinSW in service mode
+2026-03-23 16:29:52,990 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 16:29:53,025 INFO  - Started process 13136
+2026-03-23 16:29:53,038 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 16:29:53,088 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 16:30:31,915 DEBUG - Starting WinSW in console mode
+2026-03-23 16:30:31,962 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:30:31,973 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-23 16:30:31,974 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 16:30:31,974 DEBUG - ProcessKill 13136
+2026-03-23 16:30:31,978 DEBUG - Stopping process 13136...
+2026-03-23 16:30:32,410 DEBUG - Process 13136 canceled with code 0.
+2026-03-23 16:30:32,414 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 16:30:42,523 DEBUG - Starting WinSW in console mode
+2026-03-23 16:30:42,576 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:30:42,589 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:30:43,223 DEBUG - Starting WinSW in service mode
+2026-03-23 16:30:43,420 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 16:30:43,453 INFO  - Started process 1592
+2026-03-23 16:30:43,467 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 16:30:43,531 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 16:33:11,309 DEBUG - Starting WinSW in console mode
+2026-03-23 16:33:11,361 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:33:11,371 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 16:33:11,372 DEBUG - ProcessKill 1592
+2026-03-23 16:33:11,375 DEBUG - Stopping process 1592...
+2026-03-23 16:33:12,108 DEBUG - Process 1592 canceled with code 0.
+2026-03-23 16:33:12,112 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 16:33:12,141 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:33:12,794 DEBUG - Starting WinSW in service mode
+2026-03-23 16:33:13,009 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 16:33:13,044 INFO  - Started process 12636
+2026-03-23 16:33:13,057 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 16:33:13,108 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 16:37:21,391 DEBUG - Starting WinSW in console mode
+2026-03-23 16:37:21,444 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:37:21,454 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 16:37:21,454 DEBUG - ProcessKill 12636
+2026-03-23 16:37:21,458 DEBUG - Stopping process 12636...
+2026-03-23 16:37:22,048 DEBUG - Process 12636 canceled with code 0.
+2026-03-23 16:37:22,054 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 16:37:22,210 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:37:22,839 DEBUG - Starting WinSW in service mode
+2026-03-23 16:37:23,032 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 16:37:23,065 INFO  - Started process 12584
+2026-03-23 16:37:23,079 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 16:37:23,129 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 16:54:14,804 DEBUG - Starting WinSW in console mode
+2026-03-23 16:54:14,856 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:54:14,867 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 16:54:14,867 DEBUG - ProcessKill 12584
+2026-03-23 16:54:14,871 DEBUG - Stopping process 12584...
+2026-03-23 16:54:16,036 DEBUG - Process 12584 canceled with code 0.
+2026-03-23 16:54:16,040 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 16:54:16,166 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:54:16,801 DEBUG - Starting WinSW in service mode
+2026-03-23 16:54:16,995 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 16:54:17,028 INFO  - Started process 5968
+2026-03-23 16:54:17,042 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 16:54:17,082 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 16:59:00,796 DEBUG - Starting WinSW in console mode
+2026-03-23 16:59:00,843 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:59:00,856 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-23 16:59:00,857 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 16:59:00,858 DEBUG - ProcessKill 5968
+2026-03-23 16:59:00,861 DEBUG - Stopping process 5968...
+2026-03-23 16:59:01,142 DEBUG - Process 5968 canceled with code 0.
+2026-03-23 16:59:01,146 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 16:59:21,523 DEBUG - Starting WinSW in console mode
+2026-03-23 16:59:21,574 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:59:21,587 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 16:59:22,226 DEBUG - Starting WinSW in service mode
+2026-03-23 16:59:22,421 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 16:59:22,456 INFO  - Started process 14032
+2026-03-23 16:59:22,470 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 16:59:22,526 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 17:04:11,632 DEBUG - Starting WinSW in console mode
+2026-03-23 17:04:11,684 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 17:04:11,695 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 17:04:11,695 DEBUG - ProcessKill 14032
+2026-03-23 17:04:11,699 DEBUG - Stopping process 14032...
+2026-03-23 17:04:12,248 DEBUG - Process 14032 canceled with code 0.
+2026-03-23 17:04:12,253 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 17:04:12,438 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 17:04:13,071 DEBUG - Starting WinSW in service mode
+2026-03-23 17:04:13,266 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 17:04:13,300 INFO  - Started process 1724
+2026-03-23 17:04:13,313 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 17:04:13,362 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 17:09:22,558 DEBUG - Starting WinSW in console mode
+2026-03-23 17:09:22,614 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 17:09:22,624 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 17:09:22,625 DEBUG - ProcessKill 1724
+2026-03-23 17:09:22,628 DEBUG - Stopping process 1724...
+2026-03-23 17:09:23,759 DEBUG - Process 1724 canceled with code 0.
+2026-03-23 17:09:23,764 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 17:09:23,899 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 17:09:24,545 DEBUG - Starting WinSW in service mode
+2026-03-23 17:09:24,740 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 17:09:24,774 INFO  - Started process 7032
+2026-03-23 17:09:24,788 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 17:09:24,844 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 17:11:10,560 DEBUG - Starting WinSW in console mode
+2026-03-23 17:11:10,613 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 17:11:10,624 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 17:11:10,624 DEBUG - ProcessKill 7032
+2026-03-23 17:11:10,628 DEBUG - Stopping process 7032...
+2026-03-23 17:11:10,873 DEBUG - Process 7032 canceled with code 0.
+2026-03-23 17:11:10,877 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 17:11:11,124 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 17:11:11,767 DEBUG - Starting WinSW in service mode
+2026-03-23 17:11:11,976 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 17:11:12,011 INFO  - Started process 8456
+2026-03-23 17:11:12,025 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 17:11:12,058 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 17:40:58,428 DEBUG - Starting WinSW in console mode
+2026-03-23 17:40:58,481 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 17:40:58,492 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 17:40:58,492 DEBUG - ProcessKill 8456
+2026-03-23 17:40:58,496 DEBUG - Stopping process 8456...
+2026-03-23 17:40:59,123 DEBUG - Process 8456 canceled with code 0.
+2026-03-23 17:40:59,127 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 17:40:59,270 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 17:40:59,908 DEBUG - Starting WinSW in service mode
+2026-03-23 17:41:00,105 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 17:41:00,140 INFO  - Started process 3980
+2026-03-23 17:41:00,154 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 17:41:00,204 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 18:21:53,676 DEBUG - Starting WinSW in console mode
+2026-03-23 18:21:53,728 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 18:21:53,738 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 18:21:53,739 DEBUG - ProcessKill 3980
+2026-03-23 18:21:53,743 DEBUG - Stopping process 3980...
+2026-03-23 18:21:54,818 DEBUG - Process 3980 canceled with code 0.
+2026-03-23 18:21:54,823 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 18:21:55,048 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 18:21:55,699 DEBUG - Starting WinSW in service mode
+2026-03-23 18:21:55,893 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 18:21:55,928 INFO  - Started process 10956
+2026-03-23 18:21:55,941 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 18:21:55,978 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 19:05:30,005 DEBUG - Starting WinSW in console mode
+2026-03-23 19:05:30,057 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 19:05:30,068 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 19:05:30,068 DEBUG - ProcessKill 10956
+2026-03-23 19:05:30,072 DEBUG - Stopping process 10956...
+2026-03-23 19:05:30,407 DEBUG - Process 10956 canceled with code 0.
+2026-03-23 19:05:30,411 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 19:05:30,564 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 19:05:31,211 DEBUG - Starting WinSW in service mode
+2026-03-23 19:05:31,405 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 19:05:31,440 INFO  - Started process 11876
+2026-03-23 19:05:31,453 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 19:05:31,498 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 19:08:36,618 DEBUG - Starting WinSW in console mode
+2026-03-23 19:08:36,665 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 19:08:36,676 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-23 19:08:36,677 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 19:08:36,678 DEBUG - ProcessKill 11876
+2026-03-23 19:08:36,681 DEBUG - Stopping process 11876...
+2026-03-23 19:08:36,942 DEBUG - Process 11876 canceled with code 0.
+2026-03-23 19:08:36,946 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 19:08:40,612 DEBUG - Starting WinSW in console mode
+2026-03-23 19:08:40,664 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 19:08:40,677 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 19:08:41,310 DEBUG - Starting WinSW in service mode
+2026-03-23 19:08:41,513 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 19:08:41,546 INFO  - Started process 13384
+2026-03-23 19:08:41,560 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 19:08:41,606 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 19:13:52,968 DEBUG - Starting WinSW in console mode
+2026-03-23 19:13:53,015 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 19:13:53,026 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-23 19:13:53,028 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 19:13:53,028 DEBUG - ProcessKill 13384
+2026-03-23 19:13:53,032 DEBUG - Stopping process 13384...
+2026-03-23 19:13:53,822 DEBUG - Process 13384 canceled with code 0.
+2026-03-23 19:13:53,827 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 19:13:57,593 DEBUG - Starting WinSW in console mode
+2026-03-23 19:13:57,644 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 19:13:57,657 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 19:13:58,288 DEBUG - Starting WinSW in service mode
+2026-03-23 19:13:58,482 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 19:13:58,516 INFO  - Started process 10748
+2026-03-23 19:13:58,529 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 19:13:58,569 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 19:18:47,216 DEBUG - Starting WinSW in console mode
+2026-03-23 19:18:47,263 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 19:18:47,275 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-23 19:18:47,276 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 19:18:47,277 DEBUG - ProcessKill 10748
+2026-03-23 19:18:47,280 DEBUG - Stopping process 10748...
+2026-03-23 19:18:47,614 DEBUG - Process 10748 canceled with code 0.
+2026-03-23 19:18:47,618 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 19:18:51,631 DEBUG - Starting WinSW in console mode
+2026-03-23 19:18:51,684 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 19:18:51,697 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 19:18:52,331 DEBUG - Starting WinSW in service mode
+2026-03-23 19:18:52,524 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 19:18:52,557 INFO  - Started process 6516
+2026-03-23 19:18:52,571 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 19:18:52,635 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 20:24:19,034 DEBUG - Starting WinSW in console mode
+2026-03-23 20:24:19,081 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 20:24:19,093 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-23 20:24:19,095 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 20:24:19,095 DEBUG - ProcessKill 6516
+2026-03-23 20:24:19,099 DEBUG - Stopping process 6516...
+2026-03-23 20:24:19,666 DEBUG - Process 6516 canceled with code 0.
+2026-03-23 20:24:19,670 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 20:24:23,543 DEBUG - Starting WinSW in console mode
+2026-03-23 20:24:23,595 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 20:24:23,608 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 20:24:24,244 DEBUG - Starting WinSW in service mode
+2026-03-23 20:24:24,439 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 20:24:24,475 INFO  - Started process 15236
+2026-03-23 20:24:24,490 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 20:24:24,539 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 20:29:48,917 DEBUG - Starting WinSW in console mode
+2026-03-23 20:29:48,969 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 20:29:48,979 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 20:29:48,980 DEBUG - ProcessKill 15236
+2026-03-23 20:29:48,983 DEBUG - Stopping process 15236...
+2026-03-23 20:29:49,542 DEBUG - Process 15236 canceled with code 0.
+2026-03-23 20:29:49,547 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 20:29:49,756 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 20:29:50,390 DEBUG - Starting WinSW in service mode
+2026-03-23 20:29:50,587 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 20:29:50,623 INFO  - Started process 10948
+2026-03-23 20:29:50,637 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 20:29:50,690 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 20:34:45,613 DEBUG - Starting WinSW in console mode
+2026-03-23 20:34:45,661 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 20:34:45,672 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-23 20:34:45,674 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 20:34:45,674 DEBUG - ProcessKill 10948
+2026-03-23 20:34:45,678 DEBUG - Stopping process 10948...
+2026-03-23 20:34:46,631 DEBUG - Process 10948 canceled with code 0.
+2026-03-23 20:34:46,635 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 20:34:50,167 DEBUG - Starting WinSW in console mode
+2026-03-23 20:34:50,218 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 20:34:50,232 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 20:34:50,875 DEBUG - Starting WinSW in service mode
+2026-03-23 20:34:51,068 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 20:34:51,101 INFO  - Started process 5736
+2026-03-23 20:34:51,115 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 20:34:51,176 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 20:52:45,049 DEBUG - Starting WinSW in console mode
+2026-03-23 20:52:45,096 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 20:52:45,107 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-23 20:52:45,109 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 20:52:45,109 DEBUG - ProcessKill 5736
+2026-03-23 20:52:45,113 DEBUG - Stopping process 5736...
+2026-03-23 20:52:46,212 DEBUG - Process 5736 canceled with code 0.
+2026-03-23 20:52:46,216 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 20:52:50,478 DEBUG - Starting WinSW in console mode
+2026-03-23 20:52:50,531 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 20:52:50,544 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 20:52:51,172 DEBUG - Starting WinSW in service mode
+2026-03-23 20:52:51,368 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 20:52:51,403 INFO  - Started process 872
+2026-03-23 20:52:51,416 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 20:52:51,468 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-23 20:53:37,382 DEBUG - Starting WinSW in console mode
+2026-03-23 20:53:37,435 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 20:53:37,444 INFO  - Stopping IRISAIBackendWaitress
+2026-03-23 20:53:37,445 DEBUG - ProcessKill 872
+2026-03-23 20:53:37,448 DEBUG - Stopping process 872...
+2026-03-23 20:53:38,530 DEBUG - Process 872 canceled with code 0.
+2026-03-23 20:53:38,534 INFO  - Finished IRISAIBackendWaitress
+2026-03-23 20:53:38,704 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-23 20:53:39,338 DEBUG - Starting WinSW in service mode
+2026-03-23 20:53:39,533 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-23 20:53:39,567 INFO  - Started process 9900
+2026-03-23 20:53:39,580 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-23 20:53:39,622 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-24 10:11:44,800 DEBUG - Starting WinSW in console mode
+2026-03-24 10:11:44,849 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 10:11:44,859 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-24 10:11:44,861 INFO  - Stopping IRISAIBackendWaitress
+2026-03-24 10:11:44,862 DEBUG - ProcessKill 9900
+2026-03-24 10:11:44,865 DEBUG - Stopping process 9900...
+2026-03-24 10:11:45,471 DEBUG - Process 9900 canceled with code 0.
+2026-03-24 10:11:45,476 INFO  - Finished IRISAIBackendWaitress
+2026-03-24 10:11:49,554 DEBUG - Starting WinSW in console mode
+2026-03-24 10:11:49,607 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 10:11:49,619 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 10:11:50,254 DEBUG - Starting WinSW in service mode
+2026-03-24 10:11:50,450 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-24 10:11:50,487 INFO  - Started process 1264
+2026-03-24 10:11:50,501 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-24 10:11:50,545 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-24 11:54:33,930 DEBUG - Starting WinSW in console mode
+2026-03-24 11:54:33,977 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 11:54:33,989 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-24 11:54:33,990 INFO  - Stopping IRISAIBackendWaitress
+2026-03-24 11:54:33,991 DEBUG - ProcessKill 1264
+2026-03-24 11:54:33,995 DEBUG - Stopping process 1264...
+2026-03-24 11:54:35,134 DEBUG - Process 1264 canceled with code 0.
+2026-03-24 11:54:35,139 INFO  - Finished IRISAIBackendWaitress
+2026-03-24 11:54:38,958 DEBUG - Starting WinSW in console mode
+2026-03-24 11:54:39,010 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 11:54:39,022 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 11:54:39,736 DEBUG - Starting WinSW in service mode
+2026-03-24 11:54:39,931 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-24 11:54:39,970 INFO  - Started process 1104
+2026-03-24 11:54:39,983 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-24 11:54:40,039 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-24 15:46:42,574 DEBUG - Starting WinSW in console mode
+2026-03-24 15:46:42,624 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 15:46:42,634 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-24 15:46:42,637 INFO  - Stopping IRISAIBackendWaitress
+2026-03-24 15:46:42,637 DEBUG - ProcessKill 1104
+2026-03-24 15:46:42,641 DEBUG - Stopping process 1104...
+2026-03-24 15:46:43,522 DEBUG - Process 1104 canceled with code 0.
+2026-03-24 15:46:43,527 INFO  - Finished IRISAIBackendWaitress
+2026-03-24 15:46:46,837 DEBUG - Starting WinSW in console mode
+2026-03-24 15:46:46,888 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 15:46:46,901 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 15:46:47,538 DEBUG - Starting WinSW in service mode
+2026-03-24 15:46:47,736 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-24 15:46:47,774 INFO  - Started process 11376
+2026-03-24 15:46:47,788 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-24 15:46:47,832 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-24 16:10:38,517 DEBUG - Starting WinSW in console mode
+2026-03-24 16:10:38,564 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 16:10:38,576 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-24 16:10:38,578 INFO  - Stopping IRISAIBackendWaitress
+2026-03-24 16:10:38,578 DEBUG - ProcessKill 11376
+2026-03-24 16:10:38,582 DEBUG - Stopping process 11376...
+2026-03-24 16:10:39,049 DEBUG - Process 11376 canceled with code 0.
+2026-03-24 16:10:39,053 INFO  - Finished IRISAIBackendWaitress
+2026-03-24 16:10:42,584 DEBUG - Starting WinSW in console mode
+2026-03-24 16:10:42,637 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 16:10:42,650 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 16:10:43,284 DEBUG - Starting WinSW in service mode
+2026-03-24 16:10:43,478 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-24 16:10:43,512 INFO  - Started process 13232
+2026-03-24 16:10:43,526 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-24 16:10:43,576 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-24 19:53:57,152 DEBUG - Starting WinSW in console mode
+2026-03-24 19:53:57,200 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 19:53:57,212 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-24 19:53:57,232 DEBUG - ProcessKill 13232
+2026-03-24 19:53:57,238 DEBUG - Stopping process 13232...
+2026-03-24 19:53:58,011 DEBUG - Process 13232 canceled with code 0.
+2026-03-24 19:53:58,016 INFO  - Finished IRISAIBackendWaitress
+2026-03-24 19:54:03,062 DEBUG - Starting WinSW in console mode
+2026-03-24 19:54:03,114 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 19:54:03,127 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 19:54:03,755 DEBUG - Starting WinSW in service mode
+2026-03-24 19:54:03,948 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-24 19:54:03,982 INFO  - Started process 9444
+2026-03-24 19:54:03,995 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-24 19:54:04,043 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-24 19:55:02,183 DEBUG - Starting WinSW in console mode
+2026-03-24 19:55:02,231 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 19:55:02,242 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-24 19:55:02,243 INFO  - Stopping IRISAIBackendWaitress
+2026-03-24 19:55:02,243 DEBUG - ProcessKill 9444
+2026-03-24 19:55:02,247 DEBUG - Stopping process 9444...
+2026-03-24 19:55:03,179 DEBUG - Process 9444 canceled with code 0.
+2026-03-24 19:55:03,183 INFO  - Finished IRISAIBackendWaitress
+2026-03-24 19:55:08,226 DEBUG - Starting WinSW in console mode
+2026-03-24 19:55:08,278 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 19:55:08,291 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 19:55:08,933 DEBUG - Starting WinSW in service mode
+2026-03-24 19:55:09,127 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-24 19:55:09,160 INFO  - Started process 13816
+2026-03-24 19:55:09,173 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-24 19:55:09,228 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-24 20:14:09,517 DEBUG - Starting WinSW in console mode
+2026-03-24 20:14:09,564 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 20:14:09,576 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-24 20:14:09,577 INFO  - Stopping IRISAIBackendWaitress
+2026-03-24 20:14:09,577 DEBUG - ProcessKill 13816
+2026-03-24 20:14:09,581 DEBUG - Stopping process 13816...
+2026-03-24 20:14:10,373 DEBUG - Process 13816 canceled with code 0.
+2026-03-24 20:14:10,377 INFO  - Finished IRISAIBackendWaitress
+2026-03-24 20:14:16,048 DEBUG - Starting WinSW in console mode
+2026-03-24 20:14:16,100 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 20:14:16,113 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 20:14:16,742 DEBUG - Starting WinSW in service mode
+2026-03-24 20:14:16,938 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-24 20:14:16,973 INFO  - Started process 1304
+2026-03-24 20:14:16,986 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-24 20:14:17,032 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-24 20:16:46,438 DEBUG - Starting WinSW in console mode
+2026-03-24 20:16:46,489 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 20:16:46,499 INFO  - Stopping IRISAIBackendWaitress
+2026-03-24 20:16:46,500 DEBUG - ProcessKill 1304
+2026-03-24 20:16:46,503 DEBUG - Stopping process 1304...
+2026-03-24 20:16:47,498 DEBUG - Process 1304 canceled with code 0.
+2026-03-24 20:16:47,502 INFO  - Finished IRISAIBackendWaitress
+2026-03-24 20:16:47,507 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 20:16:48,136 DEBUG - Starting WinSW in service mode
+2026-03-24 20:16:48,330 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-24 20:16:48,364 INFO  - Started process 9564
+2026-03-24 20:16:48,378 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-24 20:16:48,425 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-24 20:31:18,314 DEBUG - Starting WinSW in console mode
+2026-03-24 20:31:18,361 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 20:31:18,372 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-24 20:31:18,374 INFO  - Stopping IRISAIBackendWaitress
+2026-03-24 20:31:18,374 DEBUG - ProcessKill 9564
+2026-03-24 20:31:18,378 DEBUG - Stopping process 9564...
+2026-03-24 20:31:19,342 DEBUG - Process 9564 canceled with code 0.
+2026-03-24 20:31:19,347 INFO  - Finished IRISAIBackendWaitress
+2026-03-24 20:31:23,404 DEBUG - Starting WinSW in console mode
+2026-03-24 20:31:23,456 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 20:31:23,469 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-24 20:31:24,101 DEBUG - Starting WinSW in service mode
+2026-03-24 20:31:24,294 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-24 20:31:24,328 INFO  - Started process 13136
+2026-03-24 20:31:24,341 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-24 20:31:24,394 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-25 08:52:55,977 DEBUG - Starting WinSW in console mode
+2026-03-25 08:52:56,026 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-25 08:52:56,036 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-25 08:52:56,038 INFO  - Stopping IRISAIBackendWaitress
+2026-03-25 08:52:56,038 DEBUG - ProcessKill 13136
+2026-03-25 08:52:56,042 DEBUG - Stopping process 13136...
+2026-03-25 08:52:56,865 DEBUG - Process 13136 canceled with code 0.
+2026-03-25 08:52:56,870 INFO  - Finished IRISAIBackendWaitress
+2026-03-25 08:53:01,165 DEBUG - Starting WinSW in console mode
+2026-03-25 08:53:01,217 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-25 08:53:01,230 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-25 08:53:01,864 DEBUG - Starting WinSW in service mode
+2026-03-25 08:53:02,058 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-25 08:53:02,092 INFO  - Started process 4216
+2026-03-25 08:53:02,105 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-25 08:53:02,153 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-25 12:36:32,958 DEBUG - Starting WinSW in console mode
+2026-03-25 12:36:33,005 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-25 12:36:33,382 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-25 12:36:33,410 INFO  - Stopping IRISAIBackendWaitress
+2026-03-25 12:36:33,411 DEBUG - ProcessKill 4216
+2026-03-25 12:36:33,426 DEBUG - Stopping process 4216...
+2026-03-25 12:36:35,316 DEBUG - Process 4216 canceled with code 0.
+2026-03-25 12:36:35,322 INFO  - Finished IRISAIBackendWaitress
+2026-03-25 12:36:37,272 DEBUG - Starting WinSW in console mode
+2026-03-25 12:36:37,324 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-25 12:36:37,337 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-25 12:36:37,986 DEBUG - Starting WinSW in service mode
+2026-03-25 12:36:38,179 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-25 12:36:38,215 INFO  - Started process 9008
+2026-03-25 12:36:38,228 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-25 12:36:38,281 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-26 12:11:00,302 DEBUG - Starting WinSW in console mode
+2026-03-26 12:11:00,350 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 12:11:00,444 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-26 12:11:00,597 INFO  - Stopping IRISAIBackendWaitress
+2026-03-26 12:11:00,627 DEBUG - ProcessKill 9008
+2026-03-26 12:11:00,678 DEBUG - Stopping process 9008...
+2026-03-26 12:11:03,301 DEBUG - Process 9008 canceled with code 0.
+2026-03-26 12:11:03,321 INFO  - Finished IRISAIBackendWaitress
+2026-03-26 12:11:05,086 DEBUG - Starting WinSW in console mode
+2026-03-26 12:11:05,140 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 12:11:05,153 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 12:11:05,799 DEBUG - Starting WinSW in service mode
+2026-03-26 12:11:05,996 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-26 12:11:06,030 INFO  - Started process 6804
+2026-03-26 12:11:06,044 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-26 12:11:06,107 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-26 12:34:56,429 DEBUG - Starting WinSW in console mode
+2026-03-26 12:34:56,478 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 12:34:56,490 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-26 12:34:56,492 INFO  - Stopping IRISAIBackendWaitress
+2026-03-26 12:34:56,492 DEBUG - ProcessKill 6804
+2026-03-26 12:34:56,496 DEBUG - Stopping process 6804...
+2026-03-26 12:34:57,614 DEBUG - Process 6804 canceled with code 0.
+2026-03-26 12:34:57,619 INFO  - Finished IRISAIBackendWaitress
+2026-03-26 12:35:00,433 DEBUG - Starting WinSW in console mode
+2026-03-26 12:35:00,485 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 12:35:00,498 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 12:35:01,142 DEBUG - Starting WinSW in service mode
+2026-03-26 12:35:01,335 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-26 12:35:01,369 INFO  - Started process 7088
+2026-03-26 12:35:01,383 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-26 12:35:01,439 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-26 12:59:49,088 DEBUG - Starting WinSW in console mode
+2026-03-26 12:59:49,136 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 12:59:49,148 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-26 12:59:49,150 INFO  - Stopping IRISAIBackendWaitress
+2026-03-26 12:59:49,150 DEBUG - ProcessKill 7088
+2026-03-26 12:59:49,154 DEBUG - Stopping process 7088...
+2026-03-26 12:59:49,413 DEBUG - Process 7088 canceled with code 0.
+2026-03-26 12:59:49,418 INFO  - Finished IRISAIBackendWaitress
+2026-03-26 12:59:52,926 DEBUG - Starting WinSW in console mode
+2026-03-26 12:59:52,978 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 12:59:52,991 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 12:59:53,630 DEBUG - Starting WinSW in service mode
+2026-03-26 12:59:53,826 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-26 12:59:53,860 INFO  - Started process 5868
+2026-03-26 12:59:53,874 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-26 12:59:53,935 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-26 13:02:23,404 DEBUG - Starting WinSW in console mode
+2026-03-26 13:02:23,451 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 13:02:23,463 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-26 13:02:23,464 INFO  - Stopping IRISAIBackendWaitress
+2026-03-26 13:02:23,464 DEBUG - ProcessKill 5868
+2026-03-26 13:02:23,468 DEBUG - Stopping process 5868...
+2026-03-26 13:02:24,034 DEBUG - Process 5868 canceled with code 0.
+2026-03-26 13:02:24,040 INFO  - Finished IRISAIBackendWaitress
+2026-03-26 13:02:26,940 DEBUG - Starting WinSW in console mode
+2026-03-26 13:02:26,993 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 13:02:27,007 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 13:02:27,658 DEBUG - Starting WinSW in service mode
+2026-03-26 13:02:27,857 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-26 13:02:27,892 INFO  - Started process 12124
+2026-03-26 13:02:27,907 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-26 13:02:27,955 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-26 13:03:24,617 DEBUG - Starting WinSW in console mode
+2026-03-26 13:03:24,664 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 13:03:24,675 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-26 13:03:24,676 INFO  - Stopping IRISAIBackendWaitress
+2026-03-26 13:03:24,677 DEBUG - ProcessKill 12124
+2026-03-26 13:03:24,680 DEBUG - Stopping process 12124...
+2026-03-26 13:03:24,901 DEBUG - Process 12124 canceled with code 0.
+2026-03-26 13:03:24,905 INFO  - Finished IRISAIBackendWaitress
+2026-03-26 13:03:29,086 DEBUG - Starting WinSW in console mode
+2026-03-26 13:03:29,139 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 13:03:29,151 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 13:03:29,800 DEBUG - Starting WinSW in service mode
+2026-03-26 13:03:29,995 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-26 13:03:30,030 INFO  - Started process 10140
+2026-03-26 13:03:30,043 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-26 13:03:30,095 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-03-26 13:25:43,629 DEBUG - Starting WinSW in console mode
+2026-03-26 13:25:43,679 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 13:25:43,691 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-03-26 13:25:43,693 INFO  - Stopping IRISAIBackendWaitress
+2026-03-26 13:25:43,693 DEBUG - ProcessKill 10140
+2026-03-26 13:25:43,697 DEBUG - Stopping process 10140...
+2026-03-26 13:25:43,968 DEBUG - Process 10140 canceled with code 0.
+2026-03-26 13:25:43,973 INFO  - Finished IRISAIBackendWaitress
+2026-03-26 13:25:47,740 DEBUG - Starting WinSW in console mode
+2026-03-26 13:25:47,793 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 13:25:47,806 INFO  - Starting service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-03-26 13:25:48,442 DEBUG - Starting WinSW in service mode
+2026-03-26 13:25:48,636 INFO  - Starting venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8001 ai_backend.wsgi:application
+2026-03-26 13:25:48,671 INFO  - Started process 15124
+2026-03-26 13:25:48,684 DEBUG - Forwarding logs of the process System.Diagnostics.Process (python) to WinSW.RollingLogAppender
+2026-03-26 13:25:48,736 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' restarted successfully.
+2026-04-12 11:41:23,253 DEBUG - Starting WinSW in console mode
+2026-04-12 11:41:23,302 INFO  - Stopping service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)'...
+2026-04-12 11:41:23,324 INFO  - Service 'IRIS AI Backend (Vella) (IRISAIBackendWaitress)' stopped successfully.
+2026-04-12 11:41:23,491 INFO  - Stopping IRISAIBackendWaitress
+2026-04-12 11:41:23,528 DEBUG - ProcessKill 15124
+2026-04-12 11:41:23,543 DEBUG - Stopping process 15124...
+2026-04-12 11:41:26,559 DEBUG - Process 15124 canceled with code 0.
+2026-04-12 11:41:26,588 INFO  - Finished IRISAIBackendWaitress

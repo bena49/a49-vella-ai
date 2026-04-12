@@ -1,0 +1,206 @@
+DEBUG: POST /api/ai/
+DEBUG: [Session:krkj2jd7] 🧠 Routing to OpenAI...
+DEBUG: [Session:krkj2jd7] ROUTING GPT FIELDS: {'intent': 'unknown', 'view_type_raw': '1 ไร่ = ?', 'levels_raw': None, 'stage_raw': None, 'template_raw': None, 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': 'non-standard view'}
+DEBUG: Parsing Levels Input -> '1 ไร่ = ?'
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: [Session:krkj2jd7] 🧠 Routing to OpenAI...
+DEBUG: [Session:krkj2jd7] ROUTING GPT FIELDS: {'intent': 'unknown', 'view_type_raw': '5 rai to sqFT', 'levels_raw': None, 'stage_raw': None, 'template_raw': None, 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': 'non-standard view'}
+DEBUG: Parsing Levels Input -> 'convert 5 rai-sqft'
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🧠 Routing to OpenAI...
+DEBUG: [Session:6gnfah1y] ROUTING GPT FIELDS: {'intent': 'create_view', 'view_type_raw': 'floor plan', 'levels_raw': 'LEVEL 01, LEVEL P2', 'stage_raw': 'CD', 'template_raw': 'A49_CD_A1_FLOOR PLAN', 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: [Session:6gnfah1y] Fresh command detected. Clearing pending slots.
+DEBUG: Parsing Levels Input -> 'level 01, level p2'
+DEBUG: Final Levels Found -> ['L1', 'P2']
+DEBUG: Parsing Levels Input -> 'create floor plan for level 01, level p2 in cd using a49_cd_a1_floor plan and sb_plan_overall'
+DEBUG: Final Levels Found -> ['L1', 'P2']
+DEBUG: [Session:6gnfah1y] ENTERING finalize_create_views()
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🔄 Session recovered: 6gnfah1y
+DEBUG: [Session:6gnfah1y] UPDATED cache: 44 views stored.
+DEBUG: [Session:6gnfah1y] ENTERING finalize_create_views()
+DEBUG: [Session:6gnfah1y] Processing 'floor plan' (Abbrev: FL) | Batch Count: 1
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🧠 Routing to OpenAI...
+DEBUG: [Session:6gnfah1y] ROUTING GPT FIELDS: {'intent': 'unknown', 'view_type_raw': 'Convert 500 mm to inches', 'levels_raw': None, 'stage_raw': None, 'template_raw': None, 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': 'non-standard view'}
+DEBUG: Parsing Levels Input -> 'convert 500 mm-inches'
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🧠 Routing to OpenAI...
+DEBUG: [Session:6gnfah1y] ROUTING GPT FIELDS: {'intent': 'unknown', 'view_type_raw': '1500 + 200) * 4.5', 'levels_raw': None, 'stage_raw': None, 'template_raw': None, 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': 'non-standard view'}
+DEBUG: Parsing Levels Input -> '1500 + 200) * 4.5'
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🧠 Routing to OpenAI...
+DEBUG: [Session:6gnfah1y] ROUTING GPT FIELDS: {}
+DEBUG: Parsing Levels Input -> '(1500 + 200) * 4.5'
+DEBUG: POST /api/ai/
+DEBUG: [Session:07g1162x] 🧠 Routing to OpenAI...
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🧠 Routing to OpenAI...
+DEBUG: [Session:6gnfah1y] ROUTING GPT FIELDS: {'intent': 'unknown', 'view_type_raw': None, 'levels_raw': None, 'stage_raw': None, 'template_raw': None, 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: Parsing Levels Input -> 'what-eat today'
+DEBUG: [Session:07g1162x] ROUTING GPT FIELDS: {'intent': 'unknown', 'view_type_raw': 'สูตรในการ คำนวนพื้นที่วัสดุ เช่น พื้น', 'levels_raw': None, 'stage_raw': None, 'template_raw': None, 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': 'non-standard view'}
+DEBUG: Parsing Levels Input -> 'สูตรในการ คำนวนพื้นที่วัสดุ เช่น พื้น คิดยังไง'
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🧠 Routing to OpenAI...
+DEBUG: [Session:6gnfah1y] ROUTING GPT FIELDS: {'intent': 'create_view', 'view_type_raw': 'floor plan', 'levels_raw': 'LEVEL B2, LEVEL B1, SITE, LEVEL 01', 'stage_raw': 'CD', 'template_raw': 'A49_CD_A1_FLOOR PLAN', 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: [Session:6gnfah1y] Fresh command detected. Clearing pending slots.
+DEBUG: Parsing Levels Input -> 'level b2, level b1, site, level 01'
+DEBUG: Final Levels Found -> ['L1', 'B2', 'B1', 'SITE']
+DEBUG: Parsing Levels Input -> 'create floor plan for level b2, level b1, site, level 01 in cd using a49_cd_a1_floor plan and sb_plan_overall'
+DEBUG: Final Levels Found -> ['L1', 'B2', 'B1', 'SITE']
+DEBUG: [Session:6gnfah1y] ENTERING finalize_create_views()
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🔄 Session recovered: 6gnfah1y
+DEBUG: [Session:6gnfah1y] UPDATED cache: 42 views stored.
+DEBUG: [Session:6gnfah1y] ENTERING finalize_create_views()
+DEBUG: [Session:6gnfah1y] Processing 'floor plan' (Abbrev: FL) | Batch Count: 1
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🧠 Routing to OpenAI...
+DEBUG: [Session:6gnfah1y] ROUTING GPT FIELDS: {'intent': 'create_view', 'view_type_raw': 'ceiling plan', 'levels_raw': 'LEVEL 01, LEVEL 02, LEVEL 03, LEVEL 04, LEVEL 05', 'stage_raw': 'CD', 'template_raw': 'A49_CD_A5_REFLECTED CEILING PLAN', 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: [Session:6gnfah1y] Fresh command detected. Clearing pending slots.
+DEBUG: Parsing Levels Input -> 'level 01, level 02, level 03, level 04, level 05'
+DEBUG: Final Levels Found -> ['L1', 'L2', 'L3', 'L4', 'L5']
+DEBUG: Parsing Levels Input -> 'create ceiling plan for level 01, level 02, level 03, level 04, level 05 in cd using a49_cd_a5_reflected ceiling plan and sb_plan_overall'
+DEBUG: Final Levels Found -> ['L1', 'L2', 'L3', 'L4', 'L5']
+DEBUG: [Session:6gnfah1y] ENTERING finalize_create_views()
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🔄 Session recovered: 6gnfah1y
+DEBUG: [Session:6gnfah1y] UPDATED cache: 46 views stored.
+DEBUG: [Session:6gnfah1y] ENTERING finalize_create_views()
+DEBUG: [Session:6gnfah1y] Processing 'ceiling plan' (Abbrev: CP) | Batch Count: 1
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🧠 Routing to OpenAI...
+DEBUG: [Session:6gnfah1y] ROUTING GPT FIELDS: {'intent': 'batch_create', 'view_type_raw': None, 'levels_raw': None, 'stage_raw': 'CD', 'template_raw': 'A49_CD_A8_DOOR & WINDOW', 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': '4', 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: [Session:6gnfah1y] Fresh command detected. Clearing pending slots.
+DEBUG: Parsing Levels Input -> 'create 4 schedules in cd using a49_cd_a8_door & window'
+DEBUG: [Session:6gnfah1y] ENTERING finalize_create_views()
+DEBUG: Parsing Levels Input -> 'create 4 schedules in cd using a49_cd_a8_door & window'
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🔄 Session recovered: 6gnfah1y
+DEBUG: [Session:6gnfah1y] UPDATED cache: 51 views stored.
+DEBUG: [Session:6gnfah1y] ENTERING finalize_create_views()
+DEBUG: [Session:6gnfah1y] Processing 'schedules' (Abbrev: SC) | Batch Count: 4
+DEBUG: POST /api/ai/
+DEBUG: [Session:q4p9vvm5] 🧠 Routing to OpenAI...
+DEBUG: [Session:q4p9vvm5] ROUTING GPT FIELDS: {'intent': 'create_view', 'view_type_raw': 'floor plan', 'levels_raw': 'LEVEL B1, SITE, LEVEL 01', 'stage_raw': 'CD', 'template_raw': None, 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: [Session:q4p9vvm5] Fresh command detected. Clearing pending slots.
+DEBUG: Parsing Levels Input -> 'level b1, site, level 01'
+DEBUG: Final Levels Found -> ['L1', 'B1', 'SITE']
+DEBUG: Parsing Levels Input -> 'create floor plan for level b1, site, level 01 in cd'
+DEBUG: Final Levels Found -> ['L1', 'B1', 'SITE']
+DEBUG: POST /api/ai/
+DEBUG: [Session:q4p9vvm5] 🧠 Routing to OpenAI...
+DEBUG: [Session:q4p9vvm5] ROUTING GPT FIELDS: {'intent': None, 'view_type_raw': None, 'levels_raw': None, 'stage_raw': None, 'template_raw': 'A49_CD_A1_FLOOR PLAN', 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: Parsing Levels Input -> 'a49_cd_a1_floor plan'
+DEBUG: POST /api/ai/
+DEBUG: [Session:q4p9vvm5] 🔄 Session recovered: q4p9vvm5
+DEBUG: POST /api/ai/
+DEBUG: [Session:ck2jn7tl] 🧠 Routing to OpenAI...
+DEBUG: [Session:ck2jn7tl] ROUTING GPT FIELDS: {'intent': None, 'view_type_raw': None, 'levels_raw': None, 'stage_raw': None, 'template_raw': None, 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🧠 Routing to OpenAI...
+DEBUG: [Session:6gnfah1y] ROUTING GPT FIELDS: {'intent': 'batch_create', 'view_type_raw': None, 'levels_raw': 'LEVEL 01, LEVEL 02, LEVEL 03', 'stage_raw': 'CD', 'template_raw': None, 'sheet_category_raw': 'A1', 'titleblock_raw': 'A49_TB_A1_Horizontal: Plan Sheet', 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: [Session:6gnfah1y] Fresh command detected. Clearing pending slots.
+DEBUG: Parsing Levels Input -> 'level 01, level 02, level 03'
+DEBUG: Final Levels Found -> ['L1', 'L2', 'L3']
+DEBUG: Parsing Levels Input -> 'create sheets a1 for level 01, level 02, level 03 in cd using titleblock a49_tb_a1_horizontal: plan sheet'
+DEBUG: Final Levels Found -> ['L1', 'L2', 'L3']
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🔄 Session recovered: 6gnfah1y
+DEBUG: [Session:6gnfah1y] UPDATED cache: 12 sheets stored.
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🧠 Routing to OpenAI...
+DEBUG: [Session:6gnfah1y] ROUTING GPT FIELDS: {'intent': 'batch_create', 'view_type_raw': None, 'levels_raw': None, 'stage_raw': 'CD', 'template_raw': None, 'sheet_category_raw': 'A0', 'titleblock_raw': None, 'batch_count_raw': '5', 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: [Session:6gnfah1y] Fresh command detected. Clearing pending slots.
+DEBUG: Parsing Levels Input -> 'create 5 sheets a0 in cd'
+DEBUG: Parsing Levels Input -> 'create 5 sheets a0 in cd'
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🧠 Routing to OpenAI...
+DEBUG: [Session:6gnfah1y] ROUTING GPT FIELDS: {'intent': None, 'view_type_raw': None, 'levels_raw': None, 'stage_raw': None, 'template_raw': None, 'sheet_category_raw': None, 'titleblock_raw': 'A49_TB_A1_Horizontal : Plan Sheet', 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: Parsing Levels Input -> 'a49_tb_a1_horizontal : plan sheet'
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🧠 Routing to OpenAI...
+DEBUG: [Session:6gnfah1y] ROUTING GPT FIELDS: {'intent': 'batch_create', 'view_type_raw': None, 'levels_raw': None, 'stage_raw': 'CD', 'template_raw': 'A49_CD_A8_DOOR & WINDOW', 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': '1', 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: [Session:6gnfah1y] Fresh command detected. Clearing pending slots.
+DEBUG: Parsing Levels Input -> 'create 1 schedule in cd using a49_cd_a8_door & window'
+DEBUG: [Session:6gnfah1y] ENTERING finalize_create_views()
+DEBUG: Parsing Levels Input -> 'create 1 schedule in cd using a49_cd_a8_door & window'
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🔄 Session recovered: 6gnfah1y
+DEBUG: [Session:6gnfah1y] UPDATED cache: 55 views stored.
+DEBUG: [Session:6gnfah1y] ENTERING finalize_create_views()
+DEBUG: [Session:6gnfah1y] Processing 'schedule' (Abbrev: SC) | Batch Count: 1
+DEBUG: POST /api/ai/
+DEBUG: [Session:q4p9vvm5] 🧠 Routing to OpenAI...
+DEBUG: [Session:q4p9vvm5] ROUTING GPT FIELDS: {'intent': 'create_view', 'view_type_raw': 'floor plan', 'levels_raw': 'L1', 'stage_raw': None, 'template_raw': None, 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: [Session:q4p9vvm5] Fresh command detected. Clearing pending slots.
+DEBUG: Parsing Levels Input -> 'l1'
+DEBUG: Final Levels Found -> ['L1']
+DEBUG: Parsing Levels Input -> 'create l1 floor plan'
+DEBUG: Final Levels Found -> ['L1']
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🧠 Routing to OpenAI...
+DEBUG: [Session:6gnfah1y] ROUTING GPT FIELDS: {'intent': 'create_and_place', 'view_type_raw': 'floor plan', 'levels_raw': 'LEVEL 01', 'stage_raw': 'CD', 'template_raw': 'A49_CD_A1_FLOOR PLAN', 'sheet_category_raw': 'A1', 'titleblock_raw': 'A49_TB_A1_Horizontal: Plan Sheet', 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': 'MATCH', 'reference_sheet_raw': 'A1.xx', 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: [Session:6gnfah1y] Fresh command detected. Clearing pending slots.
+DEBUG: Parsing Levels Input -> 'level 01'
+DEBUG: Final Levels Found -> ['L1']
+DEBUG: Parsing Levels Input -> 'create floor plan for levels level 01 in cd using a49_cd_a1_floor plan and sb_plan_overall place it on a new a1 sheet using a49_tb_a1_horizontal: plan sheet matching sheet a1.xx'
+DEBUG: Final Levels Found -> ['L1']
+DEBUG: [Session:6gnfah1y] 🚀 Upgrading Intent via Router: create_view -> create_and_place
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🔄 Session recovered: 6gnfah1y
+DEBUG: [Session:6gnfah1y] UPDATED cache: 15 sheets stored.
+DEBUG: [Session:6gnfah1y] ENTERING finalize_create_and_place() orchestration.
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🔄 Session recovered: 6gnfah1y
+DEBUG: [Session:6gnfah1y] UPDATED cache: 56 views stored.
+DEBUG: [Session:6gnfah1y] ENTERING finalize_create_and_place() orchestration.
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🧠 Routing to OpenAI...
+DEBUG: [Session:6gnfah1y] ROUTING GPT FIELDS: {'intent': 'create_and_place', 'view_type_raw': 'floor plan', 'levels_raw': 'LEVEL 01, LEVEL 14, LEVEL 05, LEVEL 04, LEVEL 03, LEVEL 02, LEVEL 06, LEVEL 07, LEVEL 09, LEVEL 10, LEVEL 13, LEVEL 12, LEVEL 11', 'stage_raw': 'CD', 'template_raw': 'A49_CD_A1_FLOOR PLAN', 'sheet_category_raw': 'A1', 'titleblock_raw': 'A49_TB_A1_Horizontal: Plan Sheet', 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': 'MATCH', 'reference_sheet_raw': 'A1.xx', 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: [Session:6gnfah1y] Fresh command detected. Clearing pending slots.
+DEBUG: Parsing Levels Input -> 'level 01, level 14, level 05, level 04, level 03, level 02, level 06, level 07, level 09, level 10, level 13, level 12, level 11'
+DEBUG: Final Levels Found -> ['L1', 'L14', 'L5', 'L4', 'L3', 'L2', 'L6', 'L7', 'L9', 'L10', 'L13', 'L12', 'L11']
+DEBUG: Parsing Levels Input -> 'create floor plan for levels level 01, level 14, level 05, level 04, level 03, level 02, level 06, level 07, level 09, level 10, level 13, level 12, level 11 in cd using a49_cd_a1_floor plan and sb_plan_overall place it on a new a1 sheet using a49_tb_a1_horizontal: plan sheet matching sheet a1.xx'
+DEBUG: Final Levels Found -> ['L1', 'L14', 'L5', 'L4', 'L3', 'L2', 'L6', 'L7', 'L9', 'L10', 'L13', 'L12', 'L11']
+DEBUG: [Session:6gnfah1y] 🚀 Upgrading Intent via Router: create_view -> create_and_place
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🔄 Session recovered: 6gnfah1y
+DEBUG: [Session:6gnfah1y] UPDATED cache: 12 sheets stored.
+DEBUG: [Session:6gnfah1y] ENTERING finalize_create_and_place() orchestration.
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] 🔄 Session recovered: 6gnfah1y
+DEBUG: [Session:6gnfah1y] UPDATED cache: 42 views stored.
+DEBUG: [Session:6gnfah1y] ENTERING finalize_create_and_place() orchestration.
+DEBUG: POST /api/ai/
+DEBUG: [Session:6gnfah1y] ⚡ FAST ROUTE HIT: start_interactive_room_package
+DEBUG: [Session:6gnfah1y] ROUTING GPT FIELDS: {'intent': 'start_interactive_room_package', 'stage_raw': 'CD'}
+DEBUG: Parsing Levels Input -> 'run the room elevation tool is cd'
+DEBUG: POST /api/ai/
+DEBUG: [Session:jj7mzcks] 🧠 Routing to OpenAI...
+DEBUG: [Session:jj7mzcks] ROUTING GPT FIELDS: {'intent': None, 'view_type_raw': None, 'levels_raw': None, 'stage_raw': None, 'template_raw': None, 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: POST /api/ai/
+DEBUG: [Session:yjgdk6f8] 🧠 Routing to OpenAI...
+DEBUG: [Session:yjgdk6f8] ROUTING GPT FIELDS: {'intent': 'create_and_place', 'view_type_raw': 'floor plan', 'levels_raw': 'LEVEL B2, LEVEL 10, LEVEL B1, SITE, LEVEL 01', 'stage_raw': 'CD', 'template_raw': 'A49_CD_A1_FLOOR PLAN', 'sheet_category_raw': 'A1', 'titleblock_raw': 'A49_TB_A1_Horizontal: Plan Sheet', 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': 'MATCH', 'reference_sheet_raw': 'A1.xx', 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: [Session:yjgdk6f8] Fresh command detected. Clearing pending slots.
+DEBUG: Parsing Levels Input -> 'level b2, level 10, level b1, site, level 01'
+DEBUG: Final Levels Found -> ['L10', 'L1', 'B2', 'B1', 'SITE']
+DEBUG: Parsing Levels Input -> 'create floor plan for levels level b2, level 10, level b1, site, level 01 in cd using a49_cd_a1_floor plan place it on a new a1 sheet using a49_tb_a1_horizontal: plan sheet matching sheet a1.xx'
+DEBUG: Final Levels Found -> ['L10', 'L1', 'B2', 'B1', 'SITE']
+DEBUG: [Session:yjgdk6f8] 🚀 Upgrading Intent via Router: create_view -> create_and_place

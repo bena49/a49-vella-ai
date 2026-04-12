@@ -1,0 +1,67 @@
+Project: irisaiassistant_backend (Django)
+Environment: Windows Service (Waitress)
+
+D:\xampp\webapps\irisaiassistant_backend
+
+ROOT
+├── ai_backend/                 <-- Main Django project settings
+│   ├── __init__.py
+│   ├── asgi.py
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
+│
+├── ai_router/                  <-- Main Django App for Vella
+│   ├── ai_commands/
+│   │   ├── __init__.py
+│   │   ├── batch_processor.py
+│   │   ├── modifier.py
+│   │   ├── sheet_creator.py
+│   │   └── view_creator.py
+│   │
+│   ├── ai_core/
+│   │   ├── __init__.py
+│   │   ├── gpt_integration.py  <-- *** Target for fast_route_intent (Regex Router)
+│   │   └── session_manager.py
+│   │
+│   ├── ai_engines/             <-- A49 logic and prompt engineering
+│   │   ├── __init__.py
+│   │   ├── level_engine.py
+│   │   ├── naming_engine.py
+│   │   ├── scope_box_engine.py
+│   │   ├── system_prompt.py
+│   │   ├── template_engine.py
+│   │   └── titleblock_engine.py
+│   │
+│   ├── ai_utils/
+│   │   ├── __init__.py
+│   │   ├── envelope_builder.py
+│   │   ├── formatters.py
+│   │   └── validators.py
+│   │
+│   ├── migrations/             <-- Django database migrations
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   ├── urls.py
+│   └── views.py                <-- *** Target for checking the Fast Route before OpenAI
+│
+├── logs/                       <-- Waitress service logs
+│   ├── IRISAIBackendWaitress.err.log
+│   ├── IRISAIBackendWaitress.err.log.old
+│   ├── IRISAIBackendWaitress.out.log
+│   ├── IRISAIBackendWaitress.out.log.old
+│   └── IRISAIBackendWaitress.wrapper.log
+│
+├── venv/                       <-- Python Virtual Environment
+│
+├── .env
+├── AI_restart_waitress_service.bat
+├── AI_start_waitress_service.bat
+├── AI_stop_waitress_service.bat
+├── db.sqlite3                  <-- Local Django DB
+├── IRISAIBackendWaitress.exe
+├── IRISAIBackendWaitress.xml
+├── manage.py
+└── waitress-ai.bat

@@ -1,0 +1,25 @@
+# -----------------------------
+# BACKEND (Python / Django)
+# -----------------------------
+.env
+venv/
+__pycache__/
+*.pyc
+db.sqlite3
+
+# -----------------------------
+# FRONTEND (Vue / Nuxt)
+# -----------------------------
+node_modules/
+.nuxt/
+.output/
+dist/
+*.log
+
+# -----------------------------
+# REVIT ADD-IN (C#)
+# -----------------------------
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo

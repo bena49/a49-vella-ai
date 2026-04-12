@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<RevitAddIns>
+	<AddIn Type="Application">
+		<Name>STD_AI_RevitAssistant</Name>
+		<Assembly>A49AIRevitAssistantAddin\A49AIRevitAssistant.dll</Assembly>
+		<AddInId>90BC3C7F-4875-47EA-8E4D-7F1F377BA09E</AddInId>
+		<FullClassName>A49AIRevitAssistant.MainClass</FullClassName>
+		<VendorId>A49</VendorId>
+		<VendorDescription>Architects 49</VendorDescription>
+	</AddIn>
+</RevitAddIns>

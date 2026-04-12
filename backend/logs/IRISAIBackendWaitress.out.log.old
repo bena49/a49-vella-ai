@@ -1,0 +1,27 @@
+DEBUG: POST /api/ai/
+DEBUG: [Session:4wmsipxl] 🧠 Routing to OpenAI...
+DEBUG: [Session:4wmsipxl] ROUTING GPT FIELDS: {'intent': 'unknown', 'view_type_raw': None, 'levels_raw': None, 'stage_raw': None, 'template_raw': None, 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': None}
+DEBUG: Parsing Levels Input -> 'what are you doing today'
+DEBUG: POST /api/ai/
+DEBUG: [Session:4wmsipxl] 🧠 Routing to OpenAI...
+DEBUG: [Session:4wmsipxl] ROUTING GPT FIELDS: {'intent': 'unknown', 'view_type_raw': None, 'levels_raw': None, 'stage_raw': None, 'template_raw': None, 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': 'non-standard view'}
+DEBUG: Parsing Levels Input -> 'วันนี้เป็นยังไงบ้าง'
+DEBUG: POST /api/ai/
+DEBUG: [Session:4wmsipxl] 🧠 Routing to OpenAI...
+DEBUG: [Session:4wmsipxl] ROUTING GPT FIELDS: {'intent': 'unknown', 'view_type_raw': 'คิดเลข', 'levels_raw': None, 'stage_raw': None, 'template_raw': None, 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': 'non-standard view'}
+DEBUG: Parsing Levels Input -> 'คิดเลขได้มั้ย'
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: [Session:4wmsipxl] 🧠 Routing to OpenAI...
+DEBUG: [Session:4wmsipxl] ROUTING GPT FIELDS: {'intent': 'unknown', 'view_type_raw': None, 'levels_raw': None, 'stage_raw': None, 'template_raw': None, 'sheet_category_raw': None, 'titleblock_raw': None, 'batch_count_raw': None, 'rename_target_raw': None, 'rename_value_raw': None, 'duplicate_mode_raw': None, 'target_sheet_raw': None, 'placement_raw': None, 'reference_sheet_raw': None, 'list_query_raw': None, 'custom_mode_raw': None, 'user_provided_name_raw': None, 'additional_notes': 'non-standard view'}
+DEBUG: Parsing Levels Input -> '1 ไร่ เท่ากับกี่ ตร.ม.'
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: COMPLETE SESSION RESET
+DEBUG: POST /api/ai/
+DEBUG: COMPLETE SESSION RESET
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/
+DEBUG: POST /api/ai/

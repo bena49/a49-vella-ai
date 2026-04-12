@@ -1,0 +1,52 @@
+Project: irisaiassistant (Nuxt 3, WebView2 in Revit)
+Styling: Tailwind CSS
+Package manager: pnpm
+
+D:\xampp\webapps\irisaiassistant
+
+ROOT (not expanded)
+├── app.vue
+├── nuxt.config.ts
+├── package.json
+└── public/
+
+
+UI STRUCTURE 
+├── assets
+│   └── css
+│       ├── tailwind.css
+│       └── vella.css
+│
+├── components/
+│   ├── chat/
+│   │   ├── ChatMessage.vue       <-- (NOT DONE YET) Individual message bubbles
+│   │   └── ChatInput.vue         <-- *** Input box + buttons (Mic, Send, Clear)
+│   ├── dialogs/
+│   │   └── RenameDialog.vue      <-- (STARTED BUT NOT COMPLETED or Needed)
+│   ├── wizards/
+│   │   ├── PlanViewWizard.vue    	<-- Plan creation wizard
+│   │   ├── SheetWizard.vue       	<-- Sheet creation wizard
+│   │   ├── CreateAndPlaceWizard.vue    <-- Plan and Sheet creation wizard
+│   │   └── RoomElevationWizard.vue     <-- Enlarged Plan and Elevations creation wizard
+│   ├── help/
+│   │   ├── HelpCreatePlaceTab.vue  <-- Completed
+│   │   ├── HelpItem.vue    	      <-- Completed
+│   │   ├── HelpModal.vue    	  	  <-- Completed
+│   │   ├── HelpSheetsTab.vue    	  <-- Completed
+│   │   ├── HelpStandardsTab.vue    <-- Completed
+│   │   └── HelpViewsTab.vue    	  <-- Completed
+│   └── VellaModal.vue          <-- Started but not sure of its use
+│
+├── composables/
+│   ├── useRevitBridge.ts  <-- Handles all WebView2/Chrome communication
+│   └── useVellaApi.ts     <-- (NOT DONE YET) Handles Django API calls & session state
+│
+├── pages/
+│   └──  index.vue		<-- Completed
+│
+├── public/
+│   ├── favicon.ico    <-- Done
+│   └── robots.txt     <-- Done
+│
+├── utils/
+│   └── a49Standards.ts    <-- standards file

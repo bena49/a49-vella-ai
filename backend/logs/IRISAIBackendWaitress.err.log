@@ -1,7 +1,0 @@
-INFO:waitress:Serving on http://127.0.0.1:8001
-Unauthorized: /api/ai/
-WARNING:django.request:Unauthorized: /api/ai/
-Unauthorized: /api/ai/
-WARNING:django.request:Unauthorized: /api/ai/
-Unauthorized: /api/ai/
-WARNING:django.request:Unauthorized: /api/ai/

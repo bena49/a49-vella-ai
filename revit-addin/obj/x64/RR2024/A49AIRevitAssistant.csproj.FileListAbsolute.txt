@@ -1,6 +1,0 @@
-C:\Users\Ben Pongprot\OneDrive\00_REVIT AI Automation\A49AIRevitAssistant\obj\x64\RR2024\A49AIRevitAssistant.csproj.AssemblyReference.cache
-C:\Users\Ben Pongprot\OneDrive\00_REVIT AI Automation\A49AIRevitAssistant\obj\x64\RR2024\DockablePaneViewer.baml
-C:\Users\Ben Pongprot\OneDrive\00_REVIT AI Automation\A49AIRevitAssistant\obj\x64\RR2024\DockablePaneViewer.g.cs
-C:\Users\Ben Pongprot\OneDrive\00_REVIT AI Automation\A49AIRevitAssistant\obj\x64\RR2024\A49AIRevitAssistant_MarkupCompile.cache
-C:\Users\Ben Pongprot\OneDrive\00_REVIT AI Automation\A49AIRevitAssistant\obj\x64\RR2024\A49AIRevitAssistant.g.resources
-C:\Users\Ben Pongprot\OneDrive\00_REVIT AI Automation\A49AIRevitAssistant\obj\x64\RR2024\A49AIRevitAssistant.csproj.CoreCompileInputs.cache

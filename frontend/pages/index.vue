@@ -94,8 +94,10 @@
     <PlanViewWizard v-if="showWizard" v-bind="wizardProps" :key="wizardKey" @close="closeWizard" @submit="handleWizardSubmit" />
     <SheetWizard v-if="showSheetWizard" v-bind="sheetWizardProps" :key="wizardKey" @close="showSheetWizard = false" @submit="handleWizardSubmit" />
     <CreateAndPlaceWizard v-if="showCreatePlaceWizard" v-bind="createPlaceWizardProps" :key="'cp-'+wizardKey" @close="showCreatePlaceWizard = false" @submit="handleWizardSubmit" />
-
-    <!--IMPORTANT - Uncoment this line below to see UI in  localhost:3000 screen -->
+    
+    <!--LIVE - <RenameWizard> Line 1 ON + Line 2 OFF -->
+    <RenameWizard v-if="showRenameWizard" v-bind="renameWizardProps" :key="'rw-'+wizardKey" @close="showRenameWizard = false" @submit="handleBatchSubmit" />
+    <!--localhost:3000 - <RenameWizard> Line 1 OFF + Line 2 ON -->
     <!--<RenameWizard v-if="true" v-bind="renameWizardProps" :key="'rw-'+wizardKey" @close="showRenameWizard = false" @submit="handleBatchSubmit" /> -->
     
     <RoomElevationWizard v-if="showRoomWizard" v-bind="roomWizardProps" :key="'rm-'+wizardKey" @close="showRoomWizard = false" @executeRaw="handleRoomElevationExecute" />

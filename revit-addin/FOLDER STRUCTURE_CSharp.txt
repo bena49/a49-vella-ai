@@ -1,6 +1,6 @@
-Project: irisaiassistant (Csharp)
+Project: Vella-AI (Csharp)
 
-C:\Users\Bunda.A49local\OneDrive\00_REVIT AI Automation\A49AIRevitAssistant
+C:\DEV Projects\Vella-AI\revit-addin
 
 ROOT 
 ├── addin/
@@ -53,6 +53,7 @@ ROOT
 ├── obj/
 ├── Properties/
 │   └── AssemblyInfo.cs
+├── Resources/
 ├── UI/
 │   ├── A49PaneProvider.cs
 │   ├── DockablePaneViewer.xaml

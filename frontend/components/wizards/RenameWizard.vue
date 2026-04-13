@@ -33,20 +33,6 @@
              </button>
           </div>
 
-          <!-- Original Find search box - Commented out
-          <div class="relative flex-1">
-             <div class="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 flex items-center pointer-events-none z-10">
-                <Icon name="lucide:search" class="text-xl" />
-             </div>
-             <input 
-               v-model="searchQuery" 
-               placeholder="Find"
-               class="w-full bg-black/20 backdrop-blur-sm border border-white/20 rounded-xl pl-9 pr-4 py-2 text-xs 
-                      text-white placeholder-white/50 focus:border-[#D8B4FE] outline-none transition"
-             />
-          </div>
-          -->
-
           <!-- Replace button now takes the place of the search box -->
           <button 
             @click="showSearchReplace = !showSearchReplace"

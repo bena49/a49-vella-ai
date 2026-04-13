@@ -5,7 +5,7 @@ Package manager: pnpm
 Main project folder
 C:\DEV Projects\Vella-AI  (local Home and Work PC)
 ├── .git/                       <-- .git hidden folder
-├── ai_backend/                 <-- Main backend folder
+├── backend/                 <-- Main backend folder
 ├── frontend/                   <-- Main frontend folder
 ├── revit-addin/                <-- Main csharp Revit folder
 └── .gitignore

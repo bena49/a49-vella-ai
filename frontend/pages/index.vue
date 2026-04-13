@@ -96,7 +96,7 @@
     <CreateAndPlaceWizard v-if="showCreatePlaceWizard" v-bind="createPlaceWizardProps" :key="'cp-'+wizardKey" @close="showCreatePlaceWizard = false" @submit="handleWizardSubmit" />
 
     <!--IMPORTANT - Uncoment this line below to see UI in  localhost:3000 screen -->
-    <RenameWizard v-if="true" v-bind="renameWizardProps" :key="'rw-'+wizardKey" @close="showRenameWizard = false" @submit="handleBatchSubmit" /> 
+    <!--<RenameWizard v-if="true" v-bind="renameWizardProps" :key="'rw-'+wizardKey" @close="showRenameWizard = false" @submit="handleBatchSubmit" /> -->
     
     <RoomElevationWizard v-if="showRoomWizard" v-bind="roomWizardProps" :key="'rm-'+wizardKey" @close="showRoomWizard = false" @executeRaw="handleRoomElevationExecute" />
     <HelpModal v-if="showHelp" @close="showHelp = false" @submit="handleHelpPrompt" />

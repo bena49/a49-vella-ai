@@ -19,10 +19,10 @@
         </button>
       </div>
 
-      <div class="px-6 py-3 flex flex-col gap-2 shrink-0 border-b border-white/5 bg-white/5">
+      <div class="px-6 py-3 flex flex-col gap-3 shrink-0 border-b border-white/5 bg-white/5">
         
-        <div class="flex justify-between items-center gap-4">
-          <div class="flex bg-black/20 rounded-xl p-1 border border-white/10 w-[160px] shrink-0">
+        <div class="flex flex-col min-[500px]:flex-row justify-between items-stretch min-[500px]:items-center gap-3 w-full">
+          <div class="flex bg-black/20 rounded-xl p-1 border border-white/10 w-full min-[500px]:w-[160px] shrink-0">
              <button 
                v-for="tab in ['SHEETS', 'VIEWS']" :key="tab"
                @click="activeTab = tab"
@@ -33,41 +33,40 @@
              </button>
           </div>
 
-          <!-- Replace button now takes the place of the search box -->
           <button 
             @click="showSearchReplace = !showSearchReplace"
-            class="flex-1 px-4 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-left gap-2"
+            class="w-full min-[500px]:flex-1 px-4 py-2 min-[500px]:py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center min-[500px]:justify-start gap-2"
             :class="showSearchReplace 
               ? 'bg-[#D8B4FE] text-[#0A1D4A] border-[#D8B4FE] shadow-lg shadow-purple-900/20' 
               : 'bg-black/20 border-white/10 text-white/70 hover:bg-white/10 hover:text-white'"
           >
             <Icon name="lucide:replace" class="text-base" />
-            <span>Replace</span>
+            <span>Replace Text</span>
           </button>
         </div>
 
-        <div v-if="showSearchReplace" class="animate-fade-in bg-[#D8B4FE]/10 border border-[#D8B4FE]/30 rounded-xl p-3 flex gap-3 items-center">
-            <div class="flex-1 flex flex-col gap-1">
+        <div v-if="showSearchReplace" class="animate-fade-in bg-[#D8B4FE]/10 border border-[#D8B4FE]/30 rounded-xl p-3 flex flex-col min-[500px]:flex-row gap-3 items-start min-[500px]:items-center w-full">
+            <div class="w-full min-[500px]:flex-1 flex flex-col gap-1">
                 <label class="text-[9px] uppercase font-bold text-[#D8B4FE]/80">Find Text</label>
                 <input v-model="findText" placeholder="e.g. FLOOR PLAN" class="w-full bg-black/20 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-[#D8B4FE]" />
             </div>
-            <div class="flex-1 flex flex-col gap-1">
+            <div class="w-full min-[500px]:flex-1 flex flex-col gap-1">
                 <label class="text-[9px] uppercase font-bold text-[#D8B4FE]/80">Replace With</label>
                 <input v-model="replaceText" placeholder="e.g. แปลนพื้น" class="w-full bg-black/20 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-[#D8B4FE]" />
             </div>
-            <div class="flex flex-col gap-1 w-32">
-                 <label class="text-[9px] uppercase font-bold text-transparent">.</label>
+            <div class="w-full min-[500px]:w-32 flex flex-col gap-1">
+                 <label class="hidden min-[500px]:block text-[9px] uppercase font-bold text-transparent">.</label>
                  <button 
                     @click="applySearchReplace"
                     :disabled="!findText"
-                    class="w-full bg-[#D8B4FE] hover:bg-[#B39DDB] text-[#0A1D4A] font-bold py-1.5 rounded-lg text-xs shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed">
+                    class="w-full bg-[#D8B4FE] hover:bg-[#B39DDB] text-[#0A1D4A] font-bold py-2 min-[500px]:py-1.5 rounded-lg text-xs shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed">
                     Apply to List
                  </button>
             </div>
         </div>
 
-        <div class="flex justify-between items-center gap-4 animate-fade-in z-20">
-            <div class="relative w-[160px] shrink-0">
+        <div class="flex flex-col min-[500px]:flex-row justify-between items-stretch min-[500px]:items-center gap-3 animate-fade-in z-20 w-full">
+            <div class="relative w-full min-[500px]:w-[160px] shrink-0">
               <div @click="toggleDropdown('stage')" 
                    class="w-full bg-black/20 backdrop-blur-sm border border-white/10 rounded-xl px-3 py-2 text-xs 
                    text-white focus:border-[#D8B4FE] outline-none transition cursor-pointer flex justify-between items-center hover:bg-white/5"
@@ -86,7 +85,7 @@
               </div>
             </div>
 
-            <div class="relative flex-1">
+            <div class="relative w-full min-[500px]:flex-1">
               <div @click="toggleDropdown('set')" 
                    class="w-full bg-black/20 backdrop-blur-sm border border-white/10 rounded-xl px-3 py-2 text-xs 
                    text-white focus:border-[#D8B4FE] outline-none transition cursor-pointer flex justify-between items-center hover:bg-white/5"
@@ -111,7 +110,7 @@
       <div class="flex-1 overflow-hidden relative bg-[#0A1D4A]">
         <div class="absolute inset-0 overflow-y-auto custom-scrollbar px-6 pb-6" @click="closeAllDropdowns">
           
-          <table class="w-full text-left border-collapse">
+          <table class="w-full text-left border-collapse min-w-[600px]">
             <thead class="sticky top-0 bg-[#0A1D4A] z-10 shadow-lg border-b border-white/10">
                 <tr>
                 <th v-if="activeTab === 'SHEETS'" class="py-3 text-[10px] uppercase tracking-wider text-white/50 font-bold pl-2 w-16">
@@ -198,13 +197,30 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { PROJECT_PHASE_MAP, SHEET_SET_MAP } from '~/utils/a49Standards';
 
 const props = defineProps({
-  inventoryData: { 
-    type: Object, 
-    default: () => ({ sheets: [], views: [] }) 
-  }
+  inventoryData: { type: Object }
 });
 
 const emit = defineEmits(['close', 'submit']);
+
+// --- THE SMART MOCK DATA SWITCH ---
+const mockData = {
+  sheets: [
+    { unique_id: 'mock-s1', number: 'A-101', name: 'GROUND FLOOR PLAN', stage: 'DD', category: 'A' },
+    { unique_id: 'mock-s2', number: 'A-102', name: 'SECOND FLOOR PLAN', stage: 'DD', category: 'A' },
+    { unique_id: 'mock-s3', number: 'S-201', name: 'STRUCTURAL FOUNDATION', stage: 'CD', category: 'S' }
+  ],
+  views: [
+    { unique_id: 'mock-v1', name: '01 - Floor Plan - Ground', sheet_number: 'A-101', title_on_sheet: 'GROUND FLOOR' },
+    { unique_id: 'mock-v2', name: '02 - Floor Plan - Second', sheet_number: 'A-102', title_on_sheet: 'SECOND FLOOR' },
+    { unique_id: 'mock-v3', name: 'Elev - North', sheet_number: null, title_on_sheet: null }
+  ]
+};
+
+// If Revit sends data, use it. If it's empty (localhost), use mockData!
+const activeData = computed(() => {
+   const hasRealData = props.inventoryData?.sheets?.length > 0 || props.inventoryData?.views?.length > 0;
+   return hasRealData ? props.inventoryData : mockData;
+});
 
 // --- STATE ---
 const activeTab = ref('SHEETS'); 
@@ -221,10 +237,13 @@ const showSearchReplace = ref(false);
 const findText = ref('');
 const replaceText = ref('');
 
-// --- INIT ---
-watch(() => props.inventoryData, (newVal) => {
+// --- INIT (Now watching activeData instead of props) ---
+watch(() => activeData.value, (newVal) => {
     if(!newVal) return;
-    [...newVal.sheets, ...newVal.views].forEach(item => {
+    const sheets = newVal.sheets || [];
+    const views = newVal.views || [];
+    
+    [...sheets, ...views].forEach(item => {
         if (!changes.value[item.unique_id]) {
             changes.value[item.unique_id] = {};
         }
@@ -255,8 +274,8 @@ const applySearchReplace = () => {
 // --- COMPUTED ---
 const currentList = computed(() => {
     return activeTab.value === 'SHEETS' 
-        ? props.inventoryData.sheets 
-        : props.inventoryData.views;
+        ? (activeData.value.sheets || []) 
+        : (activeData.value.views || []);
 });
 
 const filteredItems = computed(() => {
@@ -276,9 +295,9 @@ const filteredItems = computed(() => {
         items = items.filter(item => {
             if (activeTab.value === 'SHEETS') {
                 const cat = item.category || "";
-                return cat.startsWith(code) || item.number.startsWith(code);
+                return cat.startsWith(code) || (item.number && item.number.startsWith(code));
             } else {
-                const n = item.name.toUpperCase();
+                const n = (item.name || "").toUpperCase();
                 return n.includes(`_${code}_`) || n.includes(` ${code} `);
             }
         });
@@ -292,7 +311,7 @@ const filteredItems = computed(() => {
             if (activeTab.value === 'SHEETS' && item.stage) {
                 if (item.stage === code) return true;
             }
-            const n = item.name.toUpperCase();
+            const n = (item.name || "").toUpperCase();
             const num = (item.number || "").toUpperCase(); 
 
             return n.includes(code) || n.includes(label) || 
@@ -322,7 +341,7 @@ const submitChanges = () => {
             if (edits[key] && edits[key].trim() !== '') cleanEdits[key] = edits[key];
         });
         if (Object.keys(cleanEdits).length > 0) {
-            const isSheet = props.inventoryData.sheets.find(s => s.unique_id === uid);
+            const isSheet = (activeData.value.sheets || []).find(s => s.unique_id === uid);
             const type = isSheet ? 'SHEET' : 'VIEW';
             updates.push({ unique_id: uid, element_type: type, changes: cleanEdits });
         }
@@ -337,7 +356,7 @@ onUnmounted(() => { document.removeEventListener('keydown', handleKeydown); });
 </script>
 
 <style scoped>
-.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; margin: 2px 0; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }

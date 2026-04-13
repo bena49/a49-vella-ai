@@ -144,6 +144,9 @@ namespace A49AIRevitAssistant.Executor
                             return "{\"status\":\"silent\"}";
                         }
 
+                    case "preflight_check":
+                        return new PreflightCheckCommand(_uiapp).Execute(env);
+
                     default:
                         return $"❌ Unknown command: {env.command}";
                 }

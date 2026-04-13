@@ -50,6 +50,10 @@ def fast_route_intent(user_text):
     # This allows long master commands to pass through to OpenAI safely.
     if "sb_" in txt and len(txt.split()) <= 3:
         return {"intent": "resume_wizard"}
+    
+    # --- PREFLIGHT CHECK ---
+    if any(word in txt for word in ["preflight", "health check", "check standards"]):
+        return {"intent": "preflight_check"}
 
     # --- BASIC LISTS ---
     if txt.startswith("list ") or txt.startswith("show "):

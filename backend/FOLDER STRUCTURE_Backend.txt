@@ -49,14 +49,17 @@ ROOT
 │   │   ├── formatters.py
 │   │   └── validators.py
 │   │
-│   ├── migrations/             <-- Django database migrations
+│   ├── migrations/            <-- Django database migrations
 │   ├── __init__.py
 │   ├── admin.py
 │   ├── apps.py
 │   ├── auth.py				<-- AZURE login for company Microsoft's account
 │   ├── models.py
 │   ├── urls.py
-│   └── views.py                <-- *** Target for checking the Fast Route before OpenAI
+│   └── views.py               <-- *** Target for checking the Fast Route before OpenAI
+│   │
+│   ├── standards/
+│   │   └── standards.json		<-- The master standards data
 │
 ├── logs/                       <-- Waitress service logs
 │   ├── IRISAIBackendWaitress.err.log

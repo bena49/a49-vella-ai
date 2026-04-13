@@ -26,7 +26,7 @@ from .ai_core.session_manager import (
 from .ai_core.gpt_integration import (
     build_prompt, route_gpt_fields, fast_route_intent
 )
-from .ai_utils.envelope_builder import send_envelope
+from .ai_utils.envelope_builder import send_envelope, envelope_preflight_check
 from .ai_utils.formatters import (
     format_views_for_display, format_sheets_for_display,
     normalize_view_list, normalize_sheet_list,
@@ -456,6 +456,7 @@ def ai_router(request):
             "list_views_on_sheet", 
             "fetch_project_inventory", 
             "execute_batch_update",
+            "preflight_check",
             "ui:help",
             "wizard:create_views",
             "wizard:create_sheets",
@@ -469,6 +470,22 @@ def ai_router(request):
             if intent.startswith("list_"):
                 request.session["ai_list_mode"] = True
                 request.session.modified = True
+            
+            # 💥 PREFLIGHT CHECK
+            if intent == "preflight_check":
+                import os
+                standards_path = os.path.join(
+                    os.path.dirname(__file__), "standards", "standards.json"
+                )
+                try:
+                    with open(standards_path, "r", encoding="utf-8") as f:
+                        standards_data = json.load(f)
+                except Exception as e:
+                    return Response({"message": f"❌ Could not load standards.json: {e}"})
+                
+                reset_pending(request)
+                env = envelope_preflight_check(standards_data)
+                return send_envelope(request, env)
             
             # 💥 THE NATIVE FIX: Let send_envelope handle the routing!
             if intent == "start_interactive_room_package":

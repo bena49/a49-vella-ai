@@ -119,3 +119,13 @@ def envelope_remove_view_from_sheet(view_name, sheet_number):
         "view": view_name,
         "sheet": sheet_number
     }
+
+# =====================================================================
+# PREFLIGHT ENVELOPES
+# =====================================================================
+
+def envelope_preflight_check(standards_data):
+    return {
+        "command": "preflight_check",
+        "raw": standards_data
+    }

@@ -1,0 +1,408 @@
+{
+  "meta": {
+    "version": "1.0.0",
+    "last_updated": "2026-04-13",
+    "description": "A49 Revit Standards Registry — Master source of truth for Vella Preflight Check"
+  },
+
+  "view_templates": [
+    {
+      "name": "A49_WV_FLOOR PLAN",
+      "stage": "WV",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "00 - WORKING VIEW",
+      "view_set": "A1_FLOOR PLANS"
+    },
+    {
+      "name": "A49_WV_SITE PLAN",
+      "stage": "WV",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "00 - WORKING VIEW",
+      "view_set": "A1_FLOOR PLANS"
+    },
+    {
+      "name": "A49_WV_REFLECTED CEILING PLAN",
+      "stage": "WV",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "00 - WORKING VIEW",
+      "view_set": "A5_CEILING PLANS"
+    },
+    {
+      "name": "A49_WV_ELEVATION",
+      "stage": "WV",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "00 - WORKING VIEW",
+      "view_set": "A2_BUILDING ELEVATIONS"
+    },
+    {
+      "name": "A49_WV_BUILDING SECTION",
+      "stage": "WV",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "00 - WORKING VIEW",
+      "view_set": "A3_BUILDING SECTIONS"
+    },
+    {
+      "name": "A49_WV_WALL SECTION",
+      "stage": "WV",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "00 - WORKING VIEW",
+      "view_set": "A4_WALL SECTIONS"
+    },
+
+    {
+      "name": "A49_PD_FLOOR PLAN",
+      "stage": "PD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "01 - PRE-DESIGN",
+      "view_set": "A1_FLOOR PLANS"
+    },
+    {
+      "name": "A49_PD_PRESENTATION PLAN",
+      "stage": "PD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "01 - PRE-DESIGN",
+      "view_set": "A1_FLOOR PLANS"
+    },
+    {
+      "name": "A49_PD_SITE PLAN",
+      "stage": "PD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "01 - PRE-DESIGN",
+      "view_set": "A1_FLOOR PLANS"
+    },
+    {
+      "name": "A49_PD_REFLECTED CEILING PLAN",
+      "stage": "PD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "01 - PRE-DESIGN",
+      "view_set": "A5_CEILING PLANS"
+    },
+    {
+      "name": "A49_PD_ELEVATION",
+      "stage": "PD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "01 - PRE-DESIGN",
+      "view_set": "A2_BUILDING ELEVATIONS"
+    },
+    {
+      "name": "A49_PD_BUILDING SECTION",
+      "stage": "PD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "01 - PRE-DESIGN",
+      "view_set": "A3_BUILDING SECTIONS"
+    },
+    {
+      "name": "A49_PD_WALL SECTION",
+      "stage": "PD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "01 - PRE-DESIGN",
+      "view_set": "A4_WALL SECTIONS"
+    },
+    {
+      "name": "A49_PD_DOOR & WINDOW",
+      "stage": "PD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "01 - PRE-DESIGN",
+      "view_set": "A8_DOOR AND WINDOW SCHEDULE"
+    },
+    {
+      "name": "A49_PD_DETAILS",
+      "stage": "PD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "01 - PRE-DESIGN",
+      "view_set": "A9_DETAILS"
+    },
+    {
+      "name": "A49_PD_EIA AREA PLAN",
+      "stage": "PD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "01 - PRE-DESIGN",
+      "view_set": "A1_FLOOR PLANS"
+    },
+    {
+      "name": "A49_PD_NFA AREA PLAN",
+      "stage": "PD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "01 - PRE-DESIGN",
+      "view_set": "A1_FLOOR PLANS"
+    },
+
+    {
+      "name": "A49_DD_FLOOR PLAN",
+      "stage": "DD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "02 - DESIGN DEVELOPMENT",
+      "view_set": "A1_FLOOR PLANS"
+    },
+    {
+      "name": "A49_DD_PRESENTATION PLAN",
+      "stage": "DD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "02 - DESIGN DEVELOPMENT",
+      "view_set": "A1_FLOOR PLANS"
+    },
+    {
+      "name": "A49_DD_SITE PLAN",
+      "stage": "DD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "02 - DESIGN DEVELOPMENT",
+      "view_set": "A1_FLOOR PLANS"
+    },
+    {
+      "name": "A49_DD_REFLECTED CEILING PLAN",
+      "stage": "DD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "02 - DESIGN DEVELOPMENT",
+      "view_set": "A5_CEILING PLANS"
+    },
+    {
+      "name": "A49_DD_ELEVATION",
+      "stage": "DD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "02 - DESIGN DEVELOPMENT",
+      "view_set": "A2_BUILDING ELEVATIONS"
+    },
+    {
+      "name": "A49_DD_BUILDING SECTION",
+      "stage": "DD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "02 - DESIGN DEVELOPMENT",
+      "view_set": "A3_BUILDING SECTIONS"
+    },
+    {
+      "name": "A49_DD_WALL SECTION",
+      "stage": "DD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "02 - DESIGN DEVELOPMENT",
+      "view_set": "A4_WALL SECTIONS"
+    },
+    {
+      "name": "A49_DD_DOOR & WINDOW",
+      "stage": "DD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "02 - DESIGN DEVELOPMENT",
+      "view_set": "A8_DOOR AND WINDOW SCHEDULE"
+    },
+    {
+      "name": "A49_DD_DETAILS",
+      "stage": "DD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "02 - DESIGN DEVELOPMENT",
+      "view_set": "A9_DETAILS"
+    },
+    {
+      "name": "A49_DD_EIA AREA PLAN",
+      "stage": "DD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "02 - DESIGN DEVELOPMENT",
+      "view_set": "A1_FLOOR PLANS"
+    },
+    {
+      "name": "A49_DD_NFA AREA PLAN",
+      "stage": "DD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "02 - DESIGN DEVELOPMENT",
+      "view_set": "A1_FLOOR PLANS"
+    },
+    {
+      "name": "A49_DD_INTERIOR ELEVATION",
+      "stage": "DD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "02 - DESIGN DEVELOPMENT",
+      "view_set": "A6_ENLARGED PLANS AND INTERIOR ELEVATIONS"
+    },
+    {
+      "name": "A49_DD_INTERIOR ENLARGED PLAN",
+      "stage": "DD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "02 - DESIGN DEVELOPMENT",
+      "view_set": "A6_ENLARGED PLANS AND INTERIOR ELEVATIONS"
+    },
+
+    {
+      "name": "A49_CD_A1_FLOOR PLAN",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A1_FLOOR PLANS"
+    },
+    {
+      "name": "A49_CD_A1_FLOOR PLAN_COLOR",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A1_FLOOR PLANS"
+    },
+    {
+      "name": "A49_CD_A1_SITE PLAN",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A1_FLOOR PLANS"
+    },
+    {
+      "name": "A49_CD_A1_SITE PLAN_COLOR",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A1_FLOOR PLANS"
+    },
+    {
+      "name": "A49_CD_A2_ELEVATION",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A2_BUILDING ELEVATIONS"
+    },
+    {
+      "name": "A49_CD_A2_ELEVATION_COLOR",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A2_BUILDING ELEVATIONS"
+    },
+    {
+      "name": "A49_CD_A3_BUILDING SECTION",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A3_BUILDING SECTIONS"
+    },
+    {
+      "name": "A49_CD_A3_BUILDING SECTION_COLOR",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A3_BUILDING SECTIONS"
+    },
+    {
+      "name": "A49_CD_A4_DETAIL SECTION",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A4_WALL SECTIONS"
+    },
+    {
+      "name": "A49_CD_A4_WALL SECTION",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A4_WALL SECTIONS"
+    },
+    {
+      "name": "A49_CD_A4_WALL SECTION_COLOR",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A4_WALL SECTIONS"
+    },
+    {
+      "name": "A49_CD_A5_REFLECTED CEILING PLAN",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A5_CEILING PLANS"
+    },
+    {
+      "name": "A49_CD_A5_REFLECTED CEILING PLAN_COLOR",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A5_CEILING PLANS"
+    },
+    {
+      "name": "A49_CD_A6_PATTERNS PLAN",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A6_ENLARGED PLANS AND INTERIOR ELEVATIONS"
+    },
+    {
+      "name": "A49_CD_A6_INTERIOR ELEVATION",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A6_ENLARGED PLANS AND INTERIOR ELEVATIONS"
+    },
+    {
+      "name": "A49_CD_A6_INTERIOR ENLARGED PLAN",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A6_ENLARGED PLANS AND INTERIOR ELEVATIONS"
+    },
+    {
+      "name": "A49_CD_A7_VERTICAL CIRCULATION PLAN",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A7_VERTICAL CIRCULATION"
+    },
+    {
+      "name": "A49_CD_A7_VERTICAL CIRCULATION_SECTION",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A7_VERTICAL CIRCULATION"
+    },
+    {
+      "name": "A49_CD_A8_DOOR & WINDOW",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A8_DOOR AND WINDOW SCHEDULE"
+    },
+    {
+      "name": "A49_CD_A9_DETAILS",
+      "stage": "CD",
+      "discipline": "ARCHITECTURE",
+      "project_phase": "03 - CONSTRUCTION DOCUMENTS",
+      "view_set": "A9_DETAILS"
+    }
+  ],
+
+  "titleblocks": [
+    {
+      "family": "A49_TB_A1_Horizontal",
+      "types": ["Plan Sheet", "Detail Sheet"],
+      "category": "standard"
+    },
+    {
+      "family": "A49_TB_A1_Vertical",
+      "types": ["Plan Sheet", "Detail Sheet"],
+      "category": "standard"
+    },
+    {
+      "family": "A49_TB_A1_Horizontal_Cover",
+      "types": ["Cover"],
+      "category": "cover"
+    }
+  ],
+
+  "project_parameters": [
+    {
+      "name": "DISCIPLINE",
+      "applies_to": "Views",
+      "type": "Text",
+      "required": true
+    },
+    {
+      "name": "PROJECT PHASE",
+      "applies_to": "Views",
+      "type": "Text",
+      "required": true
+    },
+    {
+      "name": "VIEW SET",
+      "applies_to": "Views",
+      "type": "Text",
+      "required": true
+    }
+  ],
+
+  "template_file": {
+    "base_path": "D:\\xampp\\htdocs\\A49-Standards\\03_BIM_References\\01_Templates",
+    "file_pattern": "A49_TEMPLATE_RVT{version}.rvt",
+    "note": "Version is derived from Revit's VersionNumber (e.g., 2024 -> RVT24, 2025 -> RVT25)"
+  }
+}

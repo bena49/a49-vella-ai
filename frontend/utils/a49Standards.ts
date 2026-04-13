@@ -36,16 +36,17 @@ const TEMPLATE_MAP: Record<string, Record<string, string[]>> = {
         "D1": ["A49_PD_DETAILS"],
         "AP": ["A49_PD_EIA AREA PLAN", "A49_PD_NFA AREA PLAN"],
     },
-    "DD": {
+"DD": {
         "FL": ["A49_DD_FLOOR PLAN", "A49_DD_PRESENTATION PLAN"],
         "SITE": ["A49_DD_SITE PLAN"],
         "CP": ["A49_DD_REFLECTED CEILING PLAN"],
         "EL": ["A49_DD_ELEVATION"],
-        "SE": ["A49_DD_WALL SECTION"],
+        "SE": ["A49_DD_BUILDING SECTION"],
         "WS": ["A49_DD_WALL SECTION"],
         "SC": ["A49_DD_DOOR & WINDOW"],
         "D1": ["A49_DD_DETAILS"],
         "AP": ["A49_DD_EIA AREA PLAN", "A49_DD_NFA AREA PLAN"],
+        "PT": ["A49_DD_INTERIOR ELEVATION", "A49_DD_INTERIOR ENLARGED PLAN"],
     },
     "CD": {
         "A1": [
@@ -63,7 +64,7 @@ const TEMPLATE_MAP: Record<string, Record<string, string[]>> = {
             "A49_CD_A5_REFLECTED CEILING PLAN", 
             "A49_CD_A5_REFLECTED CEILING PLAN_COLOR"
         ],
-        "A6": ["A49_CD_A6_PATTERNS PLAN", 'A49_CD_A6_INTERIOR ENLARGED PLAN', "A49_CD_A6_INTERIOR ELEVATION"],
+        "A6": ["A49_CD_A6_PATTERNS PLAN", "A49_CD_A6_INTERIOR ENLARGED PLAN", "A49_CD_A6_INTERIOR ELEVATION"],
         "A7": ["A49_CD_A7_VERTICAL CIRCULATION PLAN", "A49_CD_A7_VERTICAL CIRCULATION_SECTION"],
         
         "A8": ["A49_CD_A8_DOOR & WINDOW"],

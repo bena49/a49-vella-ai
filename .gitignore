@@ -23,3 +23,4 @@ dist/
 [Oo]bj/
 *.user
 *.suo
+.vs/

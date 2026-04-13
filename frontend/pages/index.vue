@@ -243,6 +243,78 @@ async function handleRevitMessage(raw) {
       return;
   }
 
+  if (data.preflight_result) {
+    const r = data.preflight_result;
+    
+    if (r.status === "error") {
+      messages.value.push({ from: "vella", text: "❌ Preflight Error: " + r.message });
+      scrollToBottom();
+      return;
+    }
+
+    let msg = "";
+    
+    if (r.status === "all_clear") {
+      msg = "⚡ PREFLIGHT REPORT\n━━━━━━━━━━━━━━━━━━\n\n";
+      msg += `✅ All Clear! Your project meets A49 standards.\n\n`;
+      msg += `View Templates: ${r.view_templates.present}/${r.view_templates.total_required} ✅\n`;
+      msg += `Titleblocks: ${r.titleblocks.present}/${r.titleblocks.total_required} ✅\n`;
+      msg += `Parameters: ${r.project_parameters.present}/${r.project_parameters.total_required} ✅`;
+    } else {
+      msg = "⚡ PREFLIGHT REPORT\n━━━━━━━━━━━━━━━━━━\n\n";
+      
+      // View Templates
+      const vt = r.view_templates;
+      const vtStatus = (vt.missing_count === 0 && vt.misconfigured_count === 0) ? "✅" : "⚠️";
+      msg += `View Templates: ${vt.present}/${vt.total_required} ${vtStatus}\n`;
+      
+      // Titleblocks
+      const tb = r.titleblocks;
+      const tbStatus = tb.missing_count === 0 ? "✅" : "⚠️";
+      msg += `Titleblocks: ${tb.present}/${tb.total_required} ${tbStatus}\n`;
+      
+      // Parameters
+      const pp = r.project_parameters;
+      const ppStatus = pp.missing_count === 0 ? "✅" : "⚠️";
+      msg += `Parameters: ${pp.present}/${pp.total_required} ${ppStatus}\n`;
+
+      // Missing Templates
+      if (vt.missing_count > 0) {
+        msg += `\n❌ Missing Templates (${vt.missing_count}):\n`;
+        vt.missing.forEach(name => { msg += `• ${name}\n`; });
+      }
+
+      // Misconfigured Templates
+      if (vt.misconfigured_count > 0) {
+        msg += `\n⚠️ Misconfigured Templates (${vt.misconfigured_count}):\n`;
+        vt.misconfigured.forEach(item => {
+          msg += `• ${item.name}\n`;
+          item.issues.forEach(issue => {
+            msg += `  └ ${issue.parameter}: expected "${issue.expected}", found "${issue.actual}"\n`;
+          });
+        });
+      }
+
+      // Missing Titleblocks
+      if (tb.missing_count > 0) {
+        msg += `\n❌ Missing Titleblocks (${tb.missing_count}):\n`;
+        tb.missing.forEach(name => { msg += `• ${name}\n`; });
+      }
+
+      // Missing Parameters
+      if (pp.missing_count > 0) {
+        msg += `\n❌ Missing Parameters (${pp.missing_count}):\n`;
+        pp.missing.forEach(name => { msg += `• ${name}\n`; });
+      }
+
+      msg += `\nRevit Version: ${r.revit_version} | Template: ${r.template_file}`;
+    }
+
+    messages.value.push({ from: "vella", text: msg });
+    scrollToBottom();
+    return;
+  }
+
   if (data.status === "silent") return;
   if (data.result === "✔ Command executed successfully.") return;
 
@@ -349,6 +421,11 @@ async function sendToBackend(payload) {
    ACTION HANDLERS & UTILITIES
 --------------------------------------------------------------------------- */
 function handleAction(action) {
+  if (action === 'preflight_check') {
+    messages.value.push({ from: "vella", text: "⚡ Running Preflight Check..." });
+    sendToBackend({ message: "preflight check", session_key: sessionKey.value });
+    return;
+  }
   if (action === 'ui:help') showHelp.value = true;
   else if (action === 'wizard:create_views') {
     wizardProps.value = { levels: [], templates: [], scopeBoxes: [] };

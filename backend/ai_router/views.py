@@ -26,7 +26,7 @@ from .ai_core.session_manager import (
 from .ai_core.gpt_integration import (
     build_prompt, route_gpt_fields, fast_route_intent
 )
-from .ai_utils.envelope_builder import send_envelope, envelope_preflight_check
+from .ai_utils.envelope_builder import send_envelope, envelope_preflight_check, envelope_preflight_repair
 from .ai_utils.formatters import (
     format_views_for_display, format_sheets_for_display,
     normalize_view_list, normalize_sheet_list,
@@ -289,7 +289,6 @@ def ai_router(request):
                 request.session["ai_renumber_confirmed"] = True
                 request.session["ai_expecting_renumber_confirmation"] = False
                 request.session.modified = True
-                # Re-run the modifier to execute the pending command
                 from .ai_commands.modifier import finalize_modification_command
                 return finalize_modification_command(request)
             
@@ -299,9 +298,33 @@ def ai_router(request):
                 request.session["ai_expecting_renumber_confirmation"] = False
                 return Response({"message": "❌ Cancelled. The sheets were not renumbered."})
         
-        # 💥 NEW: BULLETPROOF "NO" INTERCEPTOR
-        # If the user says 'no' during view creation, immediately skip the scope box.
+        # 💥 CLEAN TEXT (used by interceptors below)
         clean_text = raw_text_lower.strip(".!, ")
+
+        # ==========================================================
+        # 0.6) PREFLIGHT REPAIR INTERCEPTOR
+        # ==========================================================
+        if request.session.get("ai_expecting_preflight_repair"):
+            if clean_text in ["yes", "y", "confirm", "fix", "repair", "proceed", "sure", "ok"]:
+                debug_session(request, "🔧 User confirmed Preflight Repair.")
+                request.session["ai_expecting_preflight_repair"] = False
+                request.session.modified = True
+                
+                standards_data = request.session.get("ai_preflight_standards")
+                if not standards_data:
+                    return Response({"message": "❌ No preflight data found. Please run Preflight Check again."})
+                
+                env = envelope_preflight_repair(standards_data, request.data.get("preflight_result"))
+                return send_envelope(request, env)
+            
+            elif clean_text in ["no", "n", "cancel", "skip", "later", "not now"]:
+                debug_session(request, "⏭️ User skipped Preflight Repair.")
+                request.session["ai_expecting_preflight_repair"] = False
+                request.session["ai_preflight_standards"] = None
+                request.session.modified = True
+                return Response({"message": "No problem. You can run Preflight Check again anytime."})
+
+        # 💥 BULLETPROOF "NO" INTERCEPTOR
         if clean_text in ["no", "none", "skip", "n", "nope", "cancel"]:
             current_intent = request.session.get("ai_pending_intent")
             if current_intent in ["create_view", "create_and_place"]:
@@ -315,7 +338,7 @@ def ai_router(request):
         conv_response = process_conversational_intent(raw_text_lower, request)
         if conv_response:
             return conv_response
-
+        
         # ==========================================================
         # 1) Handle Revit Callbacks (WITH LIST MODE RESTORED!)
         # ==========================================================
@@ -482,6 +505,11 @@ def ai_router(request):
                         standards_data = json.load(f)
                 except Exception as e:
                     return Response({"message": f"❌ Could not load standards.json: {e}"})
+                
+                # Store standards in session for repair flow
+                request.session["ai_preflight_standards"] = standards_data
+                request.session["ai_expecting_preflight_repair"] = True
+                request.session.modified = True
                 
                 reset_pending(request)
                 env = envelope_preflight_check(standards_data)

@@ -116,6 +116,7 @@
     <Compile Include="Executor\Commands\ListViewsOnSheetCommand.cs" />
     <Compile Include="Executor\Commands\PlaceViewOnSheetCommand.cs" />
     <Compile Include="Executor\Commands\PreflightCheckCommand.cs" />
+    <Compile Include="Executor\Commands\PreflightRepairCommand.cs" />
     <Compile Include="Executor\Commands\RemoveViewFromSheetCommand.cs" />
     <Compile Include="Executor\Commands\RenameSheetCommand.cs" />
     <Compile Include="Executor\Commands\RenameViewCommand.cs" />

@@ -129,3 +129,12 @@ def envelope_preflight_check(standards_data):
         "command": "preflight_check",
         "raw": standards_data
     }
+
+def envelope_preflight_repair(standards_data, preflight_result):
+    return {
+        "command": "preflight_repair",
+        "raw": {
+            "standards": standards_data,
+            "preflight_result": preflight_result
+        }
+    }

@@ -147,6 +147,9 @@ namespace A49AIRevitAssistant.Executor
                     case "preflight_check":
                         return new PreflightCheckCommand(_uiapp).Execute(env);
 
+                    case "preflight_repair":
+                        return new PreflightRepairCommand(_uiapp).Execute(env);
+
                     default:
                         return $"❌ Unknown command: {env.command}";
                 }

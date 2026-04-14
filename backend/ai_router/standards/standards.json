@@ -401,7 +401,7 @@
   ],
 
   "template_file": {
-    "base_path": "D:\\xampp\\htdocs\\A49-Standards\\03_BIM_References\\01_Templates",
+    "base_path": "\\\\159.192.115.63@4999\\DavWWWRoot\\03_BIM_References\\01_Templates",
     "file_pattern": "A49_TEMPLATE_RVT{version}.rvt",
     "note": "Version is derived from Revit's VersionNumber (e.g., 2024 -> RVT24, 2025 -> RVT25)"
   }

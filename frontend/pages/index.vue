@@ -252,39 +252,28 @@ async function handleRevitMessage(raw) {
       return;
     }
 
-    let msg = "";
+    let msg = "⚡ PREFLIGHT REPORT\n━━━━━━━━━━━━━━━━━━\n\n";
     
-    if (r.status === "all_clear") {
-      msg = "⚡ PREFLIGHT REPORT\n━━━━━━━━━━━━━━━━━━\n\n";
-      msg += `✅ All Clear! Your project meets A49 standards.\n\n`;
-      msg += `View Templates: ${r.view_templates.present}/${r.view_templates.total_required} ✅\n`;
-      msg += `Titleblocks: ${r.titleblocks.present}/${r.titleblocks.total_required} ✅\n`;
-      msg += `Parameters: ${r.project_parameters.present}/${r.project_parameters.total_required} ✅`;
-    } else {
-      msg = "⚡ PREFLIGHT REPORT\n━━━━━━━━━━━━━━━━━━\n\n";
-      
-      // View Templates
-      const vt = r.view_templates;
-      const vtStatus = (vt.missing_count === 0 && vt.misconfigured_count === 0) ? "✅" : "⚠️";
-      msg += `View Templates: ${vt.present}/${vt.total_required} ${vtStatus}\n`;
-      
-      // Titleblocks
-      const tb = r.titleblocks;
-      const tbStatus = tb.missing_count === 0 ? "✅" : "⚠️";
-      msg += `Titleblocks: ${tb.present}/${tb.total_required} ${tbStatus}\n`;
-      
-      // Parameters
-      const pp = r.project_parameters;
-      const ppStatus = pp.missing_count === 0 ? "✅" : "⚠️";
-      msg += `Parameters: ${pp.present}/${pp.total_required} ${ppStatus}\n`;
+    const vt = r.view_templates;
+    const tb = r.titleblocks;
+    const pp = r.project_parameters;
+    
+    const vtOk = vt.missing_count === 0 && vt.misconfigured_count === 0;
+    const tbOk = tb.missing_count === 0;
+    const ppOk = pp.missing_count === 0;
+    
+    msg += `View Templates: ${vt.present}/${vt.total_required} ${vtOk ? "✅" : "⚠️"}\n`;
+    msg += `Titleblocks: ${tb.present}/${tb.total_required} ${tbOk ? "✅" : "⚠️"}\n`;
+    msg += `Parameters: ${pp.present}/${pp.total_required} ${ppOk ? "✅" : "⚠️"}\n`;
 
-      // Missing Templates
+    if (r.status === "all_clear") {
+      msg += `\nRevit Version: ${r.revit_version} | Template: ${r.template_file}\n`;
+      msg += `\n✅ All Clear! Your project meets A49 standards.\nYou can continue with Vella's assistance.`;
+    } else {
       if (vt.missing_count > 0) {
         msg += `\n❌ Missing Templates (${vt.missing_count}):\n`;
         vt.missing.forEach(name => { msg += `• ${name}\n`; });
       }
-
-      // Misconfigured Templates
       if (vt.misconfigured_count > 0) {
         msg += `\n⚠️ Misconfigured Templates (${vt.misconfigured_count}):\n`;
         vt.misconfigured.forEach(item => {
@@ -294,20 +283,52 @@ async function handleRevitMessage(raw) {
           });
         });
       }
-
-      // Missing Titleblocks
       if (tb.missing_count > 0) {
         msg += `\n❌ Missing Titleblocks (${tb.missing_count}):\n`;
         tb.missing.forEach(name => { msg += `• ${name}\n`; });
       }
-
-      // Missing Parameters
       if (pp.missing_count > 0) {
         msg += `\n❌ Missing Parameters (${pp.missing_count}):\n`;
         pp.missing.forEach(name => { msg += `• ${name}\n`; });
       }
-
       msg += `\nRevit Version: ${r.revit_version} | Template: ${r.template_file}`;
+      msg += `\n\n⚠️ Warning! Your project does not fully meet A49 standards.\nPlease say 'Yes' to let Vella fix the issues for you or say 'No' to fix this later.`;
+    }
+
+    window.__vellaPreflightResult = r;
+    messages.value.push({ from: "vella", text: msg });
+    scrollToBottom();
+    return;
+  }
+
+  if (data.preflight_repair_result) {
+    const r = data.preflight_repair_result;
+    let msg = "";
+
+    if (r.status === "error") {
+      msg = "❌ Repair Error: " + r.message;
+    } else {
+      msg = "🔧 REPAIR REPORT\n━━━━━━━━━━━━━━━━━━\n\n";
+
+      if (r.summary) {
+        if (r.summary.templates_transferred > 0)
+          msg += `✅ ${r.summary.templates_transferred} missing template(s) transferred\n`;
+        if (r.summary.parameters_fixed > 0)
+          msg += `✅ ${r.summary.parameters_fixed} misconfigured template(s) fixed\n`;
+        if (r.summary.titleblocks_transferred > 0)
+          msg += `✅ ${r.summary.titleblocks_transferred} missing titleblock(s) transferred\n`;
+
+        if (r.summary.errors && r.summary.errors.length > 0) {
+          msg += `\n⚠️ Errors (${r.summary.errors.length}):\n`;
+          r.summary.errors.forEach(err => { msg += `• ${err}\n`; });
+        }
+      }
+
+      msg += `\n${r.message}`;
+      
+      if (r.status === "success") {
+        msg += `\n\nRun Preflight Check again to verify all issues are resolved.`;
+      }
     }
 
     messages.value.push({ from: "vella", text: msg });
@@ -338,7 +359,17 @@ async function handleRevitMessage(raw) {
 function handleUserSubmit(text) {
   messages.value.push({ from: "user", text });
   scrollToBottom();
-  sendToBackend({ message: text, session_key: sessionKey.value });
+  
+  const payload = { message: text, session_key: sessionKey.value };
+  
+  // Attach preflight result if user is confirming a repair
+  const confirmWords = ["yes", "y", "confirm", "fix", "repair", "proceed", "sure", "ok"];
+  if (window.__vellaPreflightResult && confirmWords.includes(text.toLowerCase().trim())) {
+    payload.preflight_result = window.__vellaPreflightResult;
+    window.__vellaPreflightResult = null;
+  }
+  
+  sendToBackend(payload);
 }
 
 async function sendUserPrompt(revitData = null) {

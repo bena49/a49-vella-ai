@@ -231,7 +231,7 @@ namespace A49AIRevitAssistant.Executor.Commands
             foreach (Parameter p in element.Parameters)
             {
                 if (p.Definition != null &&
-                    string.Equals(p.Definition.Name, paramName, StringComparison.OrdinalIgnoreCase))
+                    string.Equals(p.Definition.Name, paramName, StringComparison.Ordinal))
                 {
                     if (p.HasValue)
                     {
@@ -252,32 +252,71 @@ namespace A49AIRevitAssistant.Executor.Commands
         {
             var result = new TitleblockCheckResult();
 
-            // Get all loaded titleblock family names
-            var loadedFamilies = new FilteredElementCollector(doc)
+            // Get all loaded titleblock families with their types
+            var titleblockFamilies = new FilteredElementCollector(doc)
                 .OfClass(typeof(Family))
                 .Cast<Family>()
                 .Where(f => f.FamilyCategory != null &&
                        f.FamilyCategory.Id.Value == (int)BuiltInCategory.OST_TitleBlocks)
-                .Select(f => f.Name)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                .ToList();
+
+            // Build lookup: family name -> list of type names
+            var familyTypeLookup = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var family in titleblockFamilies)
+            {
+                var typeNames = new List<string>();
+                foreach (var typeId in family.GetFamilySymbolIds())
+                {
+                    var symbol = doc.GetElement(typeId) as FamilySymbol;
+                    if (symbol != null)
+                        typeNames.Add(symbol.Name);
+                }
+                familyTypeLookup[family.Name] = typeNames;
+            }
 
             var requiredTitleblocks = standards["titleblocks"] as JArray;
             if (requiredTitleblocks == null) return result;
 
-            result.TotalRequired = requiredTitleblocks.Count;
+            // Count total required = sum of all types across all families
+            int totalRequired = 0;
+            foreach (JObject req in requiredTitleblocks)
+            {
+                var types = req["types"] as JArray;
+                if (types != null) totalRequired += types.Count;
+            }
+            result.TotalRequired = totalRequired;
 
             foreach (JObject req in requiredTitleblocks)
             {
                 string familyName = req["family"]?.ToString();
                 if (string.IsNullOrEmpty(familyName)) continue;
 
-                if (loadedFamilies.Contains(familyName))
+                var requiredTypes = req["types"] as JArray;
+                if (requiredTypes == null) continue;
+
+                // Check if family exists
+                if (!familyTypeLookup.TryGetValue(familyName, out List<string> loadedTypes))
                 {
-                    result.Present++;
+                    // Family missing entirely — all its types are missing
+                    foreach (var t in requiredTypes)
+                    {
+                        result.Missing.Add($"{familyName} : {t}");
+                    }
+                    continue;
                 }
-                else
+
+                // Family exists — check each required type
+                foreach (var t in requiredTypes)
                 {
-                    result.Missing.Add(familyName);
+                    string typeName = t.ToString();
+                    if (loadedTypes.Any(lt => string.Equals(lt, typeName, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        result.Present++;
+                    }
+                    else
+                    {
+                        result.Missing.Add($"{familyName} : {typeName}");
+                    }
                 }
             }
 

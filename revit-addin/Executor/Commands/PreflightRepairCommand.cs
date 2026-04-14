@@ -2,15 +2,14 @@
 // A49AIRevitAssistant/Executor/Commands/PreflightRepairCommand.cs
 // ============================================================================
 // Repairs issues found by PreflightCheckCommand:
-//   1. Transfers missing View Templates from master .rvt file
-//   2. Fixes misconfigured parameter values on existing View Templates
-//   3. Transfers missing Titleblock families from master .rvt file
+//   1. Renames misnamed View Templates to correct names
+//   2. Renames misnamed Titleblock types to correct names
+//   3. Fixes misconfigured parameter values on existing View Templates
+//   4. Transfers truly missing View Templates from master .rvt file
+//   5. Transfers truly missing Titleblock families from master .rvt file
 //
-// The repair data (standards + preflight results) is received in env.raw
-// from Django. The master .rvt file is accessed via the WebDAV drive
-// which is assumed to be already connected (via STD_DriveConnect).
-//
-// Results are sent directly to Vue via SendRawMessage.
+// Repair order: Rename first, then fix parameters, then transfer missing.
+// This prevents duplicates from being created.
 // ============================================================================
 
 using System;
@@ -71,7 +70,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                 string templateFileName = filePattern.Replace("{version}", shortVersion);
                 string templateFilePath = Path.Combine(basePath, templateFileName);
 
-                A49Logger.Log($"🔧 Preflight Repair: Looking for master template at: {templateFilePath}");
+                A49Logger.Log($"🔧 Preflight Repair: Master template path: {templateFilePath}");
 
                 // ─────────────────────────────────────────────────────
                 // 3. COLLECT WHAT NEEDS FIXING
@@ -81,34 +80,137 @@ namespace A49AIRevitAssistant.Executor.Commands
 
                 var missingTemplates = vtResult?["missing"]?.ToObject<List<string>>() ?? new List<string>();
                 var misconfigured = vtResult?["misconfigured"] as JArray ?? new JArray();
-                var missingTitleblocks = tbResult?["missing"]?.ToObject<List<string>>() ?? new List<string>();
+                var misnamedTemplates = vtResult?["misnamed"] as JArray ?? new JArray();
 
-                int fixedTemplates = 0;
+                var missingTitleblocks = tbResult?["missing"]?.ToObject<List<string>>() ?? new List<string>();
+                var misnamedTitleblocks = tbResult?["misnamed"] as JArray ?? new JArray();
+
+                int renamedTemplates = 0;
+                int renamedTitleblocks = 0;
                 int fixedParameters = 0;
-                int fixedTitleblocks = 0;
+                int transferredTemplates = 0;
+                int transferredTitleblocks = 0;
                 var errors = new List<string>();
 
+                // Build standards lookup for expected parameter values
+                var standardsLookup = new Dictionary<string, JObject>(StringComparer.OrdinalIgnoreCase);
+                var standardTemplates = standards["view_templates"] as JArray;
+                if (standardTemplates != null)
+                {
+                    foreach (JObject st in standardTemplates)
+                    {
+                        string name = st["name"]?.ToString();
+                        if (!string.IsNullOrEmpty(name))
+                            standardsLookup[name] = st;
+                    }
+                }
+
                 // ─────────────────────────────────────────────────────
-                // 4. FIX MISCONFIGURED PARAMETERS (No master file needed)
+                // 4. RENAME MISNAMED VIEW TEMPLATES
+                // ─────────────────────────────────────────────────────
+                if (misnamedTemplates.Count > 0)
+                {
+                    A49Logger.Log($"🔧 Renaming {misnamedTemplates.Count} misnamed view templates...");
+
+                    using (Transaction tx = new Transaction(doc, "Vella - Rename View Templates"))
+                    {
+                        tx.Start();
+
+                        foreach (JObject item in misnamedTemplates)
+                        {
+                            string expectedName = item["expected"]?.ToString();
+                            string currentName = item["current"]?.ToString();
+                            int elementId = item["element_id"]?.ToObject<int>() ?? -1;
+
+                            if (string.IsNullOrEmpty(expectedName) || elementId < 0) continue;
+
+                            try
+                            {
+                                Element element = doc.GetElement(new ElementId(elementId));
+                                if (element is View view && view.IsTemplate)
+                                {
+                                    view.Name = expectedName;
+                                    A49Logger.Log($"  ✅ Renamed: '{currentName}' → '{expectedName}'");
+                                    renamedTemplates++;
+
+                                    // Also fix parameters if needed
+                                    if (standardsLookup.TryGetValue(expectedName, out JObject expected))
+                                    {
+                                        bool paramFixed = false;
+                                        paramFixed |= SetParameterValue(view, "DISCIPLINE", expected["discipline"]?.ToString());
+                                        paramFixed |= SetParameterValue(view, "PROJECT PHASE", expected["project_phase"]?.ToString());
+                                        paramFixed |= SetParameterValue(view, "VIEW SET", expected["view_set"]?.ToString());
+                                        if (paramFixed) fixedParameters++;
+                                    }
+                                }
+                                else
+                                {
+                                    errors.Add($"Element {elementId} is not a view template.");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                errors.Add($"Failed to rename '{currentName}': {ex.Message}");
+                                A49Logger.Log($"  ❌ Rename failed for '{currentName}': {ex.Message}");
+                            }
+                        }
+
+                        tx.Commit();
+                    }
+                }
+
+                // ─────────────────────────────────────────────────────
+                // 5. RENAME MISNAMED TITLEBLOCK TYPES
+                // ─────────────────────────────────────────────────────
+                if (misnamedTitleblocks.Count > 0)
+                {
+                    A49Logger.Log($"🔧 Renaming {misnamedTitleblocks.Count} misnamed titleblock types...");
+
+                    using (Transaction tx = new Transaction(doc, "Vella - Rename Titleblock Types"))
+                    {
+                        tx.Start();
+
+                        foreach (JObject item in misnamedTitleblocks)
+                        {
+                            string familyName = item["family"]?.ToString();
+                            string expectedType = item["expected"]?.ToString();
+                            string currentType = item["current"]?.ToString();
+                            int elementId = item["element_id"]?.ToObject<int>() ?? -1;
+
+                            if (string.IsNullOrEmpty(expectedType) || elementId < 0) continue;
+
+                            try
+                            {
+                                Element element = doc.GetElement(new ElementId(elementId));
+                                if (element is FamilySymbol symbol)
+                                {
+                                    symbol.Name = expectedType;
+                                    A49Logger.Log($"  ✅ Renamed: '{familyName} : {currentType}' → '{familyName} : {expectedType}'");
+                                    renamedTitleblocks++;
+                                }
+                                else
+                                {
+                                    errors.Add($"Element {elementId} is not a titleblock type.");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                errors.Add($"Failed to rename titleblock '{currentType}': {ex.Message}");
+                                A49Logger.Log($"  ❌ Titleblock rename failed for '{currentType}': {ex.Message}");
+                            }
+                        }
+
+                        tx.Commit();
+                    }
+                }
+
+                // ─────────────────────────────────────────────────────
+                // 6. FIX MISCONFIGURED PARAMETERS
                 // ─────────────────────────────────────────────────────
                 if (misconfigured.Count > 0)
                 {
                     A49Logger.Log($"🔧 Fixing {misconfigured.Count} misconfigured templates...");
 
-                    // Build standards lookup for expected values
-                    var standardsLookup = new Dictionary<string, JObject>(StringComparer.OrdinalIgnoreCase);
-                    var standardTemplates = standards["view_templates"] as JArray;
-                    if (standardTemplates != null)
-                    {
-                        foreach (JObject st in standardTemplates)
-                        {
-                            string name = st["name"]?.ToString();
-                            if (!string.IsNullOrEmpty(name))
-                                standardsLookup[name] = st;
-                        }
-                    }
-
-                    // Get all view templates in document
                     var allTemplates = new FilteredElementCollector(doc)
                         .OfClass(typeof(View))
                         .Cast<View>()
@@ -128,7 +230,6 @@ namespace A49AIRevitAssistant.Executor.Commands
                             if (!standardsLookup.TryGetValue(templateName, out JObject expected)) continue;
 
                             bool fixed_any = false;
-
                             fixed_any |= SetParameterValue(template, "DISCIPLINE", expected["discipline"]?.ToString());
                             fixed_any |= SetParameterValue(template, "PROJECT PHASE", expected["project_phase"]?.ToString());
                             fixed_any |= SetParameterValue(template, "VIEW SET", expected["view_set"]?.ToString());
@@ -143,7 +244,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                 }
 
                 // ─────────────────────────────────────────────────────
-                // 5. TRANSFER MISSING TEMPLATES & TITLEBLOCKS FROM MASTER
+                // 7. TRANSFER TRULY MISSING ITEMS FROM MASTER FILE
                 // ─────────────────────────────────────────────────────
                 bool needsMasterFile = missingTemplates.Count > 0 || missingTitleblocks.Count > 0;
 
@@ -161,7 +262,6 @@ namespace A49AIRevitAssistant.Executor.Commands
 
                         try
                         {
-                            // Open master file in background (not visible, no worksets)
                             A49Logger.Log("📂 Opening master template file...");
                             var openOptions = new OpenOptions();
                             openOptions.DetachFromCentralOption = DetachFromCentralOption.DetachAndPreserveWorksets;
@@ -187,14 +287,12 @@ namespace A49AIRevitAssistant.Executor.Commands
                                         .ToDictionary(v => v.Name, v => v, StringComparer.OrdinalIgnoreCase);
 
                                     var elementsToCopy = new List<ElementId>();
-                                    var namesFound = new List<string>();
 
                                     foreach (string name in missingTemplates)
                                     {
                                         if (masterTemplates.TryGetValue(name, out View masterTemplate))
                                         {
                                             elementsToCopy.Add(masterTemplate.Id);
-                                            namesFound.Add(name);
                                         }
                                         else
                                         {
@@ -214,19 +312,14 @@ namespace A49AIRevitAssistant.Executor.Commands
                                             try
                                             {
                                                 ElementTransformUtils.CopyElements(
-                                                    masterDoc,
-                                                    elementsToCopy,
-                                                    doc,
-                                                    Transform.Identity,
-                                                    copyOptions
-                                                );
-                                                fixedTemplates = elementsToCopy.Count;
-                                                A49Logger.Log($"✅ Transferred {fixedTemplates} view templates.");
+                                                    masterDoc, elementsToCopy, doc,
+                                                    Transform.Identity, copyOptions);
+                                                transferredTemplates = elementsToCopy.Count;
+                                                A49Logger.Log($"✅ Transferred {transferredTemplates} view templates.");
                                             }
                                             catch (Exception ex)
                                             {
                                                 errors.Add($"Template transfer error: {ex.Message}");
-                                                A49Logger.Log($"❌ Template transfer error: {ex.Message}");
                                             }
 
                                             tx.Commit();
@@ -239,7 +332,6 @@ namespace A49AIRevitAssistant.Executor.Commands
                                 {
                                     A49Logger.Log($"🔧 Transferring {missingTitleblocks.Count} missing titleblocks...");
 
-                                    // Parse "Family : Type" format from missing list
                                     var neededFamilies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                                     foreach (string entry in missingTitleblocks)
                                     {
@@ -247,16 +339,14 @@ namespace A49AIRevitAssistant.Executor.Commands
                                         neededFamilies.Add(familyName);
                                     }
 
-                                    // Find titleblock families in master doc
                                     var masterTBFamilies = new FilteredElementCollector(masterDoc)
                                         .OfClass(typeof(Family))
                                         .Cast<Family>()
                                         .Where(f => f.FamilyCategory != null &&
-                                               f.FamilyCategory.Id.Value == (int)BuiltInCategory.OST_TitleBlocks &&
+                                               f.FamilyCategory.Id.IntegerValue == (int)BuiltInCategory.OST_TitleBlocks &&
                                                neededFamilies.Contains(f.Name))
                                         .ToList();
 
-                                    // Collect all FamilySymbol IDs for the needed families
                                     var tbElementsToCopy = new List<ElementId>();
                                     var tbNamesFound = new List<string>();
 
@@ -269,7 +359,6 @@ namespace A49AIRevitAssistant.Executor.Commands
                                         tbNamesFound.Add(family.Name);
                                     }
 
-                                    // Report families not found in master
                                     foreach (string needed in neededFamilies)
                                     {
                                         if (!tbNamesFound.Any(n => string.Equals(n, needed, StringComparison.OrdinalIgnoreCase)))
@@ -290,19 +379,14 @@ namespace A49AIRevitAssistant.Executor.Commands
                                             try
                                             {
                                                 ElementTransformUtils.CopyElements(
-                                                    masterDoc,
-                                                    tbElementsToCopy,
-                                                    doc,
-                                                    Transform.Identity,
-                                                    copyOptions
-                                                );
-                                                fixedTitleblocks = missingTitleblocks.Count;
+                                                    masterDoc, tbElementsToCopy, doc,
+                                                    Transform.Identity, copyOptions);
+                                                transferredTitleblocks = missingTitleblocks.Count;
                                                 A49Logger.Log($"✅ Transferred {tbNamesFound.Count} titleblock families.");
                                             }
                                             catch (Exception ex)
                                             {
                                                 errors.Add($"Titleblock transfer error: {ex.Message}");
-                                                A49Logger.Log($"❌ Titleblock transfer error: {ex.Message}");
                                             }
 
                                             tx.Commit();
@@ -318,7 +402,6 @@ namespace A49AIRevitAssistant.Executor.Commands
                         }
                         finally
                         {
-                            // Close the master document without saving
                             if (masterDoc != null && masterDoc.IsValidObject)
                             {
                                 masterDoc.Close(false);
@@ -329,15 +412,17 @@ namespace A49AIRevitAssistant.Executor.Commands
                 }
 
                 // ─────────────────────────────────────────────────────
-                // 6. BUILD REPAIR REPORT
+                // 8. BUILD REPAIR REPORT
                 // ─────────────────────────────────────────────────────
-                int totalFixed = fixedTemplates + fixedParameters + fixedTitleblocks;
+                int totalFixed = renamedTemplates + renamedTitleblocks + fixedParameters + transferredTemplates + transferredTitleblocks;
 
                 var summary = new
                 {
-                    templates_transferred = fixedTemplates,
+                    templates_renamed = renamedTemplates,
+                    titleblocks_renamed = renamedTitleblocks,
                     parameters_fixed = fixedParameters,
-                    titleblocks_transferred = fixedTitleblocks,
+                    templates_transferred = transferredTemplates,
+                    titleblocks_transferred = transferredTitleblocks,
                     errors = errors
                 };
 
@@ -421,7 +506,6 @@ namespace A49AIRevitAssistant.Executor.Commands
         {
             public DuplicateTypeAction OnDuplicateTypeNamesFound(DuplicateTypeNamesHandlerArgs args)
             {
-                // Use the destination project's types if duplicates exist
                 return DuplicateTypeAction.UseDestinationTypes;
             }
         }

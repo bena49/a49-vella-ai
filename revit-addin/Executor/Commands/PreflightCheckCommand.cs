@@ -2,23 +2,21 @@
 // A49AIRevitAssistant/Executor/Commands/PreflightCheckCommand.cs
 // ============================================================================
 // Scans the active Revit document against A49 standards and reports:
-//   1. Missing or misconfigured View Templates
-//   2. Missing Titleblock families
+//   1. Missing, misnamed, or misconfigured View Templates
+//   2. Missing or misnamed Titleblock types
 //   3. Missing Project Parameters (DISCIPLINE, PROJECT PHASE, VIEW SET)
 //
 // Standards data is received in the envelope from Django (standards.json).
-// Results are sent directly to Vue via SendRawMessage (same pattern as
-// GetProjectInfoCommand / fetch_project_info).
+// Results are sent directly to Vue via SendRawMessage.
 // ============================================================================
 
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Xml.Linq;
 
 namespace A49AIRevitAssistant.Executor.Commands
 {
@@ -50,9 +48,9 @@ namespace A49AIRevitAssistant.Executor.Commands
                 // ─────────────────────────────────────────────────────
                 // 2. DETECT REVIT VERSION
                 // ─────────────────────────────────────────────────────
-                string fullVersion = _uiapp.Application.VersionNumber; // e.g. "2024"
+                string fullVersion = _uiapp.Application.VersionNumber;
                 string shortVersion = fullVersion.Length >= 4
-                    ? fullVersion.Substring(2) // "24"
+                    ? fullVersion.Substring(2)
                     : fullVersion;
                 string templateFileName = $"A49_TEMPLATE_RVT{shortVersion}.rvt";
 
@@ -78,7 +76,9 @@ namespace A49AIRevitAssistant.Executor.Commands
                 // ─────────────────────────────────────────────────────
                 bool hasIssues = templateResult.Missing.Count > 0
                     || templateResult.Misconfigured.Count > 0
+                    || templateResult.Misnamed.Count > 0
                     || titleblockResult.Missing.Count > 0
+                    || titleblockResult.Misnamed.Count > 0
                     || parameterResult.Missing.Count > 0;
 
                 var report = new
@@ -95,8 +95,10 @@ namespace A49AIRevitAssistant.Executor.Commands
                             present = templateResult.Present,
                             missing_count = templateResult.Missing.Count,
                             misconfigured_count = templateResult.Misconfigured.Count,
+                            misnamed_count = templateResult.Misnamed.Count,
                             missing = templateResult.Missing,
-                            misconfigured = templateResult.Misconfigured
+                            misconfigured = templateResult.Misconfigured,
+                            misnamed = templateResult.Misnamed
                         },
 
                         titleblocks = new
@@ -104,7 +106,9 @@ namespace A49AIRevitAssistant.Executor.Commands
                             total_required = titleblockResult.TotalRequired,
                             present = titleblockResult.Present,
                             missing_count = titleblockResult.Missing.Count,
-                            missing = titleblockResult.Missing
+                            misnamed_count = titleblockResult.Misnamed.Count,
+                            missing = titleblockResult.Missing,
+                            misnamed = titleblockResult.Misnamed
                         },
 
                         project_parameters = new
@@ -121,10 +125,11 @@ namespace A49AIRevitAssistant.Executor.Commands
 
                 A49Logger.Log($"✅ Preflight complete: {templateResult.Present}/{templateResult.TotalRequired} templates, " +
                     $"{titleblockResult.Present}/{titleblockResult.TotalRequired} titleblocks, " +
-                    $"{parameterResult.Present}/{parameterResult.TotalRequired} parameters");
+                    $"{parameterResult.Present}/{parameterResult.TotalRequired} parameters | " +
+                    $"Misnamed: {templateResult.Misnamed.Count} templates, {titleblockResult.Misnamed.Count} titleblocks");
 
                 // ─────────────────────────────────────────────────────
-                // 7. SEND DIRECTLY TO VUE (Same pattern as fetch_project_info)
+                // 7. SEND DIRECTLY TO VUE
                 // ─────────────────────────────────────────────────────
                 A49AIRevitAssistant.UI.DockablePaneViewer.Instance.Dispatcher.Invoke(() =>
                 {
@@ -147,14 +152,12 @@ namespace A49AIRevitAssistant.Executor.Commands
         {
             var result = new TemplateCheckResult();
 
-            // Get all View Templates in the document
             var allTemplates = new FilteredElementCollector(doc)
                 .OfClass(typeof(View))
                 .Cast<View>()
                 .Where(v => v.IsTemplate)
                 .ToList();
 
-            // Build a lookup: template name -> View element
             var templateLookup = new Dictionary<string, View>(StringComparer.OrdinalIgnoreCase);
             foreach (var vt in allTemplates)
             {
@@ -162,11 +165,24 @@ namespace A49AIRevitAssistant.Executor.Commands
                     templateLookup[vt.Name] = vt;
             }
 
-            // Check each required template from standards
             var requiredTemplates = standards["view_templates"] as JArray;
             if (requiredTemplates == null) return result;
 
             result.TotalRequired = requiredTemplates.Count;
+
+            // Collect all required names
+            var requiredNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (JObject req in requiredTemplates)
+            {
+                string name = req["name"]?.ToString();
+                if (!string.IsNullOrEmpty(name)) requiredNames.Add(name);
+            }
+
+            // Find A49_ templates in doc that are NOT in the required list — misname candidates
+            var unmatchedDocTemplates = allTemplates
+                .Where(v => v.Name.StartsWith("A49_", StringComparison.OrdinalIgnoreCase)
+                            && !requiredNames.Contains(v.Name))
+                .ToList();
 
             foreach (JObject req in requiredTemplates)
             {
@@ -177,35 +193,104 @@ namespace A49AIRevitAssistant.Executor.Commands
                 string expectedPhase = req["project_phase"]?.ToString() ?? "";
                 string expectedViewSet = req["view_set"]?.ToString() ?? "";
 
-                // Check if template exists
-                if (!templateLookup.TryGetValue(reqName, out View foundTemplate))
+                // Check if template exists with exact name
+                if (templateLookup.TryGetValue(reqName, out View foundTemplate))
                 {
-                    result.Missing.Add(reqName);
+                    var issues = new List<object>();
+                    CheckParameterValue(foundTemplate, "DISCIPLINE", expectedDiscipline, issues);
+                    CheckParameterValue(foundTemplate, "PROJECT PHASE", expectedPhase, issues);
+                    CheckParameterValue(foundTemplate, "VIEW SET", expectedViewSet, issues);
+
+                    if (issues.Count > 0)
+                    {
+                        result.Misconfigured.Add(new
+                        {
+                            name = reqName,
+                            issues = issues
+                        });
+                    }
+                    else
+                    {
+                        result.Present++;
+                    }
                     continue;
                 }
 
-                // Template exists — check parameter values
-                var issues = new List<object>();
+                // Template NOT found — look for misnamed candidate
+                var candidate = FindMisnamedCandidate(reqName, unmatchedDocTemplates);
 
-                CheckParameterValue(foundTemplate, "DISCIPLINE", expectedDiscipline, issues);
-                CheckParameterValue(foundTemplate, "PROJECT PHASE", expectedPhase, issues);
-                CheckParameterValue(foundTemplate, "VIEW SET", expectedViewSet, issues);
-
-                if (issues.Count > 0)
+                if (candidate != null)
                 {
-                    result.Misconfigured.Add(new
+                    var paramIssues = new List<object>();
+                    CheckParameterValue(candidate, "DISCIPLINE", expectedDiscipline, paramIssues);
+                    CheckParameterValue(candidate, "PROJECT PHASE", expectedPhase, paramIssues);
+                    CheckParameterValue(candidate, "VIEW SET", expectedViewSet, paramIssues);
+
+                    result.Misnamed.Add(new
                     {
-                        name = reqName,
-                        issues = issues
+                        expected = reqName,
+                        current = candidate.Name,
+                        element_id = candidate.Id.Value,
+                        parameter_issues = paramIssues
                     });
+
+                    unmatchedDocTemplates.Remove(candidate);
                 }
                 else
                 {
-                    result.Present++;
+                    result.Missing.Add(reqName);
                 }
             }
 
             return result;
+        }
+
+        private View FindMisnamedCandidate(string requiredName, List<View> candidates)
+        {
+            if (candidates == null || candidates.Count == 0) return null;
+
+            string[] parts = requiredName.Split('_');
+            if (parts.Length < 3) return null;
+
+            string stage = parts[1]; // CD, DD, PD, WV
+
+            var identifiers = new List<string>();
+            for (int i = 2; i < parts.Length; i++)
+            {
+                foreach (string word in parts[i].Split(' '))
+                {
+                    string clean = word.Trim().ToUpper();
+                    if (!string.IsNullOrEmpty(clean) && clean != "A49")
+                        identifiers.Add(clean);
+                }
+            }
+
+            if (identifiers.Count == 0) return null;
+
+            View bestMatch = null;
+            int bestScore = 0;
+
+            foreach (var candidate in candidates)
+            {
+                string candidateUpper = candidate.Name.ToUpper();
+
+                if (!candidateUpper.Contains($"_{stage}_") && !candidateUpper.StartsWith($"A49_{stage}"))
+                    continue;
+
+                int score = 0;
+                foreach (string id in identifiers)
+                {
+                    if (candidateUpper.Contains(id)) score++;
+                }
+
+                if (score > bestScore && score >= Math.Max(1, identifiers.Count / 2))
+                {
+                    bestScore = score;
+                    bestMatch = candidate;
+                }
+            }
+
+            return bestMatch;
         }
 
         private void CheckParameterValue(View template, string paramName, string expected, List<object> issues)
@@ -227,7 +312,6 @@ namespace A49AIRevitAssistant.Executor.Commands
 
         private string GetParameterValue(Element element, string paramName)
         {
-            // Try by name lookup (works for Project Parameters)
             foreach (Parameter p in element.Parameters)
             {
                 if (p.Definition != null &&
@@ -252,7 +336,6 @@ namespace A49AIRevitAssistant.Executor.Commands
         {
             var result = new TitleblockCheckResult();
 
-            // Get all loaded titleblock families with their types
             var titleblockFamilies = new FilteredElementCollector(doc)
                 .OfClass(typeof(Family))
                 .Cast<Family>()
@@ -260,24 +343,22 @@ namespace A49AIRevitAssistant.Executor.Commands
                        f.FamilyCategory.Id.Value == (int)BuiltInCategory.OST_TitleBlocks)
                 .ToList();
 
-            // Build lookup: family name -> list of type names
-            var familyTypeLookup = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            var familyTypeLookup = new Dictionary<string, List<TypeInfo>>(StringComparer.OrdinalIgnoreCase);
             foreach (var family in titleblockFamilies)
             {
-                var typeNames = new List<string>();
+                var typeInfos = new List<TypeInfo>();
                 foreach (var typeId in family.GetFamilySymbolIds())
                 {
                     var symbol = doc.GetElement(typeId) as FamilySymbol;
                     if (symbol != null)
-                        typeNames.Add(symbol.Name);
+                        typeInfos.Add(new TypeInfo { Name = symbol.Name, ElementId = typeId.IntegerValue });
                 }
-                familyTypeLookup[family.Name] = typeNames;
+                familyTypeLookup[family.Name] = typeInfos;
             }
 
             var requiredTitleblocks = standards["titleblocks"] as JArray;
             if (requiredTitleblocks == null) return result;
 
-            // Count total required = sum of all types across all families
             int totalRequired = 0;
             foreach (JObject req in requiredTitleblocks)
             {
@@ -294,10 +375,8 @@ namespace A49AIRevitAssistant.Executor.Commands
                 var requiredTypes = req["types"] as JArray;
                 if (requiredTypes == null) continue;
 
-                // Check if family exists
-                if (!familyTypeLookup.TryGetValue(familyName, out List<string> loadedTypes))
+                if (!familyTypeLookup.TryGetValue(familyName, out List<TypeInfo> loadedTypes))
                 {
-                    // Family missing entirely — all its types are missing
                     foreach (var t in requiredTypes)
                     {
                         result.Missing.Add($"{familyName} : {t}");
@@ -305,22 +384,72 @@ namespace A49AIRevitAssistant.Executor.Commands
                     continue;
                 }
 
-                // Family exists — check each required type
+                var matchedTypeNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
                 foreach (var t in requiredTypes)
                 {
                     string typeName = t.ToString();
-                    if (loadedTypes.Any(lt => string.Equals(lt, typeName, StringComparison.OrdinalIgnoreCase)))
+
+                    var exactMatch = loadedTypes.FirstOrDefault(lt =>
+                        string.Equals(lt.Name, typeName, StringComparison.OrdinalIgnoreCase));
+
+                    if (exactMatch != null)
                     {
                         result.Present++;
+                        matchedTypeNames.Add(exactMatch.Name);
+                        continue;
+                    }
+
+                    // Look for misnamed candidate
+                    var candidate = loadedTypes.FirstOrDefault(lt =>
+                        !matchedTypeNames.Contains(lt.Name) &&
+                        IsSimilarTypeName(typeName, lt.Name));
+
+                    if (candidate != null)
+                    {
+                        result.Misnamed.Add(new
+                        {
+                            family = familyName,
+                            expected = typeName,
+                            current = candidate.Name,
+                            element_id = candidate.ElementId
+                        });
+                        matchedTypeNames.Add(candidate.Name);
                     }
                     else
                     {
-                        result.Missing.Add($"{familyName} : {typeName}");
+                        var unmatchedType = loadedTypes.FirstOrDefault(lt =>
+                            !matchedTypeNames.Contains(lt.Name));
+
+                        if (unmatchedType != null)
+                        {
+                            result.Misnamed.Add(new
+                            {
+                                family = familyName,
+                                expected = typeName,
+                                current = unmatchedType.Name,
+                                element_id = unmatchedType.ElementId
+                            });
+                            matchedTypeNames.Add(unmatchedType.Name);
+                        }
+                        else
+                        {
+                            result.Missing.Add($"{familyName} : {typeName}");
+                        }
                     }
                 }
             }
 
             return result;
+        }
+
+        private bool IsSimilarTypeName(string expected, string actual)
+        {
+            var expectedWords = expected.ToUpper().Split(new[] { ' ', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+            var actualWords = actual.ToUpper().Split(new[] { ' ', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+
+            int matches = expectedWords.Count(ew => actualWords.Any(aw => aw.Contains(ew) || ew.Contains(aw)));
+            return matches >= Math.Max(1, expectedWords.Length / 2);
         }
 
         // =====================================================================
@@ -330,7 +459,6 @@ namespace A49AIRevitAssistant.Executor.Commands
         {
             var result = new ParameterCheckResult();
 
-            // Get all parameter bindings in the document
             var bindingMap = doc.ParameterBindings;
             var iterator = bindingMap.ForwardIterator();
 
@@ -367,7 +495,7 @@ namespace A49AIRevitAssistant.Executor.Commands
         }
 
         // =====================================================================
-        // HELPER: Send error via raw message
+        // HELPERS
         // =====================================================================
         private string SendError(string message)
         {
@@ -393,7 +521,7 @@ namespace A49AIRevitAssistant.Executor.Commands
         }
 
         // =====================================================================
-        // RESULT MODELS (Internal)
+        // RESULT MODELS
         // =====================================================================
         private class TemplateCheckResult
         {
@@ -401,6 +529,7 @@ namespace A49AIRevitAssistant.Executor.Commands
             public int Present { get; set; } = 0;
             public List<string> Missing { get; set; } = new List<string>();
             public List<object> Misconfigured { get; set; } = new List<object>();
+            public List<object> Misnamed { get; set; } = new List<object>();
         }
 
         private class TitleblockCheckResult
@@ -408,6 +537,7 @@ namespace A49AIRevitAssistant.Executor.Commands
             public int TotalRequired { get; set; } = 0;
             public int Present { get; set; } = 0;
             public List<string> Missing { get; set; } = new List<string>();
+            public List<object> Misnamed { get; set; } = new List<object>();
         }
 
         private class ParameterCheckResult
@@ -415,6 +545,12 @@ namespace A49AIRevitAssistant.Executor.Commands
             public int TotalRequired { get; set; } = 0;
             public int Present { get; set; } = 0;
             public List<string> Missing { get; set; } = new List<string>();
+        }
+
+        private class TypeInfo
+        {
+            public string Name { get; set; }
+            public int ElementId { get; set; }
         }
     }
 }

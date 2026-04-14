@@ -274,6 +274,12 @@ async function handleRevitMessage(raw) {
         msg += `\n❌ Missing Templates (${vt.missing_count}):\n`;
         vt.missing.forEach(name => { msg += `• ${name}\n`; });
       }
+      if (vt.misnamed_count > 0) {
+        msg += `\n🔄 Misnamed Templates (${vt.misnamed_count}):\n`;
+        vt.misnamed.forEach(item => {
+          msg += `• "${item.current}" → "${item.expected}"\n`;
+        });
+      }
       if (vt.misconfigured_count > 0) {
         msg += `\n⚠️ Misconfigured Templates (${vt.misconfigured_count}):\n`;
         vt.misconfigured.forEach(item => {
@@ -286,6 +292,12 @@ async function handleRevitMessage(raw) {
       if (tb.missing_count > 0) {
         msg += `\n❌ Missing Titleblocks (${tb.missing_count}):\n`;
         tb.missing.forEach(name => { msg += `• ${name}\n`; });
+      }
+      if (tb.misnamed_count > 0) {
+        msg += `\n🔄 Misnamed Titleblocks (${tb.misnamed_count}):\n`;
+        tb.misnamed.forEach(item => {
+          msg += `• ${item.family}: "${item.current}" → "${item.expected}"\n`;
+        });
       }
       if (pp.missing_count > 0) {
         msg += `\n❌ Missing Parameters (${pp.missing_count}):\n`;
@@ -315,6 +327,10 @@ async function handleRevitMessage(raw) {
           msg += `✅ ${r.summary.templates_transferred} missing template(s) transferred\n`;
         if (r.summary.parameters_fixed > 0)
           msg += `✅ ${r.summary.parameters_fixed} misconfigured template(s) fixed\n`;
+        if (r.summary.templates_renamed > 0)
+          msg += `✅ ${r.summary.templates_renamed} view template(s) renamed\n`;
+        if (r.summary.titleblocks_renamed > 0)
+          msg += `✅ ${r.summary.titleblocks_renamed} titleblock type(s) renamed\n`;
         if (r.summary.titleblocks_transferred > 0)
           msg += `✅ ${r.summary.titleblocks_transferred} missing titleblock(s) transferred\n`;
 

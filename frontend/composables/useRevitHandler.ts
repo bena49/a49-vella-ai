@@ -151,10 +151,25 @@ export function useRevitHandler(
       return;
     }
 
-    // --- PROJECT INVENTORY (Rename wizard data) ---
+    // --- PROJECT INVENTORY (Rename wizard data)
     if (data.project_inventory) {
       updateInventoryProps(data.project_inventory);
       return;
+    }
+
+    // === START OF NEW EDIT ===
+    // --- ROOM PACKAGE COMPLETION SUMMARY ---
+    // This catches the specific signal sent from C# InteractiveRoomPackageCommand
+    if (data.type === "ROOM_PACKAGE_COMPLETE") {
+      const summaryText = `✅ **Room Package Complete!**\n\n` +
+                          `**Room:** ${data.room_name}\n` +
+                          `**Created Sheet:** ${data.sheet_number} - ${data.sheet_name}\n` +
+                          `**Views Generated:** ${data.view_count}\n\n` +
+                          `The new sheet has been opened in Revit for your review.`;
+
+      messages.value.push({ from: "vella", text: summaryText });
+      scrollToBottom();
+      return; // Stop processing so it doesn't trigger "Generic Message" logic below
     }
 
     // --- PREFLIGHT RESULT ---

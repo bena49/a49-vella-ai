@@ -218,6 +218,10 @@ namespace A49AIRevitAssistant.Executor.Commands
         {
             ViewSheet newSheet = null;
 
+            // 💥 FIX 1: Move this list declaration out of the Transaction block 
+            // so it can be accessed at the end of the method for the summary.
+            List<View> generatedElevations = new List<View>();
+
             using (Transaction t2 = new Transaction(doc, "Vella: Create Elevations & Sheet"))
             {
                 t2.Start();
@@ -237,8 +241,6 @@ namespace A49AIRevitAssistant.Executor.Commands
 
                 string[] wallFaces = { "WEST", "SOUTH", "EAST", "NORTH" };
                 View elevTemplate = FindTemplate(doc, elevTemplateName);
-
-                List<View> generatedElevations = new List<View>();
 
                 for (int i = 0; i < 4; i++)
                 {
@@ -372,6 +374,30 @@ namespace A49AIRevitAssistant.Executor.Commands
             if (newSheet != null)
             {
                 uidoc.RequestViewChange(newSheet);
+
+                // === START OF CORRECTED HANDSHAKE ===
+                // 💥 THE SUMMARY PAYLOAD
+                // Now that generatedElevations is in scope, we can count the views properly.
+                Newtonsoft.Json.Linq.JObject summary = new Newtonsoft.Json.Linq.JObject
+                {
+                    ["type"] = "ROOM_PACKAGE_COMPLETE",
+                    ["room_name"] = targetRoom.Name,
+                    ["sheet_number"] = newSheet.SheetNumber,
+                    ["sheet_name"] = newSheet.Name,
+                    ["view_count"] = generatedElevations.Count + 1 // +1 for the Enlarged Plan
+                };
+
+                // Capture session_key for the frontend bridge
+                string sKey = _rawPayload["session_key"]?.ToString();
+
+                if (A49AIRevitAssistant.UI.DockablePaneViewer.Instance != null)
+                {
+                    A49AIRevitAssistant.UI.DockablePaneViewer.Instance.PostResultToVue(
+                        summary.ToString(),
+                        sKey
+                    );
+                }
+                // === END OF CORRECTED HANDSHAKE ===
             }
         }
 

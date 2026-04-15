@@ -4,10 +4,10 @@ Package manager: pnpm
 
 Main project folder
 C:\DEV Projects\Vella-AI  (local Home and Work PC)
-├── .git/                       <-- .git hidden folder
-├── backend/                 <-- Main backend folder
-├── frontend/                   <-- Main frontend folder
-├── revit-addin/                <-- Main csharp Revit folder
+├── .git/                               <-- .git hidden folder
+├── backend/                            <-- Main backend folder
+├── frontend/                           <-- Main frontend folder
+├── revit-addin/                        <-- Main csharp Revit folder
 └── .gitignore
       
 **************************************************************
@@ -34,13 +34,13 @@ UI STRUCTURE
 │
 ├── components/
 │   ├── chat/
-│   │   ├── ChatMessage.vue       <-- (NOT done or Needed) 
-│   │   └── ChatInput.vue         <-- *** Input box + buttons (Mic, Send, Clear)
+│   │   ├── ChatMessage.vue             <-- (NOT done or Needed) 
+│   │   └── ChatInput.vue               <-- *** Input box + buttons (Mic, Send, Clear)
 │   ├── dialogs/
 │   │   └── RenameDialog.vue     
 │   ├── wizards/
 │   │   ├── CreateAndPlaceWizard.vue   <-- Plan and Sheet creation wizard
-│   │   ├── PlanViewWizard.vue    	     <-- Plan creation wizard
+│   │   ├── PlanViewWizard.vue    	   <-- Plan creation wizard
 │   │   ├── RenameWizard.vue           <-- Rename wizard
 │   │   └── RoomElevationWizard.vue    <-- Enlarged Plan and Elevations creation wizard
 │   │   └── SheetWizard.vue            <-- Sheet creation wizard
@@ -56,15 +56,19 @@ UI STRUCTURE
 │   └── VellaModal.vue          
 │
 ├── composables/
-│   ├── useRevitBridge.ts  <-- Handles all WebView2/Chrome communication
-│   └── useVellaApi.ts     <-- (NOT DONE YET) Handles Django API calls & session state
+│   ├── useAuth.ts                  <-- Handles MSAL config, init, login, token refresh, auth state
+│   ├── useChat.ts                  <-- Handles messages, isThinking, sessionKey, sendToBackend, handleUserSubmit, scrollToBottom, clearChat
+│   ├── useRevitBridge.ts           <-- Handles all WebView2/Chrome communication
+│   ├── useRevitHandler.ts          <-- Handles handleRevitMessage + preflight/repair result formatting
+│   └── useWizards.ts               <-- Handles all wizard states, props, handleAction, handleWizardSubmit, handleBatchSubmit, handleRoomElevationExecute
+
 │
 ├── pages/
-│   └──  index.vue		
+│   └──  index.vue		            <-- Main page
 │
 ├── public/
 │   ├── favicon.ico   
 │   └── robots.txt     
 │
 ├── utils/
-│   └── a49Standards.ts    <-- standards file
+│   └── a49Standards.ts             <-- standards file

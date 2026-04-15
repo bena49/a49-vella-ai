@@ -261,7 +261,9 @@ const selectSet = (val) => { filterSet.value = val; closeAllDropdowns(); };
 
 const applySearchReplace = () => {
     if (!findText.value) return;
+    
     const regex = new RegExp(findText.value, "gi");
+    
     filteredItems.value.forEach(item => {
         const originalName = item.name || "";
         if (originalName.match(regex)) {
@@ -269,6 +271,9 @@ const applySearchReplace = () => {
             changes.value[item.unique_id]['name'] = newName;
         }
     });
+
+    findText.value = '';
+    replaceText.value = '';
 };
 
 // --- COMPUTED ---

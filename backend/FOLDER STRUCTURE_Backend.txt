@@ -3,36 +3,39 @@ Environment: Windows Service (Waitress)
 
 Main project folder
 C:\DEV Projects\Vella-AI  (local Home and Work PC)
-├── .git/                       <-- .git hidden folder
-├── backend/                    <-- Main backend folder
-├── frontend/                   <-- Main frontend folder
-├── revit-addin/                <-- Main csharp Revit folder
+├── .git/                               <-- .git hidden folder
+├── backend/                            <-- Main backend folder
+├── frontend/                           <-- Main frontend folder
+├── revit-addin/                        <-- Main csharp Revit folder
 └── .gitignore
       
 **************************************************************
 
 ROOT
-├── ai_backend/                 <-- Main Django project settings
+├── ai_backend/                         <-- Main Django project settings
 │   ├── __init__.py
 │   ├── asgi.py
 │   ├── settings.py
 │   ├── urls.py
 │   └── wsgi.py
 │
-├── ai_router/                  <-- Main Django App for Vella
+├── ai_router/                          <-- Main Django App for Vella
 │   ├── ai_commands/
 │   │   ├── __init__.py
 │   │   ├── batch_processor.py
 │   │   ├── modifier.py
 │   │   ├── sheet_creator.py
+│   │   ├── preflight.py                <-- preflight_check + preflight_repair logic
 │   │   └── view_creator.py
 │   │
 │   ├── ai_core/
 │   │   ├── __init__.py
-│   │   ├── gpt_integration.py  <-- *** Target for fast_route_intent (Regex Router)
+│   │   ├── callback_handler.py         <-- Revit list-result handlers (list_views_result, list_sheets_result, list_scope_boxes_result) 
+│   │   ├── gpt_integration.py          <-- *** Target for fast_route_intent (Regex Router)
+│   │   ├── intent_router.py            <-- finalize_router() + the immediate-commands dispatch block
 │   │   └── session_manager.py
 │   │
-│   ├── ai_engines/             <-- A49 logic and prompt engineering
+│   ├── ai_engines/                     <-- A49 logic and prompt engineering
 │   │   ├── __init__.py
 │   │   ├── conversation_engine.py
 │   │   ├── level_engine.py
@@ -49,36 +52,36 @@ ROOT
 │   │   ├── formatters.py
 │   │   └── validators.py
 │   │
-│   ├── migrations/            <-- Django database migrations
+│   ├── migrations/                     <-- Django database migrations
 │   ├── __init__.py
 │   ├── admin.py
 │   ├── apps.py
-│   ├── auth.py				<-- AZURE login for company Microsoft's account
+│   ├── auth.py				            <-- AZURE login for company Microsoft's account
 │   ├── models.py
 │   ├── urls.py
-│   └── views.py               <-- *** Target for checking the Fast Route before OpenAI
+│   └── views.py                        <-- *** Target for checking the Fast Route before OpenAI
 │   │
 │   ├── standards/
-│   │   └── standards.json		<-- The master standards data
+│   │   └── standards.json		        <-- The master standards data
 │
-├── logs/                       <-- Waitress service logs
+├── logs/                               <-- Waitress service logs
 │   ├── IRISAIBackendWaitress.err.log
 │   ├── IRISAIBackendWaitress.err.log.old
 │   ├── IRISAIBackendWaitress.out.log
 │   ├── IRISAIBackendWaitress.out.log.old
 │   └── IRISAIBackendWaitress.wrapper.log
 │
-├── venv/                       <-- Python Virtual Environment
+├── venv/                               <-- Python Virtual Environment
 │
 ├── .env
-├── 1_Deploy_Backend.bat       <-- Only in web server D:\xampp\webapps\a49-vella-ai
-├── 2_Deploy_Frontend.bat.bat  <-- Only in web server D:\xampp\webapps\a49-vella-ai
-├── AI_restart_waitress_service.bat  <-- Only in web server D:\xampp\webapps\a49-vella-ai
-├── AI_start_waitress_service.bat    <-- Only in web server D:\xampp\webapps\a49-vella-ai
-├── AI_stop_waitress_service.bat     <-- Only in web server D:\xampp\webapps\a49-vella-ai
-├── db.sqlite3                  <-- Local Django DB
-├── IRISAIBackendWaitress.exe   <-- Only in web server D:\xampp\webapps\a49-vella-ai\backend
-├── IRISAIBackendWaitress.xml   <-- Only in web server D:\xampp\webapps\a49-vella-ai\backend
+├── 1_Deploy_Backend.bat                <-- Only in web server D:\xampp\webapps\a49-vella-ai
+├── 2_Deploy_Frontend.bat.bat           <-- Only in web server D:\xampp\webapps\a49-vella-ai
+├── AI_restart_waitress_service.bat     <-- Only in web server D:\xampp\webapps\a49-vella-ai
+├── AI_start_waitress_service.bat       <-- Only in web server D:\xampp\webapps\a49-vella-ai
+├── AI_stop_waitress_service.bat        <-- Only in web server D:\xampp\webapps\a49-vella-ai
+├── db.sqlite3                          <-- Local Django DB
+├── IRISAIBackendWaitress.exe           <-- Only in web server D:\xampp\webapps\a49-vella-ai\backend
+├── IRISAIBackendWaitress.xml           <-- Only in web server D:\xampp\webapps\a49-vella-ai\backend
 ├── manage.py
 ├── requirements.txt
 └── start_local_backend.bat

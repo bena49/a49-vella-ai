@@ -122,6 +122,41 @@ function formatRepairResult(r: any): string {
 }
 
 // =====================================================================
+// AUTO-TAG RESULT FORMATTER
+// =====================================================================
+
+function formatAutoTagResult(r: any): string {
+  if (r.status === "error") {
+    return "❌ Auto-Tag Error: " + r.message;
+  }
+
+  let msg = "🏷️ AUTO-TAG REPORT\n━━━━━━━━━━━━━━━━━━\n\n";
+
+  msg += `Tag Family: ${r.tag_family || "—"} : ${r.tag_type || "—"}\n`;
+  msg += `Views Processed: ${r.views_processed || 0}\n`;
+  msg += `Doors Tagged: ${r.tagged_count || 0} ✅\n`;
+
+  if (r.skipped_count > 0) {
+    msg += `Already Tagged (Skipped): ${r.skipped_count} ⏭️\n`;
+  }
+
+  if (r.errors && r.errors.length > 0) {
+    msg += `\n⚠️ Warnings (${r.errors.length}):\n`;
+    r.errors.forEach((err: string) => {
+      msg += `• ${err}\n`;
+    });
+  }
+
+  if (r.status === "success") {
+    msg += `\n✅ All doors tagged successfully!`;
+  } else if (r.status === "partial") {
+    msg += `\n⚠️ Tagging completed with some warnings.`;
+  }
+
+  return msg;
+}
+
+// =====================================================================
 // MAIN HANDLER FACTORY
 // =====================================================================
 
@@ -192,6 +227,14 @@ export function useRevitHandler(
     // --- PREFLIGHT REPAIR RESULT ---
     if (data.preflight_repair_result) {
       const msg = formatRepairResult(data.preflight_repair_result);
+      messages.value.push({ from: "vella", text: msg });
+      scrollToBottom();
+      return;
+    }
+
+    // --- AUTO-TAG RESULT ---
+    if (data.auto_tag_result) {
+      const msg = formatAutoTagResult(data.auto_tag_result);
       messages.value.push({ from: "vella", text: msg });
       scrollToBottom();
       return;

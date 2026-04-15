@@ -55,6 +55,10 @@ def fast_route_intent(user_text):
     if any(word in txt for word in ["preflight", "health check", "check standards"]):
         return {"intent": "preflight_check"}
 
+    # --- AUTO-TAG ---
+    if any(phrase in txt for phrase in ["tag doors", "auto tag", "door tags", "auto-tag doors", "tag all doors"]):
+        return {"intent": "wizard:auto_tag_doors"}
+
     # --- BASIC LISTS ---
     if txt.startswith("list ") or txt.startswith("show "):
         if "sheet" in txt: return {"intent": "list_sheets"}

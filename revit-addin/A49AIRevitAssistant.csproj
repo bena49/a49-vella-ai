@@ -101,6 +101,7 @@
     <Compile Include="Executor\A49Logger.cs" />
     <Compile Include="Executor\CommandEventHandler.cs" />
     <Compile Include="Executor\Commands\ApplyTemplateCommand.cs" />
+    <Compile Include="Executor\Commands\AutoTagDoorsCommand.cs" />
     <Compile Include="Executor\Commands\BatchRenameViewsCommand.cs" />
     <Compile Include="Executor\Commands\DuplicateViewCommand.cs" />
     <Compile Include="Executor\Commands\ExecuteBatchCommand.cs" />

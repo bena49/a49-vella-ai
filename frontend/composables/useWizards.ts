@@ -22,6 +22,7 @@ export function useWizards(
   const showCreatePlaceWizard = ref(false);
   const showRenameWizard = ref(false);
   const showRoomWizard = ref(false);
+  const showAutoTagWizard = ref(false);
   const showHelp = ref(false);
 
   // --- WIZARD PROPS ---
@@ -30,6 +31,7 @@ export function useWizards(
   const createPlaceWizardProps = ref<any>({});
   const renameWizardProps = ref<any>({});
   const roomWizardProps = ref<any>({});
+  const autoTagWizardProps = ref<any>({});
   const wizardKey = ref(0);
 
   // --- ACTION DISPATCHER ---
@@ -97,6 +99,17 @@ export function useWizards(
         command: "fetch_project_info",
         args: { types: ["levels", "templates", "titleblocks", "rooms"] },
       });
+    } else if (action === "wizard:auto_tag_doors") {
+      autoTagWizardProps.value = {
+        doorTags: [],
+        planViews: [],
+      };
+      showAutoTagWizard.value = true;
+      // Ask Revit to fetch door tags and plan views
+      sendToRevit({
+        command: "fetch_project_info",
+        args: { types: ["door_tags", "plan_views"] },
+      });
     }
   }
 
@@ -151,6 +164,26 @@ export function useWizards(
     });
   }
 
+  // 💥 AUTO-TAG SUBMIT HANDLER
+  function handleAutoTagSubmit(payload: any) {
+    showAutoTagWizard.value = false;
+
+    // Send directly to backend with auto_tag_doors intent
+    messages.value.push({
+      from: "vella",
+      text: `🏷️ Tagging doors in ${payload.view_ids.length} view(s)...`,
+    });
+
+    sendToBackend({
+      message: "auto_tag_doors",
+      tag_family: payload.tag_family,
+      tag_type: payload.tag_type,
+      view_ids: payload.view_ids,
+      skip_tagged: payload.skip_tagged,
+      session_key: sessionKey.value,
+    });
+  }
+
   function closeWizard() {
     showWizard.value = false;
   }
@@ -183,6 +216,13 @@ export function useWizards(
       rooms: projectInfo.rooms || [],
       initialStage: "CD",
     };
+    // Auto-tag wizard gets door_tags and plan_views when available
+    if (projectInfo.door_tags || projectInfo.plan_views) {
+      autoTagWizardProps.value = {
+        doorTags: projectInfo.door_tags || [],
+        planViews: projectInfo.plan_views || [],
+      };
+    }
     wizardKey.value++;
   }
 
@@ -199,6 +239,7 @@ export function useWizards(
     showCreatePlaceWizard,
     showRenameWizard,
     showRoomWizard,
+    showAutoTagWizard,
     showHelp,
     // Props
     wizardProps,
@@ -206,6 +247,7 @@ export function useWizards(
     createPlaceWizardProps,
     renameWizardProps,
     roomWizardProps,
+    autoTagWizardProps,
     wizardKey,
     // Handlers
     handleAction,
@@ -213,6 +255,7 @@ export function useWizards(
     handleWizardSubmit,
     handleBatchSubmit,
     handleRoomElevationExecute,
+    handleAutoTagSubmit,
     closeWizard,
     // Props updaters (called from useRevitHandler)
     updateWizardProps,

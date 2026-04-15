@@ -39,15 +39,29 @@ namespace A49AIRevitAssistant.UI
         {
             this.Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
             {
-                // 💥 Include the session_key in the response JSON
-                string jsonResponse = "{" +
-                    "\"status\":\"complete\"," +
-                    "\"result\":\"" + Escape(finalRevitResult) + "\"," +
-                    "\"session_key\":\"" + sessionKey + "\"," +
-                    "\"timestamp\":\"" + DateTime.Now.ToString("HH:mm:ss") + "\"" +
-                    "}";
+                string jsonResponse;
 
-                A49Logger.Log("📤 Final result sent to JS with Session: " + sessionKey);
+                // Check if the result is already a JSON object (like our Summary)
+                if (finalRevitResult.Trim().StartsWith("{"))
+                {
+                    // Inject the session key directly into the existing JSON object
+                    JObject tempObj = JObject.Parse(finalRevitResult);
+                    tempObj["session_key"] = sessionKey;
+                    tempObj["status"] = "complete";
+                    jsonResponse = tempObj.ToString();
+                }
+                else
+                {
+                    // Standard string result (fallback for simple success/error messages)
+                    jsonResponse = "{" +
+                        "\"status\":\"complete\"," +
+                        "\"result\":\"" + Escape(finalRevitResult) + "\"," +
+                        "\"session_key\":\"" + sessionKey + "\"," +
+                        "\"timestamp\":\"" + DateTime.Now.ToString("HH:mm:ss") + "\"" +
+                        "}";
+                }
+
+                A49Logger.Log("📤 Final result sent to JS: " + jsonResponse);
                 SendResponseDirect(jsonResponse);
             }));
         }

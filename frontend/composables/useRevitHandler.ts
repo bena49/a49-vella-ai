@@ -157,19 +157,22 @@ export function useRevitHandler(
       return;
     }
 
-    // === START OF NEW EDIT ===
     // --- ROOM PACKAGE COMPLETION SUMMARY ---
-    // This catches the specific signal sent from C# InteractiveRoomPackageCommand
-    if (data.type === "ROOM_PACKAGE_COMPLETE") {
+    // Extract nested result if the C# wrapper is still present
+    const payload = data.result && typeof data.result === 'string' && data.result.includes("ROOM_PACKAGE_COMPLETE") 
+                    ? JSON.parse(data.result) 
+                    : data;
+
+    if (payload.type === "ROOM_PACKAGE_COMPLETE") {
       const summaryText = `✅ **Room Package Complete!**\n\n` +
-                          `**Room:** ${data.room_name}\n` +
-                          `**Created Sheet:** ${data.sheet_number} - ${data.sheet_name}\n` +
-                          `**Views Generated:** ${data.view_count}\n\n` +
+                          `**Room:** ${payload.room_name}\n` +
+                          `**Created Sheet:** ${payload.sheet_number} - ${payload.sheet_name}\n` +
+                          `**Views Generated:** ${payload.view_count}\n\n` +
                           `The new sheet has been opened in Revit for your review.`;
 
       messages.value.push({ from: "vella", text: summaryText });
       scrollToBottom();
-      return; // Stop processing so it doesn't trigger "Generic Message" logic below
+      return;
     }
 
     // --- PREFLIGHT RESULT ---

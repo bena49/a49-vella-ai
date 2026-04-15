@@ -56,6 +56,10 @@ def fast_route_intent(user_text):
         return {"intent": "preflight_check"}
 
     # --- AUTO-TAG ---
+    # Direct execution from wizard payload (has underscores)
+    if txt == "auto_tag_doors":
+        return {"intent": "auto_tag_doors"}
+    # Natural language triggers (opens the wizard)
     if any(phrase in txt for phrase in ["tag doors", "auto tag", "door tags", "auto-tag doors", "tag all doors"]):
         return {"intent": "wizard:auto_tag_doors"}
 

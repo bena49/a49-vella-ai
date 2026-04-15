@@ -83,7 +83,34 @@ namespace A49AIRevitAssistant.Executor.Commands
                     .OrderBy(r => r.level).ThenBy(r => r.number)
                     .ToList();
 
-                // 7. Construct the Payload object
+                // 💥 7. NEW: Get Door Tag Families (for Auto-Tag wizard)
+                var doorTags = new FilteredElementCollector(_doc)
+                    .OfClass(typeof(FamilySymbol))
+                    .OfCategory(BuiltInCategory.OST_DoorTags)
+                    .Cast<FamilySymbol>()
+                    .Select(fs => new
+                    {
+                        family = fs.Family != null ? fs.Family.Name : fs.FamilyName,
+                        type = fs.Name
+                    })
+                    .OrderBy(t => t.family).ThenBy(t => t.type)
+                    .ToList();
+
+                // 💥 8. NEW: Get Plan Views (for Auto-Tag wizard view selector)
+                var planViews = new FilteredElementCollector(_doc)
+                    .OfClass(typeof(ViewPlan))
+                    .Cast<ViewPlan>()
+                    .Where(v => !v.IsTemplate && v.CanBePrinted) // Exclude templates & non-printable
+                    .Select(v => new
+                    {
+                        id = v.Id.Value,
+                        name = v.Name,
+                        type = v.ViewType.ToString()
+                    })
+                    .OrderBy(v => v.name)
+                    .ToList();
+
+                // 9. Construct the Payload object
                 var payload = new
                 {
                     project_info = new
@@ -93,11 +120,13 @@ namespace A49AIRevitAssistant.Executor.Commands
                         scope_boxes = scopeBoxes,
                         titleblocks = titleblocks,
                         sheets = sheets,
-                        rooms = rooms // 💥 Added here so Vue can read it!
+                        rooms = rooms,
+                        door_tags = doorTags,
+                        plan_views = planViews
                     }
                 };
 
-                // 8. Serialize to JSON
+                // 10. Serialize to JSON
                 return JsonConvert.SerializeObject(payload);
             }
             catch (Exception ex)

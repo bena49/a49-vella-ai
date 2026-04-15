@@ -155,7 +155,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                     }
                 };
 
-                string jsonResult = resultObj.ToString(Formatting.None);
+                string jsonResult = JsonConvert.SerializeObject(resultObj);
 
                 A49AIRevitAssistant.UI.DockablePaneViewer.Instance.Dispatcher.Invoke(() =>
                 {
@@ -351,7 +351,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                 }
             };
 
-            string jsonResult = errorResult.ToString(Formatting.None);
+            string jsonResult = JsonConvert.SerializeObject(errorResult);
 
             try
             {

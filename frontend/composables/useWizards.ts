@@ -216,13 +216,11 @@ export function useWizards(
       rooms: projectInfo.rooms || [],
       initialStage: "CD",
     };
-    // Auto-tag wizard gets door_tags and plan_views when available
-    if (projectInfo.door_tags || projectInfo.plan_views) {
-      autoTagWizardProps.value = {
-        doorTags: projectInfo.door_tags || [],
-        planViews: projectInfo.plan_views || [],
-      };
-    }
+    // Auto-tag wizard data
+    autoTagWizardProps.value = {
+      doorTags: projectInfo.door_tags || [],
+      planViews: projectInfo.plan_views || [],
+    };
     wizardKey.value++;
   }
 

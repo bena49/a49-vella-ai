@@ -125,7 +125,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 const props = defineProps({
   doorTags: { type: Array, default: () => [] },       // [{ family: "Door Tag", type: "Standard" }, ...]
@@ -133,6 +133,15 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close', 'submit']);
+
+// 💥 DEBUG: Watch for prop changes
+watch(() => props.doorTags, (newVal) => {
+  console.log('🏷️ AutoTagWizard doorTags updated:', JSON.stringify(newVal));
+}, { immediate: true });
+
+watch(() => props.planViews, (newVal) => {
+  console.log('🏷️ AutoTagWizard planViews updated:', JSON.stringify(newVal));
+}, { immediate: true });
 
 // --- STATE ---
 const selectedTagFamily = ref('');
@@ -202,7 +211,10 @@ function submitAutoTag() {
 const handleKeydown = (event) => {
   if (event.key === 'Escape') isTagFamilyOpen.value = false;
 };
-onMounted(() => { document.addEventListener('keydown', handleKeydown); });
+onMounted(() => { 
+  document.addEventListener('keydown', handleKeydown);
+  console.log('🏷️ AutoTagWizard mounted. doorTags:', JSON.stringify(props.doorTags), 'planViews:', JSON.stringify(props.planViews));
+});
 onUnmounted(() => { document.removeEventListener('keydown', handleKeydown); });
 </script>
 

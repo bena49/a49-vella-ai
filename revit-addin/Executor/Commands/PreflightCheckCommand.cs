@@ -340,7 +340,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                 .OfClass(typeof(Family))
                 .Cast<Family>()
                 .Where(f => f.FamilyCategory != null &&
-                       f.FamilyCategory.Id.Value == (int)BuiltInCategory.OST_TitleBlocks)
+                       f.FamilyCategory.Id.Value == (long)BuiltInCategory.OST_TitleBlocks)
                 .ToList();
 
             var familyTypeLookup = new Dictionary<string, List<TypeInfo>>(StringComparer.OrdinalIgnoreCase);
@@ -351,7 +351,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                 {
                     var symbol = doc.GetElement(typeId) as FamilySymbol;
                     if (symbol != null)
-                        typeInfos.Add(new TypeInfo { Name = symbol.Name, ElementId = typeId.IntegerValue });
+                        typeInfos.Add(new TypeInfo { Name = symbol.Name, ElementId = typeId.Value });
                 }
                 familyTypeLookup[family.Name] = typeInfos;
             }
@@ -550,7 +550,7 @@ namespace A49AIRevitAssistant.Executor.Commands
         private class TypeInfo
         {
             public string Name { get; set; }
-            public int ElementId { get; set; }
+            public long ElementId { get; set; }
         }
     }
 }

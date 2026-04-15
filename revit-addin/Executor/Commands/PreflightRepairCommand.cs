@@ -120,13 +120,13 @@ namespace A49AIRevitAssistant.Executor.Commands
                         {
                             string expectedName = item["expected"]?.ToString();
                             string currentName = item["current"]?.ToString();
-                            int elementId = item["element_id"]?.ToObject<int>() ?? -1;
+                            long elementId = item["element_id"]?.ToObject<long>() ?? -1;
 
                             if (string.IsNullOrEmpty(expectedName) || elementId < 0) continue;
 
                             try
                             {
-                                Element element = doc.GetElement(new ElementId(elementId));
+                                Element element = doc.GetElement(new ElementId((long)elementId));
                                 if (element is View view && view.IsTemplate)
                                 {
                                     view.Name = expectedName;
@@ -181,7 +181,7 @@ namespace A49AIRevitAssistant.Executor.Commands
 
                             try
                             {
-                                Element element = doc.GetElement(new ElementId(elementId));
+                                Element element = doc.GetElement(new ElementId((long)elementId));
                                 if (element is FamilySymbol symbol)
                                 {
                                     symbol.Name = expectedType;
@@ -343,7 +343,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                                         .OfClass(typeof(Family))
                                         .Cast<Family>()
                                         .Where(f => f.FamilyCategory != null &&
-                                               f.FamilyCategory.Id.IntegerValue == (int)BuiltInCategory.OST_TitleBlocks &&
+                                               f.FamilyCategory.Id.Value == (long)BuiltInCategory.OST_TitleBlocks &&
                                                neededFamilies.Contains(f.Name))
                                         .ToList();
 

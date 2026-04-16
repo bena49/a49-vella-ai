@@ -123,10 +123,12 @@
     <Compile Include="Executor\Commands\RenameViewCommand.cs" />
     <Compile Include="Executor\Commands\Sheets\CreateSheetsCommand.cs" />
     <Compile Include="Executor\Commands\Sheets\RenumberSheetsCommand.cs" />
+    <Compile Include="Executor\Commands\TagStrategies\CeilingTagStrategy.cs" />
     <Compile Include="Executor\Commands\TagStrategies\DoorTagStrategy.cs" />
     <Compile Include="Executor\Commands\TagStrategies\ITagStrategy.cs" />
     <Compile Include="Executor\Commands\TagStrategies\RoomTagStrategy.cs" />
     <Compile Include="Executor\Commands\TagStrategies\TagContext.cs" />
+    <Compile Include="Executor\Commands\TagStrategies\WallTagStrategy.cs" />
     <Compile Include="Executor\Commands\TagStrategies\WindowTagStrategy.cs" />
     <Compile Include="Executor\Contracts\ApplyTemplateRequest.cs" />
     <Compile Include="Executor\Contracts\CreateSheetRequest.cs" />

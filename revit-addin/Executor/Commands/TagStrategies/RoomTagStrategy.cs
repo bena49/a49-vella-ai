@@ -9,9 +9,9 @@
 //   - No leader
 //
 // ELEVATION / SECTION:
-//   - Tag at room's XY center, Z = (room level elevation) + 1200mm
+//   - Tag at room's XY center, Z = (room level elevation) + 2000mm
 //   - Uses IndependentTag.Create()
-//   - SKIPS rooms whose 1200mm-AFF point falls outside the view's crop box
+//   - SKIPS rooms whose 2000mm-AFF point falls outside the view's crop box
 //     (Option A — match Revit's visibility behavior)
 //   - No leader
 // ============================================================================
@@ -30,7 +30,7 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
         public BuiltInCategory TagCategory => BuiltInCategory.OST_RoomTags;
 
         // Height above floor for elev/section tag placement (mm → feet)
-        private const double TAG_HEIGHT_AFF_FEET = 1200.0 / 304.8;
+        private const double TAG_HEIGHT_AFF_FEET = 2000.0 / 304.8;
 
         public bool SupportsViewType(ViewType viewType)
         {

@@ -109,6 +109,30 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
                         continue;
                     }
 
+                    // For non-plan views: apply section-cut and facing-wall filters
+                    if (!isPlan)
+                    {
+                        LocationPoint lp = window.Location as LocationPoint;
+                        if (lp != null)
+                        {
+                            // Section views: only tag windows cut by the section plane
+                            if (view.ViewType == ViewType.Section &&
+                                !TagHelpers.IsElementCutBySection(view, lp.Point))
+                            {
+                                result.Skipped++;
+                                continue;
+                            }
+
+                            // Elevation views: only tag windows on the facing wall
+                            if (view.ViewType == ViewType.Elevation &&
+                                !TagHelpers.IsElementOnFacingWall(view, window))
+                            {
+                                result.Skipped++;
+                                continue;
+                            }
+                        }
+                    }
+
                     XYZ tagPoint = isPlan
                         ? CalculatePlanTagPosition(doc, window, viewPhase)
                         : CalculateElevSectionTagPosition(window, view);

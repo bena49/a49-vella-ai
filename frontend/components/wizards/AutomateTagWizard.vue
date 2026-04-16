@@ -102,7 +102,7 @@
           <div>
             <label class="text-[10px] text-white/40 block mb-1">Stage</label>
             <div class="flex bg-white/5 rounded-lg p-1 border border-white/10">
-              <button v-for="stg in ['WV', 'PD', 'DD', 'CD']" :key="stg"
+              <button v-for="stg in ['WV', 'PD', 'DD', 'CD', 'Other']" :key="stg"
                 @click="toggleStageFilter(stg)"
                 class="flex-1 rounded-md text-[11px] py-1 transition-all"
                 :class="activeStages.includes(stg) 
@@ -318,8 +318,15 @@ const filteredViews = computed(() => {
     if (!compatibleKeys.includes(v.view_type)) return false;
     // 2. View type filter
     if (activeViewTypes.value.length > 0 && !activeViewTypes.value.includes(v.view_type)) return false;
-    // 3. Stage filter
-    if (activeStages.value.length > 0 && !activeStages.value.includes(v.stage)) return false;
+    // 3. Stage filter — "Other" matches views with empty/unrecognized stage
+    if (activeStages.value.length > 0) {
+      const hasOther = activeStages.value.includes('Other');
+      const standardStages = activeStages.value.filter(s => s !== 'Other');
+      const viewStage = v.stage || '';
+      const isStandardMatch = standardStages.includes(viewStage);
+      const isOtherMatch = hasOther && !['WV', 'PD', 'DD', 'CD'].includes(viewStage);
+      if (!isStandardMatch && !isOtherMatch) return false;
+    }
     // 4. Level filter (only applies to Floor/Ceiling Plan)
     if (isLevelFilterActive.value && activeLevels.value.length > 0) {
       if (v.view_type === 'FloorPlan' || v.view_type === 'CeilingPlan') {

@@ -41,8 +41,9 @@ namespace A49AIRevitAssistant.Executor.Commands
 
             _strategies = new Dictionary<string, ITagStrategy>(StringComparer.OrdinalIgnoreCase)
             {
-                { "door", new DoorTagStrategy() }
-                // Phase 2: { "window", new WindowTagStrategy() }, { "room", new RoomTagStrategy() }
+                { "door",   new DoorTagStrategy() },
+                { "window", new WindowTagStrategy() },
+                { "room",   new RoomTagStrategy() }
                 // Phase 3: { "wall", new WallTagStrategy() }, { "ceiling", new CeilingTagStrategy() }
             };
         }

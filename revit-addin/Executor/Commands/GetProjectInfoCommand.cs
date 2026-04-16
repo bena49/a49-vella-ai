@@ -96,18 +96,126 @@ namespace A49AIRevitAssistant.Executor.Commands
                     .OrderBy(t => t.family).ThenBy(t => t.type)
                     .ToList();
 
-                // 💥 8. NEW: Get Plan Views (for Auto-Tag wizard view selector)
-                var planViews = new FilteredElementCollector(_doc)
-                    .OfClass(typeof(ViewPlan))
-                    .Cast<ViewPlan>()
-                    .Where(v => !v.IsTemplate && v.CanBePrinted) // Exclude templates & non-printable
-                    .Select(v => new
+                // 💥 7b. NEW: Window Tag Families (for Automate Tagging wizard)
+                var windowTags = new FilteredElementCollector(_doc)
+                    .OfClass(typeof(FamilySymbol))
+                    .OfCategory(BuiltInCategory.OST_WindowTags)
+                    .Cast<FamilySymbol>()
+                    .Select(fs => new
                     {
-                        id = v.Id.Value,
-                        name = v.Name,
-                        type = v.ViewType.ToString()
+                        family = fs.Family != null ? fs.Family.Name : fs.FamilyName,
+                        type = fs.Name
                     })
-                    .OrderBy(v => v.name)
+                    .OrderBy(t => t.family).ThenBy(t => t.type)
+                    .ToList();
+
+                // 💥 7c. NEW: Wall Tag Families
+                var wallTags = new FilteredElementCollector(_doc)
+                    .OfClass(typeof(FamilySymbol))
+                    .OfCategory(BuiltInCategory.OST_WallTags)
+                    .Cast<FamilySymbol>()
+                    .Select(fs => new
+                    {
+                        family = fs.Family != null ? fs.Family.Name : fs.FamilyName,
+                        type = fs.Name
+                    })
+                    .OrderBy(t => t.family).ThenBy(t => t.type)
+                    .ToList();
+
+                // 💥 7d. NEW: Room Tag Families
+                var roomTags = new FilteredElementCollector(_doc)
+                    .OfClass(typeof(FamilySymbol))
+                    .OfCategory(BuiltInCategory.OST_RoomTags)
+                    .Cast<FamilySymbol>()
+                    .Select(fs => new
+                    {
+                        family = fs.Family != null ? fs.Family.Name : fs.FamilyName,
+                        type = fs.Name
+                    })
+                    .OrderBy(t => t.family).ThenBy(t => t.type)
+                    .ToList();
+
+                // 💥 7e. NEW: Ceiling Tag Families
+                var ceilingTags = new FilteredElementCollector(_doc)
+                    .OfClass(typeof(FamilySymbol))
+                    .OfCategory(BuiltInCategory.OST_CeilingTags)
+                    .Cast<FamilySymbol>()
+                    .Select(fs => new
+                    {
+                        family = fs.Family != null ? fs.Family.Name : fs.FamilyName,
+                        type = fs.Name
+                    })
+                    .OrderBy(t => t.family).ThenBy(t => t.type)
+                    .ToList();
+
+                // 💥 8. NEW: Get Taggable Views (for Automate Tagging wizard)
+                // Includes Plans, Elevations, and Sections with full metadata for filtering.
+                // Stage/Level/ViewAbbrev are parsed from the A49 view name convention:
+                //   {STAGE}_{SHEET_TYPE}_{VIEW_ABBREV}_{LEVEL}  e.g. "CD_A1_FL_01"
+                var allowedViewTypes = new HashSet<ViewType>
+                {
+                    ViewType.FloorPlan,
+                    ViewType.CeilingPlan,
+                    ViewType.Elevation,
+                    ViewType.Section,
+                    ViewType.AreaPlan,
+                    ViewType.EngineeringPlan
+                };
+
+                var taggableViews = new FilteredElementCollector(_doc)
+                    .OfClass(typeof(View))
+                    .Cast<View>()
+                    .Where(v => !v.IsTemplate && allowedViewTypes.Contains(v.ViewType) && v.CanBePrinted)
+                    .Select(v =>
+                    {
+                        // Parse {STAGE}_{SHEET_TYPE}_{VIEW_ABBREV}_{LEVEL} from view name
+                        var parts = v.Name.Split('_');
+                        string stage = "";
+                        string levelCode = "";
+                        string viewAbbrev = "";
+
+                        if (parts.Length > 0)
+                        {
+                            var first = parts[0].ToUpper();
+                            if (first == "WV" || first == "PD" || first == "DD" || first == "CD")
+                                stage = first;
+                        }
+
+                        // Level code is typically the last segment that matches NN / BN / PN / LN / RF / 00
+                        if (parts.Length >= 2)
+                        {
+                            var last = parts[parts.Length - 1].ToUpper();
+                            // Strip any trailing text after a space or dash (e.g. "01 - Floor Plan")
+                            var levelToken = last.Split(new[] { ' ', '-' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (levelToken.Length > 0)
+                            {
+                                var candidate = levelToken[0];
+                                if (System.Text.RegularExpressions.Regex.IsMatch(candidate, @"^(RF|00|[BPL]?\d{1,2})$"))
+                                    levelCode = candidate;
+                            }
+                        }
+
+                        // View abbrev is the segment before the level (if stage present)
+                        if (parts.Length >= 3)
+                        {
+                            viewAbbrev = parts[parts.Length - 2].ToUpper();
+                        }
+
+                        // Get scale (1:N format)
+                        int scale = v.Scale;
+
+                        return new
+                        {
+                            id = v.Id.Value,
+                            name = v.Name,
+                            view_type = v.ViewType.ToString(),  // "FloorPlan", "Elevation", "Section", "CeilingPlan"
+                            stage = stage,
+                            level = levelCode,
+                            view_abbrev = viewAbbrev,
+                            scale = scale
+                        };
+                    })
+                    .OrderBy(v => v.stage).ThenBy(v => v.view_type).ThenBy(v => v.name)
                     .ToList();
 
                 // 9. Construct the Payload object
@@ -122,7 +230,16 @@ namespace A49AIRevitAssistant.Executor.Commands
                         sheets = sheets,
                         rooms = rooms,
                         door_tags = doorTags,
-                        plan_views = planViews
+                        window_tags = windowTags,
+                        wall_tags = wallTags,
+                        room_tags = roomTags,
+                        ceiling_tags = ceilingTags,
+                        // Backwards-compat: plan_views = just floor/ceiling plans (used by old AutoTagWizard)
+                        plan_views = taggableViews.Where(v => v.view_type == "FloorPlan" || v.view_type == "CeilingPlan")
+                                                  .Select(v => new { id = v.id, name = v.name, type = v.view_type })
+                                                  .ToList(),
+                        // New: full taggable views with metadata (used by new AutomateTagWizard)
+                        taggable_views = taggableViews
                     }
                 };
 

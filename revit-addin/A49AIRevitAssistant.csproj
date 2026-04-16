@@ -62,7 +62,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="A49LicenseManager">
-      <HintPath>C:\Users\Bunda.A49local\OneDrive\00_REVIT API\00_A49 License Manager\A49LicenseManager.dll</HintPath>
+      <HintPath>..\..\..\Users\Ben Pongprot\OneDrive\00_REVIT API\00_A49 License Manager\A49LicenseManager.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.Web.WebView2.Core, Version=1.0.2792.45, Culture=neutral, PublicKeyToken=2a8ab48044d2601e, processorArchitecture=MSIL">
       <HintPath>packages\Microsoft.Web.WebView2.1.0.2792.45\lib\net462\Microsoft.Web.WebView2.Core.dll</HintPath>
@@ -79,11 +79,11 @@
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
     <Reference Include="RevitAPI">
-      <HintPath>C:\Users\Bunda.A49local\OneDrive\00_REVIT API\00_RevitAPIs_DLLs\Revit2024\RevitAPI.dll</HintPath>
+      <HintPath>..\..\..\Users\Ben Pongprot\OneDrive\00_REVIT API\00_RevitAPIs_DLLs\Revit2024\RevitAPI.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="RevitAPIUI">
-      <HintPath>C:\Users\Bunda.A49local\OneDrive\00_REVIT API\00_RevitAPIs_DLLs\Revit2024\RevitAPIUI.dll</HintPath>
+      <HintPath>..\..\..\Users\Ben Pongprot\OneDrive\00_REVIT API\00_RevitAPIs_DLLs\Revit2024\RevitAPIUI.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System" />
@@ -101,6 +101,7 @@
     <Compile Include="Executor\A49Logger.cs" />
     <Compile Include="Executor\CommandEventHandler.cs" />
     <Compile Include="Executor\Commands\ApplyTemplateCommand.cs" />
+    <Compile Include="Executor\Commands\AutoTagCommand.cs" />
     <Compile Include="Executor\Commands\AutoTagDoorsCommand.cs" />
     <Compile Include="Executor\Commands\BatchRenameViewsCommand.cs" />
     <Compile Include="Executor\Commands\DuplicateViewCommand.cs" />
@@ -123,6 +124,9 @@
     <Compile Include="Executor\Commands\RenameViewCommand.cs" />
     <Compile Include="Executor\Commands\Sheets\CreateSheetsCommand.cs" />
     <Compile Include="Executor\Commands\Sheets\RenumberSheetsCommand.cs" />
+    <Compile Include="Executor\Commands\TagStrategies\DoorTagStrategy.cs" />
+    <Compile Include="Executor\Commands\TagStrategies\ITagStrategy.cs" />
+    <Compile Include="Executor\Commands\TagStrategies\TagContext.cs" />
     <Compile Include="Executor\Contracts\ApplyTemplateRequest.cs" />
     <Compile Include="Executor\Contracts\CreateSheetRequest.cs" />
     <Compile Include="Executor\Contracts\CreateViewRequest.cs" />

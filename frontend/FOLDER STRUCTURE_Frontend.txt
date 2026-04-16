@@ -22,7 +22,7 @@ ROOT (not expanded)
 ├── pnpm-lock.yaml
 ├── README.md
 ├── tailwind.config.js
-├── tsconfig.json
+└── tsconfig.json
 
 
 
@@ -42,8 +42,10 @@ UI STRUCTURE
 │   │   ├── CreateAndPlaceWizard.vue   <-- Plan and Sheet creation wizard
 │   │   ├── PlanViewWizard.vue    	   <-- Plan creation wizard
 │   │   ├── RenameWizard.vue           <-- Rename wizard
-│   │   └── RoomElevationWizard.vue    <-- Enlarged Plan and Elevations creation wizard
-│   │   └── SheetWizard.vue            <-- Sheet creation wizard
+│   │   ├── RoomElevationWizard.vue    <-- Enlarged Plan and Elevations creation wizard
+│   │   ├── SheetWizard.vue            <-- Sheet creation wizard
+│   │   ├── AutoTagWizard.vue          <-- Door tagging wizard ******TO BE REMOVED ******
+│   │   └── AutomateTagWizard.vue      <-- Full-featured tagging wizard:
 │   ├── help/
 │   │   ├── HelpCreatePlaceTab.vue  
 │   │   ├── HelpItem.vue    	      

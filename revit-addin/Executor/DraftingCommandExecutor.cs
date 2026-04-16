@@ -153,6 +153,9 @@ namespace A49AIRevitAssistant.Executor
                     case "auto_tag_doors":
                         return new AutoTagDoorsCommand(_uiapp).Execute(env);
 
+                    case "automate_tag":
+                        return new AutoTagCommand(_uiapp).Execute(env);
+
                     default:
                         return $"❌ Unknown command: {env.command}";
                 }

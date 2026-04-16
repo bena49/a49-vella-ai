@@ -23,6 +23,7 @@ export function useWizards(
   const showRenameWizard = ref(false);
   const showRoomWizard = ref(false);
   const showAutoTagWizard = ref(false);
+  const showAutomateTagWizard = ref(false);
   const showHelp = ref(false);
 
   // --- WIZARD PROPS ---
@@ -32,6 +33,7 @@ export function useWizards(
   const renameWizardProps = ref<any>({});
   const roomWizardProps = ref<any>({});
   const autoTagWizardProps = ref<any>({});
+  const automateTagWizardProps = ref<any>({});
   const wizardKey = ref(0);
 
   // --- ACTION DISPATCHER ---
@@ -110,6 +112,21 @@ export function useWizards(
         command: "fetch_project_info",
         args: { types: ["door_tags", "plan_views"] },
       });
+    } else if (action === "wizard:automate_tag") {
+      automateTagWizardProps.value = {
+        doorTags: [],
+        windowTags: [],
+        wallTags: [],
+        roomTags: [],
+        ceilingTags: [],
+        taggableViews: [],
+      };
+      showAutomateTagWizard.value = true;
+      // Ask Revit to fetch all tag families and taggable views
+      sendToRevit({
+        command: "fetch_project_info",
+        args: { types: ["door_tags", "window_tags", "wall_tags", "room_tags", "ceiling_tags", "taggable_views"] },
+      });
     }
   }
 
@@ -184,6 +201,32 @@ export function useWizards(
     });
   }
 
+  // 💥 AUTOMATE TAG SUBMIT HANDLER (unified multi-element tagging)
+  function handleAutomateTagSubmit(payload: any) {
+    showAutomateTagWizard.value = false;
+
+    const elementNames: Record<string, string> = {
+      door: "door", window: "window", wall: "wall",
+      room: "room", ceiling: "ceiling"
+    };
+    const elementLabel = elementNames[payload.tag_category] || "element";
+
+    messages.value.push({
+      from: "vella",
+      text: `🏷️ Tagging ${elementLabel}s in ${payload.view_ids.length} view(s)...`,
+    });
+
+    sendToBackend({
+      message: "automate_tag",
+      tag_category: payload.tag_category,
+      tag_family: payload.tag_family,
+      tag_type: payload.tag_type,
+      view_ids: payload.view_ids,
+      skip_tagged: payload.skip_tagged,
+      session_key: sessionKey.value,
+    });
+  }
+
   function closeWizard() {
     showWizard.value = false;
   }
@@ -221,6 +264,15 @@ export function useWizards(
       doorTags: projectInfo.door_tags || [],
       planViews: projectInfo.plan_views || [],
     };
+    // Automate tag wizard data (multi-element)
+    automateTagWizardProps.value = {
+      doorTags: projectInfo.door_tags || [],
+      windowTags: projectInfo.window_tags || [],
+      wallTags: projectInfo.wall_tags || [],
+      roomTags: projectInfo.room_tags || [],
+      ceilingTags: projectInfo.ceiling_tags || [],
+      taggableViews: projectInfo.taggable_views || [],
+    };
     wizardKey.value++;
   }
 
@@ -238,6 +290,7 @@ export function useWizards(
     showRenameWizard,
     showRoomWizard,
     showAutoTagWizard,
+    showAutomateTagWizard,
     showHelp,
     // Props
     wizardProps,
@@ -246,6 +299,7 @@ export function useWizards(
     renameWizardProps,
     roomWizardProps,
     autoTagWizardProps,
+    automateTagWizardProps,
     wizardKey,
     // Handlers
     handleAction,
@@ -254,6 +308,7 @@ export function useWizards(
     handleBatchSubmit,
     handleRoomElevationExecute,
     handleAutoTagSubmit,
+    handleAutomateTagSubmit,
     closeWizard,
     // Props updaters (called from useRevitHandler)
     updateWizardProps,

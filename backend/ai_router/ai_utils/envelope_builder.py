@@ -153,3 +153,15 @@ def envelope_auto_tag_doors(tag_family, tag_type, view_ids, skip_tagged=True):
             "skip_tagged": skip_tagged
         }
     }
+
+def envelope_automate_tag(tag_category, tag_family, tag_type, view_ids, skip_tagged=True):
+    return {
+        "command": "automate_tag",
+        "raw": {
+            "tag_category": tag_category,
+            "tag_family": tag_family,
+            "tag_type": tag_type,
+            "view_ids": view_ids,
+            "skip_tagged": skip_tagged
+        }
+    }

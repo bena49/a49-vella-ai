@@ -17,6 +17,7 @@ from ..ai_engines.titleblock_engine import get_smart_titleblock_options
 from ..ai_engines.conversation_engine import get_fallback_response
 from ..ai_commands.preflight import handle_preflight_check
 from ..ai_commands.auto_tag import handle_auto_tag_doors
+from ..ai_commands.automate_tag import handle_automate_tag
 
 
 # =====================================================================
@@ -247,12 +248,14 @@ ALLOWED_IMMEDIATE_COMMANDS = [
     "execute_batch_update",
     "preflight_check",
     "auto_tag_doors",
+    "automate_tag",
     "ui:help",
     "wizard:create_views",
     "wizard:create_sheets",
     "wizard:create_and_place",
     "wizard:room_elevations",
     "wizard:auto_tag_doors",
+    "wizard:automate_tag",
     "start_interactive_room_package"
 ]
 
@@ -278,6 +281,10 @@ def dispatch_immediate_command(request, intent, gpt_json):
     # 💥 AUTO-TAG DOORS (direct command from wizard payload)
     if intent == "auto_tag_doors":
         return handle_auto_tag_doors(request)
+
+    # 💥 AUTOMATE TAG (new unified tagging - doors, windows, walls, rooms, ceilings)
+    if intent == "automate_tag":
+        return handle_automate_tag(request)
 
     # 💥 INTERACTIVE ROOM PACKAGE
     if intent == "start_interactive_room_package":

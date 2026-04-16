@@ -101,6 +101,7 @@
     <!--<RenameWizard v-if="true" v-bind="renameWizardProps" :key="'rw-'+wizardKey" @close="showRenameWizard = false" @submit="handleBatchSubmit" /> -->
     
     <RoomElevationWizard v-if="showRoomWizard" v-bind="roomWizardProps" :key="'rm-'+wizardKey" @close="showRoomWizard = false" @executeRaw="handleRoomElevationExecute" />
+    <AutomateTagWizard v-if="showAutomateTagWizard" v-bind="automateTagWizardProps" :key="'amt-'+wizardKey" @close="showAutomateTagWizard = false" @submit="handleAutomateTagSubmit" />
     <AutoTagWizard v-if="showAutoTagWizard" v-bind="autoTagWizardProps" :key="'at-'+wizardKey" @close="showAutoTagWizard = false" @submit="handleAutoTagSubmit" />
     <HelpModal v-if="showHelp" @close="showHelp = false" @submit="handleHelpPrompt" />
 
@@ -127,6 +128,7 @@ import SheetWizard from '~/components/wizards/SheetWizard.vue';
 import RenameWizard from '~/components/wizards/RenameWizard.vue'; 
 import RoomElevationWizard from '~/components/wizards/RoomElevationWizard.vue';
 import AutoTagWizard from '~/components/wizards/AutoTagWizard.vue';
+import AutomateTagWizard from '~/components/wizards/AutomateTagWizard.vue';
 import HelpModal from '~/components/help/HelpModal.vue';
 import { useRevitBridge } from "~/composables/useRevitBridge";
 
@@ -163,11 +165,11 @@ const {
 // --- WIZARDS (actual init) ---
 const {
   showWizard, showSheetWizard, showCreatePlaceWizard,
-  showRenameWizard, showRoomWizard, showAutoTagWizard, showHelp,
+  showRenameWizard, showRoomWizard, showAutoTagWizard, showAutomateTagWizard, showHelp,
   wizardProps, sheetWizardProps, createPlaceWizardProps,
-  renameWizardProps, roomWizardProps, autoTagWizardProps, wizardKey,
+  renameWizardProps, roomWizardProps, autoTagWizardProps, automateTagWizardProps, wizardKey,
   handleAction, handleHelpPrompt, handleWizardSubmit,
-  handleBatchSubmit, handleRoomElevationExecute, handleAutoTagSubmit,
+  handleBatchSubmit, handleRoomElevationExecute, handleAutoTagSubmit, handleAutomateTagSubmit,
   closeWizard, updateWizardProps, updateInventoryProps
 } = useWizards(messages, scrollToBottom, handleUserSubmit, sendToBackend, sendToRevit, sessionKey);
 

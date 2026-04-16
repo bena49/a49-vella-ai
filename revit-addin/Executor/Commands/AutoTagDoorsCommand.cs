@@ -34,8 +34,9 @@ namespace A49AIRevitAssistant.Executor.Commands
     {
         private readonly UIApplication _uiapp;
 
-        // 400mm in feet (Revit internal units)
-        private const double TAG_OFFSET_FEET = 400.0 / 304.8;
+        // Offsets (mm) from face of wall to tag center, converted to Revit feet
+        private const double SWING_OFFSET_FEET = 700.0 / 304.8;      // Perpendicular tags (swing doors)
+        private const double PARALLEL_OFFSET_FEET = 350.0 / 304.8;   // Parallel tags (sliding/double doors)
 
         public AutoTagDoorsCommand(UIApplication uiapp)
         {
@@ -264,11 +265,16 @@ namespace A49AIRevitAssistant.Executor.Commands
         // CALCULATE TAG POSITION
         // ============================================================================
         // Logic:
-        //   1. Get door location point (insertion point on wall)
-        //   2. Get FacingOrientation (points toward swing/room side)
-        //   3. Account for FacingFlipped — if flipped, reverse the vector
-        //   4. Move OPPOSITE to facing (toward wall side) by 400mm offset
-        //   5. Result: tag center sits 400mm from wall face on wall side
+        //   1. Get door location point (insertion point, on the wall CENTERLINE)
+        //   2. Get FacingOrientation — in this project's family setup, this vector
+        //      already points toward the correct TAG side (non-swing side).
+        //      It updates live when the user flips the door, so no manual flip logic.
+        //   3. Determine offset based on wall direction:
+        //        - Horizontal wall (runs along X-axis) → tag is PARALLEL → 350mm offset
+        //        - Vertical wall (runs along Y-axis)   → tag is PERPENDICULAR → 700mm offset
+        //        - Angled wall → default to 700mm (perpendicular) per firm standard
+        //   4. Total offset = (wall thickness / 2) + offset from face
+        //   5. Tag orientation: always Horizontal (Revit default)
         // ============================================================================
         private XYZ CalculateTagPosition(FamilyInstance door)
         {
@@ -277,21 +283,56 @@ namespace A49AIRevitAssistant.Executor.Commands
 
             XYZ doorPoint = locPt.Point;
 
-            // FacingOrientation points from wall toward room (swing side)
-            XYZ facingDir = door.FacingOrientation;
+            // FacingOrientation is a LIVE vector that points toward the correct tag
+            // side (non-swing side) in this project's family setup. It already reflects
+            // any user flipping of the door, so we use it as-is without negation.
+            XYZ tagSideDir = door.FacingOrientation;
 
-            // If the door's facing is flipped, the vector already points 
-            // the opposite way, so we need to reverse our logic
-            if (door.FacingFlipped)
-                facingDir = facingDir.Negate();
+            // Get host wall
+            Wall hostWall = door.Host as Wall;
 
-            // Move OPPOSITE to facing = toward the wall side
-            XYZ wallSideDir = facingDir.Negate();
+            // Get host wall half-thickness (so offset is from wall FACE, not centerline)
+            double wallHalfWidth = 0.0;
+            if (hostWall != null)
+                wallHalfWidth = hostWall.Width / 2.0;
 
-            // Offset 400mm (in feet) from the door point toward wall side
-            XYZ tagPoint = doorPoint + wallSideDir.Multiply(TAG_OFFSET_FEET);
+            // Pick offset based on wall orientation
+            double faceOffset = IsHorizontalWall(hostWall) ? PARALLEL_OFFSET_FEET : SWING_OFFSET_FEET;
+            double totalOffset = wallHalfWidth + faceOffset;
 
+            XYZ tagPoint = doorPoint + tagSideDir.Multiply(totalOffset);
             return tagPoint;
+        }
+
+        // ============================================================================
+        // DETECT WALL ORIENTATION
+        // ============================================================================
+        // Returns true if the wall runs mostly along the X-axis (horizontal on page),
+        // which means a horizontal tag placed above/below it will be PARALLEL to it.
+        //
+        // For horizontal walls → use 350mm offset (parallel tag).
+        // For vertical/angled walls → use 700mm offset (perpendicular tag / safe default).
+        // ============================================================================
+        private bool IsHorizontalWall(Wall wall)
+        {
+            if (wall == null) return false;
+
+            LocationCurve locCurve = wall.Location as LocationCurve;
+            if (locCurve == null) return false;
+
+            Line line = locCurve.Curve as Line;
+            if (line == null) return false; // Curved wall → treat as non-horizontal (safe)
+
+            XYZ dir = line.Direction;
+            double absX = Math.Abs(dir.X);
+            double absY = Math.Abs(dir.Y);
+
+            // If X-component dominates significantly, it's a horizontal wall.
+            // Using a tolerance so near-horizontal walls (slight angle) still count.
+            // Angled walls (~45°) will fall into the "not horizontal" category
+            // and default to 700mm, which is the safer offset.
+            const double HORIZONTAL_TOLERANCE = 0.9; // cos(~25°)
+            return absX >= HORIZONTAL_TOLERANCE && absX > absY;
         }
 
         // ============================================================================

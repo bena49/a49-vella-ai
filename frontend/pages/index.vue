@@ -102,7 +102,6 @@
     
     <RoomElevationWizard v-if="showRoomWizard" v-bind="roomWizardProps" :key="'rm-'+wizardKey" @close="showRoomWizard = false" @executeRaw="handleRoomElevationExecute" />
     <AutomateTagWizard v-if="showAutomateTagWizard" v-bind="automateTagWizardProps" :key="'amt-'+wizardKey" @close="showAutomateTagWizard = false" @submit="handleAutomateTagSubmit" />
-    <AutoTagWizard v-if="showAutoTagWizard" v-bind="autoTagWizardProps" :key="'at-'+wizardKey" @close="showAutoTagWizard = false" @submit="handleAutoTagSubmit" />
     <HelpModal v-if="showHelp" @close="showHelp = false" @submit="handleHelpPrompt" />
 
     <VellaModal
@@ -127,7 +126,6 @@ import CreateAndPlaceWizard from '~/components/wizards/CreateAndPlaceWizard.vue'
 import SheetWizard from '~/components/wizards/SheetWizard.vue';
 import RenameWizard from '~/components/wizards/RenameWizard.vue'; 
 import RoomElevationWizard from '~/components/wizards/RoomElevationWizard.vue';
-import AutoTagWizard from '~/components/wizards/AutoTagWizard.vue';
 import AutomateTagWizard from '~/components/wizards/AutomateTagWizard.vue';
 import HelpModal from '~/components/help/HelpModal.vue';
 import { useRevitBridge } from "~/composables/useRevitBridge";
@@ -165,11 +163,11 @@ const {
 // --- WIZARDS (actual init) ---
 const {
   showWizard, showSheetWizard, showCreatePlaceWizard,
-  showRenameWizard, showRoomWizard, showAutoTagWizard, showAutomateTagWizard, showHelp,
+  showRenameWizard, showRoomWizard, showAutomateTagWizard, showHelp,
   wizardProps, sheetWizardProps, createPlaceWizardProps,
-  renameWizardProps, roomWizardProps, autoTagWizardProps, automateTagWizardProps, wizardKey,
+  renameWizardProps, roomWizardProps, automateTagWizardProps, wizardKey,
   handleAction, handleHelpPrompt, handleWizardSubmit,
-  handleBatchSubmit, handleRoomElevationExecute, handleAutoTagSubmit, handleAutomateTagSubmit,
+  handleBatchSubmit, handleRoomElevationExecute, handleAutomateTagSubmit,
   closeWizard, updateWizardProps, updateInventoryProps
 } = useWizards(messages, scrollToBottom, handleUserSubmit, sendToBackend, sendToRevit, sessionKey);
 

@@ -150,9 +150,6 @@ namespace A49AIRevitAssistant.Executor
                     case "preflight_repair":
                         return new PreflightRepairCommand(_uiapp).Execute(env);
 
-                    case "auto_tag_doors":
-                        return new AutoTagDoorsCommand(_uiapp).Execute(env);
-
                     case "automate_tag":
                         return new AutoTagCommand(_uiapp).Execute(env);
 

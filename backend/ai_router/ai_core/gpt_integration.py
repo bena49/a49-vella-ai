@@ -56,16 +56,16 @@ def fast_route_intent(user_text):
         return {"intent": "preflight_check"}
 
     # --- AUTO-TAG ---
-    # Direct execution from wizard payload (has underscores)
-    if txt == "auto_tag_doors":
-        return {"intent": "auto_tag_doors"}
+    # Direct execution from wizard payload
     if txt == "automate_tag":
         return {"intent": "automate_tag"}
-    # Natural language triggers
-    if any(phrase in txt for phrase in ["automate tag", "automate tagging", "tag wizard", "smart tag"]):
+    # Natural language triggers (opens the wizard)
+    if any(phrase in txt for phrase in [
+        "automate tag", "automate tagging", "tag wizard", "smart tag",
+        "tag doors", "auto tag", "door tags", "auto-tag doors", "tag all doors",
+        "tag windows", "tag walls", "tag rooms", "tag ceilings"
+    ]):
         return {"intent": "wizard:automate_tag"}
-    if any(phrase in txt for phrase in ["tag doors", "auto tag", "door tags", "auto-tag doors", "tag all doors"]):
-        return {"intent": "wizard:auto_tag_doors"}
 
     # --- BASIC LISTS ---
     if txt.startswith("list ") or txt.startswith("show "):

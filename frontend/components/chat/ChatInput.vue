@@ -60,11 +60,6 @@
           <Icon name="lucide:tags" class="text-base text-[#FF9800]" />
           <span>Automate Tagging</span>
         </button>
-        <button @click="triggerAction('wizard:auto_tag_doors')" 
-                class="w-full text-left px-4 py-2 text-xs text-white hover:bg-white/10 flex items-center gap-2 transition">
-          <Icon name="lucide:tags" class="text-base text-[#FF9800]" />
-          <span>Auto-Tag Doors</span>
-        </button>
 
         <div class="border-t border-white/10 my-1"></div>
 

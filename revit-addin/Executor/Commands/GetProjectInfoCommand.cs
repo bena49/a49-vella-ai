@@ -234,11 +234,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                         wall_tags = wallTags,
                         room_tags = roomTags,
                         ceiling_tags = ceilingTags,
-                        // Backwards-compat: plan_views = just floor/ceiling plans (used by old AutoTagWizard)
-                        plan_views = taggableViews.Where(v => v.view_type == "FloorPlan" || v.view_type == "CeilingPlan")
-                                                  .Select(v => new { id = v.id, name = v.name, type = v.view_type })
-                                                  .ToList(),
-                        // New: full taggable views with metadata (used by new AutomateTagWizard)
+                        // Full taggable views with metadata (used by AutomateTagWizard)
                         taggable_views = taggableViews
                     }
                 };

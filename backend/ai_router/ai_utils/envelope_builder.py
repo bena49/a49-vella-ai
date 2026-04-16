@@ -143,17 +143,6 @@ def envelope_preflight_repair(standards_data, preflight_result):
 # AUTO-TAG ENVELOPES
 # =====================================================================
 
-def envelope_auto_tag_doors(tag_family, tag_type, view_ids, skip_tagged=True):
-    return {
-        "command": "auto_tag_doors",
-        "raw": {
-            "tag_family": tag_family,
-            "tag_type": tag_type,
-            "view_ids": view_ids,
-            "skip_tagged": skip_tagged
-        }
-    }
-
 def envelope_automate_tag(tag_category, tag_family, tag_type, view_ids, skip_tagged=True):
     return {
         "command": "automate_tag",

@@ -1,6 +1,6 @@
 # ai_router/ai_commands/automate_tag_nlp.py
 # ============================================================================
-# Conversational Tagging Engine — Natural Language slot-filling for Vella
+# Conversational Tagging Engine — Natural Language slot-filling for Vella with multi-step conversations, intelligent defaults, and error handling.
 # ============================================================================
 # Handles the full conversation flow for tagging elements via chat:
 #

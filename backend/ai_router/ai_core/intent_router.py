@@ -368,11 +368,15 @@ def process_intent(request, raw_text_original):
         prompt = build_prompt(raw_text_original)
         gpt_json = prompt.get("parsed", {})
 
-    # 1️⃣ RUN THE ROUTER FIRST (This updates session state based on the intent)
-    route_gpt_fields(request, gpt_json)
-
-    # 2️⃣ CRITICAL: GRAB THE INTENT *AFTER* THE ROUTER RUNS
-    intent = gpt_json.get("intent") 
+    # 1️⃣ RUN THE ROUTER (updates session state based on intent)
+    # SKIP route_gpt_fields for NLP tag commands — the fast router already
+    # extracted everything needed, and route_gpt_fields would corrupt the
+    # intent by matching keywords like "door" or "tag" against view creation logic.
+    intent = gpt_json.get("intent")
+    if intent not in ("automate_tag_nlp", "cache_tag_inventory"):
+        route_gpt_fields(request, gpt_json)
+        # Re-grab intent AFTER the router runs (it may have changed it)
+        intent = gpt_json.get("intent")
 
     # 3️⃣ CHECK IMMEDIATE COMMANDS
     immediate_resp = dispatch_immediate_command(request, intent, gpt_json)

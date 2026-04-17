@@ -81,9 +81,11 @@
     <Reference Include="PresentationFramework" />
     <Reference Include="RevitAPI">
       <HintPath>..\..\..\Users\Ben Pongprot\OneDrive\00_REVIT API\00_RevitAPIs_DLLs\Revit2024\RevitAPI.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="RevitAPIUI">
       <HintPath>..\..\..\Users\Ben Pongprot\OneDrive\00_REVIT API\00_RevitAPIs_DLLs\Revit2024\RevitAPIUI.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />

@@ -12,7 +12,7 @@ from ..ai_utils.validators import validate_json_with_ai
 client = OpenAI()
 
 # =====================================================================
-# 💥 FAST ROUTER (0ms Latency Pre-Flight Check)
+# 💥 FAST ROUTER (0ms Latency Pre-Flight Check) 
 # =====================================================================
 def fast_route_intent(user_text):
     """

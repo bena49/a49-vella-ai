@@ -1,5 +1,5 @@
 # =====================================================================
-# Vella Backend (views.py) — Slim Entry Point
+# Vella Backend (views.py) — Slim Entry Point with Modular Architecture
 # ai_router/views.py
 # =====================================================================
 

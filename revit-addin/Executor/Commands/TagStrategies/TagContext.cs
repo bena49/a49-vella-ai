@@ -65,7 +65,7 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
 
                 // Check if the element is within the near/far clip range (Z axis in local coords).
                 // Use a generous tolerance (500mm in feet) since doors/windows have width.
-                double tolerance = 500.0 / 304.8;
+                double tolerance = 50.0 / 304.8;
                 double minZ = cropBox.Min.Z - tolerance;
                 double maxZ = cropBox.Max.Z + tolerance;
 
@@ -115,7 +115,7 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
 
                 // Tolerance: cos(30°) ≈ 0.866 — walls within 30° of perpendicular 
                 // to the view are considered "facing"
-                return dot > 0.7;
+                return dot > 0.96;
             }
             catch
             {

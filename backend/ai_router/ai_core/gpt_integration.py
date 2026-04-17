@@ -22,7 +22,7 @@ def fast_route_intent(user_text):
     txt = user_text.lower().strip()
 
     # --- WIZARDS & INTERACTIVE TOOLS ---
-    # 💥 CACHE TAG INVENTORY must be checked BEFORE "inventory" keyword match --
+    # 💥 CACHE TAG INVENTORY must be checked BEFORE "inventory" keyword match
     if txt == "cache_tag_inventory":
         return {"intent": "cache_tag_inventory"}
     
@@ -64,49 +64,75 @@ def fast_route_intent(user_text):
     if txt == "automate_tag":
         return {"intent": "automate_tag"}
     
-    # 💥 NLP TAGGING — Regex detects: "tag doors in CD floor plans", "tag windows in DD", etc.
-    tag_match = re.search(
-        r"tag\s+(?:all\s+)?(?:the\s+)?(?P<cat>door|window|wall|room|ceiling)s?"
-        r"(?:\s+(?:in|for|on)\s+(?P<stage>wv|pd|dd|cd))?"
-        r"(?:\s+(?P<vtype>floor\s*plans?|ceiling\s*plans?|rcps?|elevations?|sections?|plans?))?",
-        txt
-    )
-    if tag_match:
-        category = tag_match.group("cat")
-        stage = tag_match.group("stage")
-        vtype_raw = tag_match.group("vtype")
-        
-        # Map view type keyword to Revit ViewType string
-        vtype_map = {
-            "floor plan": "FloorPlan", "floor plans": "FloorPlan", 
-            "floorplan": "FloorPlan", "floorplans": "FloorPlan",
-            "plan": "FloorPlan", "plans": "FloorPlan",
-            "ceiling plan": "CeilingPlan", "ceiling plans": "CeilingPlan",
-            "ceilingplan": "CeilingPlan", "ceilingplans": "CeilingPlan",
-            "rcp": "CeilingPlan", "rcps": "CeilingPlan",
-            "elevation": "Elevation", "elevations": "Elevation",
-            "section": "Section", "sections": "Section",
-        }
-        view_type_filter = ""
-        if vtype_raw:
-            vtype_clean = vtype_raw.strip().lower()
-            view_type_filter = vtype_map.get(vtype_clean, "")
-        
-        # If user provided enough context (at least a stage), go NLP direct
-        if stage:
-            result = {
-                "intent": "automate_tag_nlp",
-                "tag_category": category,
-                "stage": stage.upper(),
-            }
-            if view_type_filter:
-                result["view_type_filter"] = view_type_filter
-            return result
-        
-        # Just "tag doors" with no stage — open the wizard
-        return {"intent": "wizard:automate_tag"}
+    # 💥 NLP TAGGING — Conversational slot-filling engine
+    # Detects tag commands and extracts as many slots as possible upfront.
+    # Missing slots are gathered via conversation in automate_tag_nlp.py.
     
-    # Fallback wizard triggers
+    # Check if this is a tag command at all
+    tag_cat_match = re.search(r"tag\s+(?:all\s+)?(?:the\s+)?(?P<cat>door|window|wall|room|ceiling)s?\b", txt)
+    
+    if tag_cat_match:
+        category = tag_cat_match.group("cat").lower()
+        result = {
+            "intent": "automate_tag_nlp",
+            "tag_category": category,
+        }
+        
+        # Extract "using [tag family]" for power users
+        # e.g. "tag doors in CD_A1_FL_01 using A49_Door Tag : Mark"
+        using_match = re.search(r"using\s+(.+?)$", txt, re.IGNORECASE)
+        if using_match:
+            result["tag_family_raw"] = using_match.group(1).strip()
+            # Remove the "using ..." part so it doesn't interfere with view name detection
+            txt_without_using = txt[:using_match.start()].strip()
+        else:
+            txt_without_using = txt
+        
+        # Extract specific view name (e.g. "tag doors in CD_A1_FL_01")
+        view_match = re.search(
+            r"(?:in|for|on)\s+(?P<viewname>\S*_\S+(?:\s*\([^)]*\))?)",
+            txt_without_using, re.IGNORECASE
+        )
+        if view_match:
+            viewname = view_match.group("viewname").strip()
+            # Must contain underscore and be longer than just "CD" to be a view name
+            if "_" in viewname and len(viewname) > 4:
+                result["view_name"] = viewname
+                return result
+        
+        # Extract stage (WV/PD/DD/CD)
+        stage_match = re.search(r"(?:in|for|on)\s+(?P<stage>wv|pd|dd|cd)\b", txt_without_using)
+        if stage_match:
+            result["stage"] = stage_match.group("stage").upper()
+        
+        # Extract view type
+        vtype_match = re.search(
+            r"(?P<vtype>floor\s*plans?|ceiling\s*plans?|rcps?|elevations?|sections?)\b",
+            txt_without_using
+        )
+        if vtype_match:
+            vtype_map = {
+                "floor plan": "FloorPlan", "floor plans": "FloorPlan",
+                "floorplan": "FloorPlan", "floorplans": "FloorPlan",
+                "ceiling plan": "CeilingPlan", "ceiling plans": "CeilingPlan",
+                "ceilingplan": "CeilingPlan", "ceilingplans": "CeilingPlan",
+                "rcp": "CeilingPlan", "rcps": "CeilingPlan",
+                "elevation": "Elevation", "elevations": "Elevation",
+                "section": "Section", "sections": "Section",
+            }
+            vtype_clean = vtype_match.group("vtype").strip().lower()
+            if vtype_clean in vtype_map:
+                result["view_type_filter"] = vtype_map[vtype_clean]
+        
+        # Extract level reference
+        level_match = re.search(r"(?:level|lvl|l)\s*(\d{1,2})\b", txt_without_using, re.IGNORECASE)
+        if level_match:
+            result["level_filter"] = level_match.group(1).zfill(2)
+        
+        # Always enter NLP flow — conversation will ask for missing slots
+        return result
+    
+    # Fallback wizard triggers (non-tag-specific phrases)
     if any(phrase in txt for phrase in ["automate tag", "automate tagging", "tag wizard", "smart tag"]):
         return {"intent": "wizard:automate_tag"}
 

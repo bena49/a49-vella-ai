@@ -1,5 +1,5 @@
 # =====================================================================
-# Vella Backend (views.py) — Slim Entry Point backend for AI Command Routing, Session Management, and Callback Handling
+# Vella Backend (views.py) — Slim Entry Point
 # ai_router/views.py
 # =====================================================================
 
@@ -24,7 +24,7 @@ from .ai_core.session_manager import (
 from .ai_core.intent_router import finalize_router, process_intent
 from .ai_core.callback_handler import handle_revit_callbacks
 from .ai_commands.preflight import handle_preflight_repair_interceptor
-from .ai_commands.automate_tag_nlp import handle_nlp_tag_family_selection
+from .ai_commands.automate_tag_nlp import handle_nlp_tag_conversation
 from .ai_engines.math_engine import process_math_and_conversions
 from .ai_engines.conversation_engine import process_conversational_intent
 
@@ -81,9 +81,9 @@ def ai_router(request):
             return preflight_resp
 
         # ==========================================================
-        # 0.7) NLP TAG FAMILY SELECTION INTERCEPTOR
+        # 0.7) NLP TAG CONVERSATION INTERCEPTOR
         # ==========================================================
-        nlp_tag_resp = handle_nlp_tag_family_selection(request, raw_text_original)
+        nlp_tag_resp = handle_nlp_tag_conversation(request, raw_text_original)
         if nlp_tag_resp:
             return nlp_tag_resp
 

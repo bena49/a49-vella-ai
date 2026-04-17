@@ -235,6 +235,23 @@ export function useWizards(
       ceilingTags: projectInfo.ceiling_tags || [],
       taggableViews: projectInfo.taggable_views || [],
     };
+
+    // 💥 CACHE TAG INVENTORY TO BACKEND (enables NLP tagging commands)
+    // This silently sends the tag families + taggable views to Django's session
+    // so that NLP commands like "tag doors in CD" can work without the wizard open.
+    if (projectInfo.taggable_views && projectInfo.taggable_views.length > 0) {
+      sendToBackend({
+        message: "cache_tag_inventory",
+        taggable_views: projectInfo.taggable_views || [],
+        door_tags: projectInfo.door_tags || [],
+        window_tags: projectInfo.window_tags || [],
+        wall_tags: projectInfo.wall_tags || [],
+        room_tags: projectInfo.room_tags || [],
+        ceiling_tags: projectInfo.ceiling_tags || [],
+        session_key: sessionKey.value,
+      });
+    }
+
     wizardKey.value++;
   }
 

@@ -17,6 +17,7 @@ from ..ai_engines.titleblock_engine import get_smart_titleblock_options
 from ..ai_engines.conversation_engine import get_fallback_response
 from ..ai_commands.preflight import handle_preflight_check
 from ..ai_commands.automate_tag import handle_automate_tag
+from ..ai_commands.automate_tag_nlp import handle_automate_tag_nlp, handle_nlp_tag_family_selection
 
 
 # =====================================================================
@@ -247,6 +248,8 @@ ALLOWED_IMMEDIATE_COMMANDS = [
     "execute_batch_update",
     "preflight_check",
     "automate_tag",
+    "automate_tag_nlp",
+    "cache_tag_inventory",
     "ui:help",
     "wizard:create_views",
     "wizard:create_sheets",
@@ -278,6 +281,23 @@ def dispatch_immediate_command(request, intent, gpt_json):
     # 💥 AUTOMATE TAG (unified tagging - doors, windows, walls, rooms, ceilings)
     if intent == "automate_tag":
         return handle_automate_tag(request)
+
+    # 💥 AUTOMATE TAG NLP (natural language tagging - "tag doors in CD floor plans")
+    if intent == "automate_tag_nlp":
+        return handle_automate_tag_nlp(request, gpt_json)
+
+    # 💥 CACHE TAG INVENTORY (silent — caches tag families + views in session for NLP)
+    if intent == "cache_tag_inventory":
+        request.session["ai_last_known_taggable_views"] = request.data.get("taggable_views", [])
+        request.session["ai_last_known_door_tags"] = request.data.get("door_tags", [])
+        request.session["ai_last_known_window_tags"] = request.data.get("window_tags", [])
+        request.session["ai_last_known_wall_tags"] = request.data.get("wall_tags", [])
+        request.session["ai_last_known_room_tags"] = request.data.get("room_tags", [])
+        request.session["ai_last_known_ceiling_tags"] = request.data.get("ceiling_tags", [])
+        request.session.modified = True
+        debug_session(request, f"📦 Cached tag inventory: {len(request.data.get('taggable_views', []))} views, "
+                      f"{len(request.data.get('door_tags', []))} door tags")
+        return Response({"message": "", "status": "silent"})
 
     # 💥 INTERACTIVE ROOM PACKAGE
     if intent == "start_interactive_room_package":

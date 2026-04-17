@@ -59,12 +59,55 @@ def fast_route_intent(user_text):
     # Direct execution from wizard payload
     if txt == "automate_tag":
         return {"intent": "automate_tag"}
-    # Natural language triggers (opens the wizard)
-    if any(phrase in txt for phrase in [
-        "automate tag", "automate tagging", "tag wizard", "smart tag",
-        "tag doors", "auto tag", "door tags", "auto-tag doors", "tag all doors",
-        "tag windows", "tag walls", "tag rooms", "tag ceilings"
-    ]):
+    
+    # 💥 CACHE TAG INVENTORY (silent — sent by frontend after wizard opens)
+    if txt == "cache_tag_inventory":
+        return {"intent": "cache_tag_inventory"}
+    
+    # 💥 NLP TAGGING — Regex detects: "tag doors in CD floor plans", "tag windows in DD", etc.
+    tag_match = re.search(
+        r"tag\s+(?:all\s+)?(?:the\s+)?(?P<cat>door|window|wall|room|ceiling)s?"
+        r"(?:\s+(?:in|for|on)\s+(?P<stage>wv|pd|dd|cd))?"
+        r"(?:\s+(?P<vtype>floor\s*plans?|ceiling\s*plans?|rcps?|elevations?|sections?|plans?))?",
+        txt
+    )
+    if tag_match:
+        category = tag_match.group("cat")
+        stage = tag_match.group("stage")
+        vtype_raw = tag_match.group("vtype")
+        
+        # Map view type keyword to Revit ViewType string
+        vtype_map = {
+            "floor plan": "FloorPlan", "floor plans": "FloorPlan", 
+            "floorplan": "FloorPlan", "floorplans": "FloorPlan",
+            "plan": "FloorPlan", "plans": "FloorPlan",
+            "ceiling plan": "CeilingPlan", "ceiling plans": "CeilingPlan",
+            "ceilingplan": "CeilingPlan", "ceilingplans": "CeilingPlan",
+            "rcp": "CeilingPlan", "rcps": "CeilingPlan",
+            "elevation": "Elevation", "elevations": "Elevation",
+            "section": "Section", "sections": "Section",
+        }
+        view_type_filter = ""
+        if vtype_raw:
+            vtype_clean = vtype_raw.strip().lower()
+            view_type_filter = vtype_map.get(vtype_clean, "")
+        
+        # If user provided enough context (at least a stage), go NLP direct
+        if stage:
+            result = {
+                "intent": "automate_tag_nlp",
+                "tag_category": category,
+                "stage": stage.upper(),
+            }
+            if view_type_filter:
+                result["view_type_filter"] = view_type_filter
+            return result
+        
+        # Just "tag doors" with no stage — open the wizard
+        return {"intent": "wizard:automate_tag"}
+    
+    # Fallback wizard triggers
+    if any(phrase in txt for phrase in ["automate tag", "automate tagging", "tag wizard", "smart tag"]):
         return {"intent": "wizard:automate_tag"}
 
     # --- BASIC LISTS ---

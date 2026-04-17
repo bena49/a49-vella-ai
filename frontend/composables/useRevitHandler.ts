@@ -130,11 +130,21 @@ function formatAutoTagResult(r: any): string {
     return "❌ Auto-Tag Error: " + r.message;
   }
 
-  let msg = "🏷️ AUTO-TAG REPORT\n━━━━━━━━━━━━━━━━━━\n\n";
+  // 1. Resolve the Category Label (e.g., "door" -> "Door", "room" -> "Room")
+  // We fall back to "Element" if the category is missing for some reason.
+  const rawCat = r.category || "element";
+  const label = rawCat.charAt(0).toUpperCase() + rawCat.slice(1);
+  
+  // 2. Handle Pluralization (e.g., Door -> Doors, Ceiling -> Ceilings)
+  const pluralLabel = label.endsWith('y') ? label.slice(0, -1) + 'ies' : label + 's';
+
+  let msg = `🏷️ ${pluralLabel.toUpperCase()} TAG REPORT\n━━━━━━━━━━━━━━━━━━\n\n`;
 
   msg += `Tag Family: ${r.tag_family || "—"} : ${r.tag_type || "—"}\n`;
   msg += `Views Processed: ${r.views_processed || 0}\n`;
-  msg += `Doors Tagged: ${r.tagged_count || 0} ✅\n`;
+  
+  // 3. Dynamic row for tagged count
+  msg += `${pluralLabel} Tagged: ${r.tagged_count || 0} ✅\n`;
 
   if (r.skipped_count > 0) {
     msg += `Already Tagged (Skipped): ${r.skipped_count} ⏭️\n`;
@@ -147,8 +157,9 @@ function formatAutoTagResult(r: any): string {
     });
   }
 
+  // 4. Dynamic success message
   if (r.status === "success") {
-    msg += `\n✅ All doors tagged successfully!`;
+    msg += `\n✅ All ${pluralLabel.toLowerCase()} tagged successfully!`;
   } else if (r.status === "partial") {
     msg += `\n⚠️ Tagging completed with some warnings.`;
   }

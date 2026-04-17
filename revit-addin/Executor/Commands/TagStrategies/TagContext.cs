@@ -50,28 +50,31 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
         {
             try
             {
-                if (sectionView.ViewType != ViewType.Section) return true;
+                if (sectionView.ViewType != ViewType.Section) return true; // Not a section — don't filter
 
                 BoundingBoxXYZ cropBox = sectionView.CropBox;
-                if (cropBox == null) return true;
+                if (cropBox == null) return true; // No crop box — allow
 
-                // Transform world point to View-Local coordinates
+                // Transform element's world point into the view's local coordinate system.
+                // In section view local coords:
+                //   X = left/right in the section view
+                //   Y = up/down in the section view  
+                //   Z = depth (near clip → far clip)
                 Transform inv = cropBox.Transform.Inverse;
                 XYZ localPoint = inv.OfPoint(elementPoint);
 
-                // Z in local coords is the depth. 
-                // Typically, Max.Z is the actual Section Cut Plane.
-                double sectionPlaneZ = cropBox.Max.Z;
+                // Check if the element is within the near/far clip range (Z axis in local coords).
+                // Use a generous tolerance (500mm in feet) since doors/windows have width.
+                double tolerance = 500.0 / 304.8;
+                double minZ = cropBox.Min.Z - tolerance;
+                double maxZ = cropBox.Max.Z + tolerance;
 
-                // We only care if the point is within 50mm of the CUT PLANE,
-                // regardless of where the Far Clip (Min.Z) is.
-                double tolerance = 50.0 / 304.8;
-
-                double distanceFromPlane = Math.Abs(localPoint.Z - sectionPlaneZ);
-
-                return distanceFromPlane <= tolerance;
+                return localPoint.Z >= minZ && localPoint.Z <= maxZ;
             }
-            catch { return true; }
+            catch
+            {
+                return true; // On error, default to including
+            }
         }
 
         /// <summary>

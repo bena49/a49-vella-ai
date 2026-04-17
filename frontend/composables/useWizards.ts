@@ -1,5 +1,5 @@
 // composables/useWizards.ts
-// Extracted from index.vue — Wizard states, props, action handlers
+// Extracted from index.vue — Wizard states, props, action handlers and Revit data updaters, all centralized in a composable for cleaner code and easier maintenance.
 
 import { ref, nextTick, type Ref } from "vue";
 

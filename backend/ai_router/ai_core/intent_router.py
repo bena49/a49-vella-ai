@@ -1,5 +1,5 @@
 # ai_router/ai_core/intent_router.py
-# Extracted from views.py — finalize_router, immediate commands, and GPT dispatch
+# Extracted from views.py — finalize_router, immediate commands, and GPT dispatch.
 
 import re
 from rest_framework.response import Response
@@ -21,7 +21,7 @@ from ..ai_commands.automate_tag_nlp import handle_automate_tag_nlp, handle_nlp_t
 
 
 # =====================================================================
-# THE ROUTER (TRAFFIC COP)
+# THE ROUTER (THE TRAFFIC COP)
 # =====================================================================
 
 def finalize_router(request):
@@ -343,7 +343,6 @@ def dispatch_immediate_command(request, intent, gpt_json):
     
     # Send immediately back to Vue/Revit
     return send_envelope(request, payload)
-
 
 # =====================================================================
 # MAIN PROCESSING ENTRY POINT

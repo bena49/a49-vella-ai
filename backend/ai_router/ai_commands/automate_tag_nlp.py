@@ -1,5 +1,5 @@
 # ai_router/ai_commands/automate_tag_nlp.py
-# Natural Language Tagging — handles commands like "tag doors in CD floor plans"
+# Natural Language Tagging — handles commands like "tag doors in CD floor plans or tag windows in DD elevations"
 # Resolves views and tag families from cached project data, then dispatches to C#.
 # If cache is empty, triggers a fetch from Revit and auto-resumes after data arrives.
 

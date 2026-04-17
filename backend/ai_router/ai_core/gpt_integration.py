@@ -22,7 +22,7 @@ def fast_route_intent(user_text):
     txt = user_text.lower().strip()
 
     # --- WIZARDS & INTERACTIVE TOOLS ---
-    # 💥 CACHE TAG INVENTORY must be checked BEFORE "inventory" keyword match
+    # 💥 CACHE TAG INVENTORY must be checked BEFORE "inventory" keyword match --
     if txt == "cache_tag_inventory":
         return {"intent": "cache_tag_inventory"}
     

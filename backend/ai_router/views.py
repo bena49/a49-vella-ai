@@ -1,5 +1,5 @@
 # =====================================================================
-# Vella Backend (views.py) — Slim Entry Point
+# Vella Backend (views.py) — Slim Entry Point backend for AI Command Routing, Session Management, and Callback Handling
 # ai_router/views.py
 # =====================================================================
 

@@ -22,6 +22,10 @@ def fast_route_intent(user_text):
     txt = user_text.lower().strip()
 
     # --- WIZARDS & INTERACTIVE TOOLS ---
+    # 💥 CACHE TAG INVENTORY must be checked BEFORE "inventory" keyword match
+    if txt == "cache_tag_inventory":
+        return {"intent": "cache_tag_inventory"}
+    
     if any(word in txt for word in ["renumber", "rename", "inventory"]):
         return {"intent": "fetch_project_inventory"}
     
@@ -59,10 +63,6 @@ def fast_route_intent(user_text):
     # Direct execution from wizard payload
     if txt == "automate_tag":
         return {"intent": "automate_tag"}
-    
-    # 💥 CACHE TAG INVENTORY (silent — sent by frontend after wizard opens)
-    if txt == "cache_tag_inventory":
-        return {"intent": "cache_tag_inventory"}
     
     # 💥 NLP TAGGING — Regex detects: "tag doors in CD floor plans", "tag windows in DD", etc.
     tag_match = re.search(

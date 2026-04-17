@@ -17,7 +17,7 @@ from ..ai_engines.titleblock_engine import get_smart_titleblock_options
 from ..ai_engines.conversation_engine import get_fallback_response
 from ..ai_commands.preflight import handle_preflight_check
 from ..ai_commands.automate_tag import handle_automate_tag
-from ..ai_commands.automate_tag_nlp import handle_automate_tag_nlp, handle_nlp_tag_family_selection
+from ..ai_commands.automate_tag_nlp import handle_automate_tag_nlp, handle_nlp_tag_family_selection, resume_pending_nlp_tag
 
 
 # =====================================================================
@@ -295,8 +295,13 @@ def dispatch_immediate_command(request, intent, gpt_json):
         request.session["ai_last_known_room_tags"] = request.data.get("room_tags", [])
         request.session["ai_last_known_ceiling_tags"] = request.data.get("ceiling_tags", [])
         request.session.modified = True
-        debug_session(request, f"📦 Cached tag inventory: {len(request.data.get('taggable_views', []))} views, "
-                      f"{len(request.data.get('door_tags', []))} door tags")
+        debug_session(request, f"📦 Cached tag inventory: {len(request.data.get('taggable_views', []))} views")
+        
+        # Auto-resume any pending NLP tag request that was waiting for this data
+        resume_resp = resume_pending_nlp_tag(request)
+        if resume_resp:
+            return resume_resp
+        
         return Response({"message": "", "status": "silent"})
 
     # 💥 INTERACTIVE ROOM PACKAGE

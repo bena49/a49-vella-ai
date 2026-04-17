@@ -1,26 +1,12 @@
 # ai_router/ai_commands/automate_tag_nlp.py
 # Natural Language Tagging — handles commands like "tag doors in CD floor plans"
 # Resolves views and tag families from cached project data, then dispatches to C#.
+# If cache is empty, triggers a fetch from Revit and auto-resumes after data arrives.
 
 from rest_framework.response import Response
 from ..ai_utils.envelope_builder import send_envelope, envelope_automate_tag
 from ..ai_core.session_manager import debug_session
 
-
-# View type keywords → Revit ViewType strings
-VIEW_TYPE_KEYWORDS = {
-    "floor plan": "FloorPlan",
-    "floor plans": "FloorPlan",
-    "plan": "FloorPlan",
-    "plans": "FloorPlan",
-    "ceiling plan": "CeilingPlan",
-    "ceiling plans": "CeilingPlan",
-    "rcp": "CeilingPlan",
-    "elevation": "Elevation",
-    "elevations": "Elevation",
-    "section": "Section",
-    "sections": "Section",
-}
 
 # Tag category → compatible Revit view types
 CATEGORY_VIEW_COMPAT = {
@@ -42,11 +28,9 @@ def handle_automate_tag_nlp(request, nlp_data):
     """
     Executes tagging based on Natural Language intent parsed by the fast router.
     
-    nlp_data expected keys:
-        - tag_category: str ("door", "window", "wall", "room", "ceiling")
-        - stage: str ("WV", "PD", "DD", "CD") — optional
-        - view_type_filter: str (e.g. "FloorPlan", "Elevation") — optional
-        - level_filter: str (e.g. "01", "02") — optional
+    If the tag inventory cache is empty, stores the pending request in session
+    and triggers a fetch_project_info from Revit. When the data arrives back
+    (via cache_tag_inventory), the pending request auto-resumes.
     """
     category = nlp_data.get("tag_category", "").lower()
     target_stage = nlp_data.get("stage", "").upper()
@@ -56,34 +40,72 @@ def handle_automate_tag_nlp(request, nlp_data):
     element_name = ELEMENT_NAMES.get(category, "elements")
     
     # ─────────────────────────────────────────────────────
-    # 1. CHECK CACHED DATA
+    # 1. CHECK CACHED DATA — if empty, trigger auto-fetch
     # ─────────────────────────────────────────────────────
     all_views = request.session.get("ai_last_known_taggable_views", [])
     
     if not all_views:
-        return Response({
-            "message": (
-                f"I'd love to tag those {element_name}, but I haven't scanned your project views yet.\n\n"
-                f"Please open the **Automate Tagging** wizard once (click + → Automate Tagging) "
-                f"so I can inventory your project. After that, you can use chat commands like this anytime!"
-            )
-        })
+        # Store the pending NLP request so we can resume after data arrives
+        request.session["ai_pending_nlp_tag_request"] = {
+            "tag_category": category,
+            "stage": target_stage,
+            "view_type_filter": view_type_filter,
+            "level_filter": level_filter,
+        }
+        request.session.modified = True
+        
+        debug_session(request, f"🔍 NLP Tag: Cache empty, fetching project inventory from Revit...")
+        
+        # Tell Revit to send project info (this goes to Vue → Vue caches to backend)
+        return send_envelope(request, {"command": "fetch_project_info"})
     
     # ─────────────────────────────────────────────────────
-    # 2. FILTER VIEWS
+    # 2. EXECUTE
     # ─────────────────────────────────────────────────────
+    return _execute_nlp_tag(request, category, target_stage, view_type_filter, level_filter)
+
+
+def resume_pending_nlp_tag(request):
+    """
+    Called after cache_tag_inventory populates the session.
+    Checks if there's a pending NLP tag request and resumes it.
+    
+    Returns Response if resumed, None if no pending request.
+    """
+    pending = request.session.get("ai_pending_nlp_tag_request")
+    if not pending:
+        return None
+    
+    # Clear the pending flag
+    request.session["ai_pending_nlp_tag_request"] = None
+    request.session.modified = True
+    
+    debug_session(request, f"🔄 Resuming pending NLP tag request: {pending}")
+    
+    return _execute_nlp_tag(
+        request,
+        pending.get("tag_category", ""),
+        pending.get("stage", ""),
+        pending.get("view_type_filter", ""),
+        pending.get("level_filter", ""),
+    )
+
+
+def _execute_nlp_tag(request, category, target_stage, view_type_filter, level_filter):
+    """
+    Core NLP tag execution — filters views, resolves tag family, dispatches.
+    """
+    element_name = ELEMENT_NAMES.get(category, "elements")
+    all_views = request.session.get("ai_last_known_taggable_views", [])
     compatible_types = CATEGORY_VIEW_COMPAT.get(category, [])
     
-    target_views = [
-        v for v in all_views
-        if v.get("view_type") in compatible_types
-    ]
+    target_views = [v for v in all_views if v.get("view_type") in compatible_types]
     
     # Stage filter
     if target_stage:
         target_views = [v for v in target_views if v.get("stage") == target_stage]
     
-    # View type filter (e.g., "floor plans" → "FloorPlan")
+    # View type filter
     if view_type_filter:
         target_views = [v for v in target_views if v.get("view_type") == view_type_filter]
     
@@ -102,7 +124,7 @@ def handle_automate_tag_nlp(request, nlp_data):
     view_ids = [v["id"] for v in target_views]
     
     # ─────────────────────────────────────────────────────
-    # 3. RESOLVE TAG FAMILY
+    # RESOLVE TAG FAMILY
     # ─────────────────────────────────────────────────────
     inventory_key = f"ai_last_known_{category}_tags"
     available_tags = request.session.get(inventory_key, [])
@@ -120,7 +142,6 @@ def handle_automate_tag_nlp(request, nlp_data):
     if len(available_tags) > 1:
         tag_list = "\n".join([f"• {t['family']} : {t['type']}" for t in available_tags])
         
-        # Store the pending NLP data in session so we can resume after user picks
         request.session["ai_pending_nlp_tag"] = {
             "category": category,
             "view_ids": view_ids,
@@ -136,18 +157,15 @@ def handle_automate_tag_nlp(request, nlp_data):
             )
         })
     
-    # Single tag family available — use it automatically
+    # Single tag family — auto-select
     selected_family = available_tags[0].get("family", "")
     selected_type = available_tags[0].get("type", "")
     
     # ─────────────────────────────────────────────────────
-    # 4. DISPATCH
+    # DISPATCH
     # ─────────────────────────────────────────────────────
-    stage_note = f" {target_stage}" if target_stage else ""
     debug_session(request, f"🚀 NLP Tag: {category} in {len(view_ids)} views using {selected_family}")
     
-    # Post a chat message via the response (frontend will display this)
-    # Then the revit_command will execute
     env = envelope_automate_tag(
         tag_category=category,
         tag_family=selected_family,
@@ -170,7 +188,6 @@ def handle_nlp_tag_family_selection(request, user_text):
     if not pending:
         return None
     
-    # Try to match the user's text against available tag families
     category = pending.get("category", "")
     inventory_key = f"ai_last_known_{category}_tags"
     available_tags = request.session.get(inventory_key, [])
@@ -182,7 +199,6 @@ def handle_nlp_tag_family_selection(request, user_text):
     
     for tag in available_tags:
         tag_display = f"{tag['family']} : {tag['type']}"
-        # Match if user pasted the full "Family : Type" or just the family name
         if (user_clean.lower() == tag_display.lower() or 
             user_clean.lower() == tag['family'].lower() or
             user_clean.lower() == tag['type'].lower()):
@@ -191,15 +207,12 @@ def handle_nlp_tag_family_selection(request, user_text):
             break
     
     if not selected_family:
-        # Didn't match — clear pending and let normal flow handle it
         request.session["ai_pending_nlp_tag"] = None
         request.session.modified = True
         return None
     
-    # Clear pending state
     view_ids = pending.get("view_ids", [])
     view_count = pending.get("view_count", len(view_ids))
-    stage = pending.get("stage", "")
     request.session["ai_pending_nlp_tag"] = None
     request.session.modified = True
     

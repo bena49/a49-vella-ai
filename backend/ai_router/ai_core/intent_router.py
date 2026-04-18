@@ -18,6 +18,7 @@ from ..ai_engines.conversation_engine import get_fallback_response
 from ..ai_commands.preflight import handle_preflight_check
 from ..ai_commands.automate_tag import handle_automate_tag
 from ..ai_commands.automate_tag_nlp import handle_automate_tag_nlp, handle_nlp_tag_conversation, resume_pending_nlp_tag
+from ..ai_commands.automate_dim import handle_automate_dim
 
 
 # =====================================================================
@@ -249,6 +250,9 @@ ALLOWED_IMMEDIATE_COMMANDS = [
     "preflight_check",
     "automate_tag",
     "automate_tag_nlp",
+    "automate_dim",         
+    "automate_dim_nlp",
+    "cache_dim_inventory",     
     "cache_tag_inventory",
     "ui:help",
     "wizard:create_views",
@@ -256,6 +260,7 @@ ALLOWED_IMMEDIATE_COMMANDS = [
     "wizard:create_and_place",
     "wizard:room_elevations",
     "wizard:automate_tag",
+    "wizard:automate_dim",
     "start_interactive_room_package"
 ]
 
@@ -285,6 +290,28 @@ def dispatch_immediate_command(request, intent, gpt_json):
     # 💥 AUTOMATE TAG NLP (natural language tagging - "tag doors in CD floor plans")
     if intent == "automate_tag_nlp":
         return handle_automate_tag_nlp(request, gpt_json)
+    
+    # 💥 AUTOMATE DIM (wizard payload — direct execution)
+    if intent == "automate_dim":
+        return handle_automate_dim(request)
+
+    # 💥 AUTOMATE DIM NLP (conversational — "dimension all walls in CD")
+    if intent == "automate_dim_nlp":
+        return handle_automate_dim_nlp(request, gpt_json)
+
+    # 💥 AUTOMATE DIM WIZARD (explicit wizard open)
+    if intent == "wizard:automate_dim":
+        return Response({
+            "message": "📐 Opening the dimensioning wizard...",
+            "intent": "wizard:automate_dim"
+        })
+
+    # 💥 CACHE DIM INVENTORY (silent — caches floor plan views in session for NLP)
+    if intent == "cache_dim_inventory":
+        request.session["ai_last_known_floor_plan_views"] = request.data.get("floor_plan_views", [])
+        request.session.modified = True
+        debug_session(request, f"📦 Cached dim inventory: {len(request.data.get('floor_plan_views', []))} floor plan views")
+        return Response({"message": "", "status": "silent"})
 
     # 💥 CACHE TAG INVENTORY (silent — caches tag families + views in session for NLP)
     if intent == "cache_tag_inventory":

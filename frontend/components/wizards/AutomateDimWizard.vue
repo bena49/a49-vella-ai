@@ -1,0 +1,377 @@
+<template>
+  <div class="fixed inset-0 flex items-center justify-center z-50 p-4">
+    <div class="absolute inset-0 bg-black/10 backdrop-blur-sm" @click="$emit('close')"></div>
+
+    <div class="relative bg-gradient-to-br from-[#0A1D4A]/95 via-[#0A1D4A]/70 to-[#0A1D4A]/40 
+            backdrop-blur-2xl border border-white/20 
+            text-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col 
+            min-h-[600px] max-h-[90vh] animate-fade-in-up">
+      
+      <!-- HEADER -->
+      <div class="p-5 border-b border-white/10 flex justify-between items-center flex-shrink-0">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-[#00BCD4]/20 flex items-center justify-center text-[#00BCD4]">
+            <Icon name="tabler:ruler-measure" class="text-xl" />
+          </div>
+          <h2 class="text-sm font-bold tracking-wide">AUTOMATE DIMENSIONS</h2>
+        </div>
+        <button @click="$emit('close')" class="text-white/40 hover:text-white transition">
+          <Icon name="lucide:x" class="text-xl" />
+        </button>
+      </div>
+
+      <!-- BODY -->
+      <div class="p-6 pb-10 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+
+        <!-- DIMENSION TYPE DROPDOWN -->
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-white/50 font-bold mb-1.5 block">Dimension Style</label>
+          <div class="relative">
+            <div @click="toggleDropdown('dimType')"
+                 class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs 
+                 text-white outline-none transition cursor-pointer flex justify-between items-center hover:bg-white/15"
+                 :class="isDimTypeOpen ? 'border-[#00BCD4]' : ''">
+              <span>{{ selectedDimType || 'Select dimension style...' }}</span>
+              <div class="text-white/50 transform transition-transform duration-200"
+                   :class="isDimTypeOpen ? 'rotate-180' : ''">▼</div>
+            </div>
+            <div v-if="isDimTypeOpen"
+                 class="absolute z-[40] w-full mt-1 bg-[#0A1D4A]/80 backdrop-blur-xl border border-white/25 rounded-xl 
+                 overflow-hidden shadow-2xl animate-fade-in max-h-48 overflow-y-auto custom-scrollbar">
+              <div v-for="dt in props.dimTypes" :key="dt"
+                   @click="selectDimType(dt)"
+                   class="px-3 py-2 text-xs text-white hover:bg-white/15 transition cursor-pointer border-b border-white/10 last:border-b-0"
+                   :class="selectedDimType === dt ? 'bg-white/20 font-medium' : ''">
+                {{ dt }}
+              </div>
+              <div v-if="props.dimTypes.length === 0" class="px-3 py-2 text-xs text-white/40 italic">
+                No dimension styles found in project
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- WHAT TO REFERENCE -->
+        <div class="space-y-2 bg-black/10 border border-white/10 rounded-xl p-3">
+          <div class="text-[10px] uppercase tracking-wider text-white/50 font-bold mb-1">Reference</div>
+          <div class="text-[10px] text-white/40 mb-2">Choose what the dimension string will snap to</div>
+
+          <label class="flex items-center justify-between cursor-pointer py-1"
+                 @click="includeOpenings = !includeOpenings">
+            <div class="flex items-center gap-2">
+              <Icon name="lucide:door-open" class="text-sm text-[#00BCD4]" />
+              <span class="text-xs">Door &amp; Window Openings</span>
+            </div>
+            <div class="w-8 h-5 rounded-full transition-all flex items-center px-0.5 flex-shrink-0"
+                 :class="includeOpenings ? 'bg-[#00BCD4]' : 'bg-white/20'">
+              <div class="w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
+                   :class="includeOpenings ? 'translate-x-3' : 'translate-x-0'"></div>
+            </div>
+          </label>
+
+          <label class="flex items-center justify-between cursor-pointer py-1"
+                 @click="includeIntersecting = !includeIntersecting">
+            <div class="flex items-center gap-2">
+              <Icon name="lucide:git-merge" class="text-sm text-[#00BCD4]" />
+              <span class="text-xs">Intersecting Walls</span>
+            </div>
+            <div class="w-8 h-5 rounded-full transition-all flex items-center px-0.5 flex-shrink-0"
+                 :class="includeIntersecting ? 'bg-[#00BCD4]' : 'bg-white/20'">
+              <div class="w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
+                   :class="includeIntersecting ? 'translate-x-3' : 'translate-x-0'"></div>
+            </div>
+          </label>
+
+          <label class="flex items-center justify-between cursor-pointer py-1"
+                 @click="includeGrids = !includeGrids">
+            <div class="flex items-center gap-2">
+              <Icon name="lucide:hash" class="text-sm text-[#00BCD4]" />
+              <span class="text-xs">Structural Grids</span>
+            </div>
+            <div class="w-8 h-5 rounded-full transition-all flex items-center px-0.5 flex-shrink-0"
+                 :class="includeGrids ? 'bg-[#00BCD4]' : 'bg-white/20'">
+              <div class="w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
+                   :class="includeGrids ? 'translate-x-3' : 'translate-x-0'"></div>
+            </div>
+          </label>
+        </div>
+
+        <!-- OFFSET DISTANCE -->
+        <div class="bg-black/10 border border-white/10 rounded-xl p-3">
+          <div class="flex justify-between items-center mb-2">
+            <label class="text-[10px] uppercase tracking-wider text-white/50 font-bold">Offset from Wall Face</label>
+            <span class="text-xs font-bold text-[#00BCD4]">{{ offsetMm }} mm</span>
+          </div>
+          <input type="range" min="400" max="2000" step="100"
+                 v-model.number="offsetMm"
+                 class="w-full h-1.5 rounded-full appearance-none cursor-pointer dim-slider" />
+          <div class="flex justify-between text-[9px] text-white/30 mt-1">
+            <span>400</span>
+            <span>1200</span>
+            <span>2000</span>
+          </div>
+        </div>
+
+        <!-- SMART PLACEMENT TOGGLE -->
+        <div class="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl px-4 py-3">
+          <div>
+            <div class="text-xs font-medium">Smart Exterior Placement</div>
+            <div class="text-[10px] text-white/40 mt-0.5">Exterior walls dimension outward from building perimeter</div>
+          </div>
+          <button @click="smartPlacement = !smartPlacement"
+            class="w-10 h-6 rounded-full transition-all flex items-center px-0.5 flex-shrink-0"
+            :class="smartPlacement ? 'bg-[#00BCD4]' : 'bg-white/20'">
+            <div class="w-5 h-5 rounded-full bg-white shadow-sm transition-transform"
+              :class="smartPlacement ? 'translate-x-4' : 'translate-x-0'"></div>
+          </button>
+        </div>
+
+        <!-- FILTERS -->
+        <div class="space-y-3 bg-black/10 border border-white/10 rounded-xl p-3">
+          <div class="text-[10px] uppercase tracking-wider text-white/50 font-bold">Filters</div>
+
+          <!-- STAGE FILTER -->
+          <div>
+            <label class="text-[10px] text-white/40 block mb-1">Stage</label>
+            <div class="flex bg-white/5 rounded-lg p-1 border border-white/10">
+              <button v-for="stg in ['WV', 'PD', 'DD', 'CD', 'Other']" :key="stg"
+                @click="toggleStageFilter(stg)"
+                class="flex-1 rounded-md text-[11px] py-1 transition-all"
+                :class="activeStages.includes(stg) 
+                  ? 'bg-white/20 text-white font-bold' 
+                  : 'text-white/40 hover:text-white/70'">
+                {{ stg }}
+              </button>
+            </div>
+          </div>
+
+          <!-- LEVEL FILTER -->
+          <div v-if="availableLevels.length > 0">
+            <label class="text-[10px] text-white/40 block mb-1">Level</label>
+            <div class="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto custom-scrollbar">
+              <button v-for="lvl in availableLevels" :key="lvl"
+                @click="toggleLevelFilter(lvl)"
+                class="px-2 py-1 rounded-md text-[10px] transition-all"
+                :class="activeLevels.includes(lvl) 
+                  ? 'bg-[#00BCD4] text-[#0A1D4A] font-bold' 
+                  : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white'">
+                {{ lvl || '(no level)' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- VIEW SELECTOR -->
+        <div>
+          <div class="flex justify-between items-end mb-1.5">
+            <label class="text-[10px] uppercase tracking-wider text-white/50 font-bold block">Select Floor Plan Views</label>
+            <button @click="toggleSelectAll" class="text-[10px] text-[#00BCD4] hover:text-white transition">
+              {{ isAllSelected ? 'Deselect All' : 'Select All' }}
+            </button>
+          </div>
+          <div class="bg-black/20 border border-white/10 rounded-xl p-2 max-h-44 overflow-y-auto custom-scrollbar">
+            <div v-if="filteredViews.length > 0" class="space-y-1">
+              <button v-for="view in filteredViews" :key="view.id"
+                @click="toggleView(view.id)"
+                class="w-full px-3 py-1.5 rounded-lg text-[11px] text-left transition-all flex items-center gap-2"
+                :class="selectedViewIds.includes(view.id) 
+                  ? 'bg-[#00BCD4] text-[#0A1D4A] font-bold' 
+                  : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'">
+                <Icon name="lucide:grid-2x2" class="text-sm flex-shrink-0" />
+                <span class="truncate flex-1">{{ view.name }}</span>
+                <span class="text-[9px] opacity-60">{{ view.level || view.stage || '' }}</span>
+              </button>
+            </div>
+            <div v-else class="text-xs text-white/30 text-center py-3">
+              No floor plan views match the current filters.
+            </div>
+          </div>
+          <div class="text-[10px] text-white/30 mt-1 text-right">
+            {{ selectedViewIds.length }} of {{ filteredViews.length }} selected
+          </div>
+        </div>
+
+      </div>
+
+      <!-- FOOTER -->
+      <div class="p-5 border-t border-white/10 flex-shrink-0">
+        <button @click="submit"
+          :disabled="!canSubmit"
+          class="w-full py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2"
+          :class="canSubmit
+            ? 'bg-[#00BCD4] hover:bg-[#26C6DA] text-[#0A1D4A] shadow-lg shadow-cyan-900/20' 
+            : 'bg-white/10 text-white/30 cursor-not-allowed'">
+          <Icon name="tabler:ruler-measure" class="text-base" />
+          <span>Dimension {{ selectedViewIds.length }} View{{ selectedViewIds.length !== 1 ? 's' : '' }}</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+
+// =====================================================================
+// PROPS
+// =====================================================================
+const props = defineProps({
+  // dimTypes: list of DimensionType names from the project
+  // e.g. ["A49_Linear", "Linear Dimension Style"]
+  dimTypes: { type: Array, default: () => [] },
+
+  // floorPlanViews: [{id, name, view_type, stage, level, view_abbrev, scale}]
+  // Already pre-filtered to FloorPlan only by index.vue / useRevitHandler
+  floorPlanViews: { type: Array, default: () => [] },
+});
+
+const emit = defineEmits(['close', 'submit']);
+
+// =====================================================================
+// STATE
+// =====================================================================
+const selectedDimType      = ref('');
+const includeOpenings      = ref(true);
+const includeIntersecting  = ref(true);
+const includeGrids         = ref(true);
+const offsetMm             = ref(800);
+const smartPlacement       = ref(true);
+
+const activeStages         = ref([]);
+const activeLevels         = ref([]);
+const selectedViewIds      = ref([]);
+
+const isDimTypeOpen        = ref(false);
+
+// =====================================================================
+// COMPUTED
+// =====================================================================
+
+// Distinct levels from views passing the stage filter
+const availableLevels = computed(() => {
+  const levels = new Set();
+  props.floorPlanViews.forEach(v => {
+    if (activeStages.value.length > 0) {
+      const hasOther = activeStages.value.includes('Other');
+      const standardStages = activeStages.value.filter(s => s !== 'Other');
+      const viewStage = v.stage || '';
+      const isStd   = standardStages.includes(viewStage);
+      const isOther = hasOther && !['WV', 'PD', 'DD', 'CD'].includes(viewStage);
+      if (!isStd && !isOther) return;
+    }
+    if (v.level) levels.add(v.level);
+  });
+  return Array.from(levels).sort();
+});
+
+const filteredViews = computed(() => {
+  return props.floorPlanViews.filter(v => {
+    // Stage filter
+    if (activeStages.value.length > 0) {
+      const hasOther     = activeStages.value.includes('Other');
+      const standardStgs = activeStages.value.filter(s => s !== 'Other');
+      const viewStage    = v.stage || '';
+      const isStd        = standardStgs.includes(viewStage);
+      const isOther      = hasOther && !['WV', 'PD', 'DD', 'CD'].includes(viewStage);
+      if (!isStd && !isOther) return false;
+    }
+    // Level filter
+    if (activeLevels.value.length > 0) {
+      if (!activeLevels.value.includes(v.level)) return false;
+    }
+    return true;
+  });
+});
+
+const isAllSelected = computed(() => {
+  return filteredViews.value.length > 0 &&
+    filteredViews.value.every(v => selectedViewIds.value.includes(v.id));
+});
+
+const canSubmit = computed(() => {
+  return selectedViewIds.value.length > 0;
+});
+
+// =====================================================================
+// ACTIONS
+// =====================================================================
+function toggleDropdown(name) {
+  if (name === 'dimType') {
+    isDimTypeOpen.value = !isDimTypeOpen.value;
+  }
+}
+
+function selectDimType(dt) {
+  selectedDimType.value = dt;
+  isDimTypeOpen.value = false;
+}
+
+function toggleStageFilter(stage) {
+  const idx = activeStages.value.indexOf(stage);
+  if (idx >= 0) activeStages.value.splice(idx, 1);
+  else activeStages.value.push(stage);
+  pruneSelectedViews();
+}
+
+function toggleLevelFilter(lvl) {
+  const idx = activeLevels.value.indexOf(lvl);
+  if (idx >= 0) activeLevels.value.splice(idx, 1);
+  else activeLevels.value.push(lvl);
+  pruneSelectedViews();
+}
+
+function pruneSelectedViews() {
+  const valid = new Set(filteredViews.value.map(v => v.id));
+  selectedViewIds.value = selectedViewIds.value.filter(id => valid.has(id));
+}
+
+function toggleView(id) {
+  const idx = selectedViewIds.value.indexOf(id);
+  if (idx >= 0) selectedViewIds.value.splice(idx, 1);
+  else selectedViewIds.value.push(id);
+}
+
+function toggleSelectAll() {
+  if (isAllSelected.value) {
+    selectedViewIds.value = [];
+  } else {
+    selectedViewIds.value = filteredViews.value.map(v => v.id);
+  }
+}
+
+function submit() {
+  if (!canSubmit.value) return;
+  emit('submit', {
+    view_ids:                 selectedViewIds.value,
+    include_openings:         includeOpenings.value,
+    include_intersecting:     includeIntersecting.value,
+    include_grids:            includeGrids.value,
+    offset_mm:                offsetMm.value,
+    smart_exterior_placement: smartPlacement.value,
+    dim_type_name:            selectedDimType.value,
+  });
+}
+
+// --- KEYBOARD ---
+const handleKeydown = (e) => {
+  if (e.key === 'Escape') isDimTypeOpen.value = false;
+};
+onMounted(() => document.addEventListener('keydown', handleKeydown));
+onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
+</script>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; margin: 2px 0; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+/* Teal range slider */
+.dim-slider { accent-color: #00BCD4; }
+
+@keyframes fade-in-up { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.animate-fade-in-up { animation: fade-in-up 0.2s ease-out forwards; }
+@keyframes fade-in { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+.animate-fade-in { animation: fade-in 0.15s ease-out forwards; }
+</style>

@@ -25,6 +25,7 @@ from .ai_core.intent_router import finalize_router, process_intent
 from .ai_core.callback_handler import handle_revit_callbacks
 from .ai_commands.preflight import handle_preflight_repair_interceptor
 from .ai_commands.automate_tag_nlp import handle_nlp_tag_conversation
+from .ai_commands.automate_dim import handle_nlp_dim_conversation
 from .ai_engines.math_engine import process_math_and_conversions
 from .ai_engines.conversation_engine import process_conversational_intent
 
@@ -86,6 +87,13 @@ def ai_router(request):
         nlp_tag_resp = handle_nlp_tag_conversation(request, raw_text_original)
         if nlp_tag_resp:
             return nlp_tag_resp
+        
+        # ==========================================================
+        # 0.8) NLP DIM CONVERSATION INTERCEPTOR
+        # ==========================================================
+        nlp_dim_resp = handle_nlp_dim_conversation(request, raw_text_original)
+        if nlp_dim_resp:
+            return nlp_dim_resp
 
         # 💥 BULLETPROOF "NO" INTERCEPTOR
         if clean_text in ["no", "none", "skip", "n", "nope", "cancel"]:

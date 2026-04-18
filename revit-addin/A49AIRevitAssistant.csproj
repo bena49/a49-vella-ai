@@ -102,6 +102,7 @@
     <Compile Include="Executor\A49Logger.cs" />
     <Compile Include="Executor\CommandEventHandler.cs" />
     <Compile Include="Executor\Commands\ApplyTemplateCommand.cs" />
+    <Compile Include="Executor\Commands\AutoDimCommand.cs" />
     <Compile Include="Executor\Commands\AutoTagCommand.cs" />
     <Compile Include="Executor\Commands\BatchRenameViewsCommand.cs" />
     <Compile Include="Executor\Commands\DuplicateViewCommand.cs" />
@@ -125,10 +126,13 @@
     <Compile Include="Executor\Commands\Sheets\CreateSheetsCommand.cs" />
     <Compile Include="Executor\Commands\Sheets\RenumberSheetsCommand.cs" />
     <Compile Include="Executor\Commands\TagStrategies\CeilingTagStrategy.cs" />
+    <Compile Include="Executor\Commands\TagStrategies\DimContext.cs" />
     <Compile Include="Executor\Commands\TagStrategies\DoorTagStrategy.cs" />
+    <Compile Include="Executor\Commands\TagStrategies\IDimStrategy.cs" />
     <Compile Include="Executor\Commands\TagStrategies\ITagStrategy.cs" />
     <Compile Include="Executor\Commands\TagStrategies\RoomTagStrategy.cs" />
     <Compile Include="Executor\Commands\TagStrategies\TagContext.cs" />
+    <Compile Include="Executor\Commands\TagStrategies\WallDimStrategy.cs" />
     <Compile Include="Executor\Commands\TagStrategies\WallTagStrategy.cs" />
     <Compile Include="Executor\Commands\TagStrategies\WindowTagStrategy.cs" />
     <Compile Include="Executor\Contracts\ApplyTemplateRequest.cs" />

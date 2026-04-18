@@ -63,6 +63,11 @@ def fast_route_intent(user_text):
     # Direct execution from wizard payload
     if txt == "automate_tag":
         return {"intent": "automate_tag"}
+
+    # --- AUTO-DIM ---
+    # Direct execution from wizard payload
+    if txt == "automate_dim":
+        return {"intent": "automate_dim"}
     
     # 💥 NLP TAGGING — Conversational slot-filling engine
     # Detects tag commands and extracts as many slots as possible upfront.
@@ -132,9 +137,40 @@ def fast_route_intent(user_text):
         # Always enter NLP flow — conversation will ask for missing slots
         return result
     
+    # 💥 NLP DIMENSIONING — Conversational trigger
+    # Matches: "dimension all walls", "auto dim CD floor plans",
+    #          "add dimensions", "annotate walls in DD"
+    dim_patterns = [
+        "dimension", "dimensioning", "auto dim", "auto-dim",
+        "add dim", "annotate walls", "wall dim"
+    ]
+    if any(pat in txt for pat in dim_patterns):
+        result = {"intent": "automate_dim_nlp"}
+
+        # Extract stage (WV/PD/DD/CD)
+        stage_match = re.search(r"(?:in|for|on)\s+(?P<stage>wv|pd|dd|cd)\b", txt)
+        if stage_match:
+            result["stage"] = stage_match.group("stage").upper()
+
+        # Extract specific view name (e.g. "dimension CD_A1_FL_01")
+        view_match = re.search(
+            r"(?:in|for|on)\s+(?P<viewname>\S*_\S+(?:\s*\([^)]*\))?)",
+            txt, re.IGNORECASE
+        )
+        if view_match:
+            viewname = view_match.group("viewname").strip()
+            if "_" in viewname and len(viewname) > 4:
+                result["view_name"] = viewname
+
+        return result
+
     # Fallback wizard triggers (non-tag-specific phrases)
     if any(phrase in txt for phrase in ["automate tag", "automate tagging", "tag wizard", "smart tag"]):
         return {"intent": "wizard:automate_tag"}
+
+    # Fallback wizard triggers for dimensioning
+    if any(phrase in txt for phrase in ["dim wizard", "dimension wizard", "dimensioning wizard"]):
+        return {"intent": "wizard:automate_dim"}
 
     # --- BASIC LISTS ---
     if txt.startswith("list ") or txt.startswith("show "):
@@ -152,6 +188,7 @@ def fast_route_intent(user_text):
 
     # Return None to let gpt-4o-mini handle complex requests
     return None
+
 
 # =====================================================================
 # GPT WRAPPER

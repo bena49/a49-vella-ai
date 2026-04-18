@@ -23,6 +23,7 @@ export function useWizards(
   const showRenameWizard = ref(false);
   const showRoomWizard = ref(false);
   const showAutomateTagWizard = ref(false);
+  const showAutomateDimWizard = ref(false);
   const showHelp = ref(false);
 
   // --- WIZARD PROPS ---
@@ -32,6 +33,7 @@ export function useWizards(
   const renameWizardProps = ref<any>({});
   const roomWizardProps = ref<any>({});
   const automateTagWizardProps = ref<any>({});
+  const automateDimWizardProps = ref<any>({});
   const wizardKey = ref(0);
 
   // --- ACTION DISPATCHER ---
@@ -114,6 +116,17 @@ export function useWizards(
         command: "fetch_project_info",
         args: { types: ["door_tags", "window_tags", "wall_tags", "room_tags", "ceiling_tags", "taggable_views"] },
       });
+    } else if (action === "wizard:automate_dim") {
+      automateDimWizardProps.value = {
+        dimTypes: [],
+        floorPlanViews: [],
+      };
+      showAutomateDimWizard.value = true;
+      // Ask Revit to fetch dimension styles and floor plan views
+      sendToRevit({
+        command: "fetch_project_info",
+        args: { types: ["dim_types", "floor_plan_views"] },
+      });
     }
   }
 
@@ -194,6 +207,28 @@ export function useWizards(
     });
   }
 
+  // 💥 AUTOMATE DIM SUBMIT HANDLER
+  function handleAutomateDimSubmit(payload: any) {
+    showAutomateDimWizard.value = false;
+
+    messages.value.push({
+      from: "vella",
+      text: `📐 Dimensioning walls in ${payload.view_ids.length} view(s)...`,
+    });
+
+    sendToBackend({
+      message: "automate_dim",
+      view_ids: payload.view_ids,
+      include_openings: payload.include_openings,
+      include_intersecting: payload.include_intersecting,
+      include_grids: payload.include_grids,
+      offset_mm: payload.offset_mm,
+      smart_exterior_placement: payload.smart_exterior_placement,
+      dim_type_name: payload.dim_type_name,
+      session_key: sessionKey.value,
+    });
+  }
+
   function closeWizard() {
     showWizard.value = false;
   }
@@ -236,6 +271,12 @@ export function useWizards(
       taggableViews: projectInfo.taggable_views || [],
     };
 
+    // Automate dim wizard data
+    automateDimWizardProps.value = {
+      dimTypes: projectInfo.dim_types || [],
+      floorPlanViews: projectInfo.floor_plan_views || [],
+    };
+
     // 💥 CACHE TAG INVENTORY TO BACKEND (enables NLP tagging commands)
     // This silently sends the tag families + taggable views to Django's session
     // so that NLP commands like "tag doors in CD" can work without the wizard open.
@@ -248,6 +289,14 @@ export function useWizards(
         wall_tags: projectInfo.wall_tags || [],
         room_tags: projectInfo.room_tags || [],
         ceiling_tags: projectInfo.ceiling_tags || [],
+        session_key: sessionKey.value,
+      });
+    }
+
+    if (projectInfo.floor_plan_views && projectInfo.floor_plan_views.length > 0) {
+      sendToBackend({
+        message: "cache_dim_inventory",
+        floor_plan_views: projectInfo.floor_plan_views,
         session_key: sessionKey.value,
       });
     }
@@ -269,6 +318,7 @@ export function useWizards(
     showRenameWizard,
     showRoomWizard,
     showAutomateTagWizard,
+    showAutomateDimWizard,
     showHelp,
     // Props
     wizardProps,
@@ -277,6 +327,7 @@ export function useWizards(
     renameWizardProps,
     roomWizardProps,
     automateTagWizardProps,
+    automateDimWizardProps,
     wizardKey,
     // Handlers
     handleAction,
@@ -285,6 +336,7 @@ export function useWizards(
     handleBatchSubmit,
     handleRoomElevationExecute,
     handleAutomateTagSubmit,
+    handleAutomateDimSubmit,
     closeWizard,
     // Props updaters (called from useRevitHandler)
     updateWizardProps,

@@ -153,6 +153,17 @@ namespace A49AIRevitAssistant.Executor
                     case "automate_tag":
                         return new AutoTagCommand(_uiapp).Execute(env);
 
+                    case "auto_dim":
+                        {
+                            var doc = _uiapp.ActiveUIDocument.Document;
+                            var uiDoc = _uiapp.ActiveUIDocument;
+                            var dimCmd = new AutoDimCommand(doc, uiDoc);
+                            string dimPayload = env.raw != null
+                                ? env.raw.ToString(Formatting.None)
+                                : "{}";
+                            return dimCmd.Execute(dimPayload);
+                        }
+
                     default:
                         return $"❌ Unknown command: {env.command}";
                 }

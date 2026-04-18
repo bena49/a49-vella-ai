@@ -102,6 +102,7 @@
     
     <RoomElevationWizard v-if="showRoomWizard" v-bind="roomWizardProps" :key="'rm-'+wizardKey" @close="showRoomWizard = false" @executeRaw="handleRoomElevationExecute" />
     <AutomateTagWizard v-if="showAutomateTagWizard" v-bind="automateTagWizardProps" :key="'amt-'+wizardKey" @close="showAutomateTagWizard = false" @submit="handleAutomateTagSubmit" />
+    <AutomateDimWizard v-if="showAutomateDimWizard" v-bind="automateDimWizardProps" :key="'amd-'+wizardKey" @close="showAutomateDimWizard = false" @submit="handleAutomateDimSubmit" />
     <HelpModal v-if="showHelp" @close="showHelp = false" @submit="handleHelpPrompt" />
 
     <VellaModal
@@ -127,6 +128,7 @@ import SheetWizard from '~/components/wizards/SheetWizard.vue';
 import RenameWizard from '~/components/wizards/RenameWizard.vue'; 
 import RoomElevationWizard from '~/components/wizards/RoomElevationWizard.vue';
 import AutomateTagWizard from '~/components/wizards/AutomateTagWizard.vue';
+import AutomateDimWizard from '~/components/wizards/AutomateDimWizard.vue';
 import HelpModal from '~/components/help/HelpModal.vue';
 import { useRevitBridge } from "~/composables/useRevitBridge";
 
@@ -163,11 +165,11 @@ const {
 // --- WIZARDS (actual init) ---
 const {
   showWizard, showSheetWizard, showCreatePlaceWizard,
-  showRenameWizard, showRoomWizard, showAutomateTagWizard, showHelp,
+  showRenameWizard, showRoomWizard, showAutomateTagWizard, showAutomateDimWizard, showHelp,
   wizardProps, sheetWizardProps, createPlaceWizardProps,
-  renameWizardProps, roomWizardProps, automateTagWizardProps, wizardKey,
+  renameWizardProps, roomWizardProps, automateTagWizardProps, automateDimWizardProps, wizardKey,
   handleAction, handleHelpPrompt, handleWizardSubmit,
-  handleBatchSubmit, handleRoomElevationExecute, handleAutomateTagSubmit,
+  handleBatchSubmit, handleRoomElevationExecute, handleAutomateTagSubmit, handleAutomateDimSubmit,
   closeWizard, updateWizardProps, updateInventoryProps
 } = useWizards(messages, scrollToBottom, handleUserSubmit, sendToBackend, sendToRevit, sessionKey);
 

@@ -218,7 +218,62 @@ namespace A49AIRevitAssistant.Executor.Commands
                     .OrderBy(v => v.stage).ThenBy(v => v.view_type).ThenBy(v => v.name)
                     .ToList();
 
-                // 9. Construct the Payload object
+                // 💥 9. NEW: Get Dimension Types (for AutomateDimWizard)
+                // Returns all Linear DimensionType names in the project.
+                var dimTypes = new FilteredElementCollector(_doc)
+                    .OfClass(typeof(DimensionType))
+                    .Cast<DimensionType>()
+                    .Where(dt => dt.StyleType == DimensionStyleType.Linear)
+                    .Select(dt => dt.Name)
+                    .OrderBy(n => n)
+                    .ToList();
+
+                // 💥 10. NEW: Get Floor Plan Views (for AutomateDimWizard)
+                // Only FloorPlan views — dimensioning is floor plans only.
+                // Returns same metadata shape as taggable_views for consistent filtering.
+                var floorPlanViews = new FilteredElementCollector(_doc)
+                    .OfClass(typeof(View))
+                    .Cast<View>()
+                    .Where(v => !v.IsTemplate && v.ViewType == ViewType.FloorPlan && v.CanBePrinted)
+                    .Select(v =>
+                    {
+                        var parts = v.Name.Split('_');
+                        string stage = "";
+                        string levelCode = "";
+
+                        if (parts.Length > 0)
+                        {
+                            var first = parts[0].ToUpper();
+                            if (first == "WV" || first == "PD" || first == "DD" || first == "CD")
+                                stage = first;
+                        }
+
+                        if (parts.Length >= 2)
+                        {
+                            var last = parts[parts.Length - 1].ToUpper();
+                            var levelToken = last.Split(new[] { ' ', '-' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (levelToken.Length > 0)
+                            {
+                                var candidate = levelToken[0];
+                                if (System.Text.RegularExpressions.Regex.IsMatch(candidate, @"^(RF|00|[BPL]?\d{1,2})$"))
+                                    levelCode = candidate;
+                            }
+                        }
+
+                        return new
+                        {
+                            id = v.Id.Value,
+                            name = v.Name,
+                            view_type = "FloorPlan",
+                            stage = stage,
+                            level = levelCode,
+                            scale = v.Scale
+                        };
+                    })
+                    .OrderBy(v => v.stage).ThenBy(v => v.name)
+                    .ToList();
+
+                // 11. Construct the Payload object
                 var payload = new
                 {
                     project_info = new
@@ -235,11 +290,15 @@ namespace A49AIRevitAssistant.Executor.Commands
                         room_tags = roomTags,
                         ceiling_tags = ceilingTags,
                         // Full taggable views with metadata (used by AutomateTagWizard)
-                        taggable_views = taggableViews
+                        taggable_views = taggableViews,
+                        // Dimension styles (used by AutomateDimWizard)
+                        dim_types = dimTypes,
+                        // Floor plan views with metadata (used by AutomateDimWizard)
+                        floor_plan_views = floorPlanViews
                     }
                 };
 
-                // 10. Serialize to JSON
+                // 12. Serialize to JSON
                 return JsonConvert.SerializeObject(payload);
             }
             catch (Exception ex)

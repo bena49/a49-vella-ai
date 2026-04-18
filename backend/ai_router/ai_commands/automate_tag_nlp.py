@@ -1,6 +1,6 @@
 # ai_router/ai_commands/automate_tag_nlp.py
 # ============================================================================
-# Conversational Tagging Engine — Natural Language slot-filling for Vella with multi-step conversations, intelligent defaults, and error handling.
+# Conversational Tagging Engine — Natural Language slot-filling for Vella
 # ============================================================================
 # Handles the full conversation flow for tagging elements via chat:
 #
@@ -180,6 +180,27 @@ def handle_automate_tag_nlp(request, nlp_data):
         if not views:
             return Response({"message": f"I couldn't find a view named '{view_name}'. Please check the name and try again."})
         
+        # If multiple views match, ask user to be more specific
+        if len(views) > 1:
+            view_list = "\n".join([f"• {v['name']}" for v in views])
+            state = {
+                "step": "awaiting_specific_view",
+                "tag_category": category,
+                "stage": "",
+                "view_type_filter": "",
+                "view_name": "",
+                "matched_views": views,
+                "view_ids": [],
+                "tag_family": "",
+                "tag_type": "",
+                "tag_family_raw": tag_family_raw,
+            }
+            _set_state(request, state)
+            return Response({
+                "message": f"I found {len(views)} views matching '{view_name}':\n{view_list}\n\n"
+                           f"Please provide the exact view name, including the suffix (e.g. the part in parentheses):"
+            })
+        
         family, ftype = _resolve_tag_family_from_text(request, category, tag_family_raw)
         if not family:
             return Response({"message": f"I couldn't find a tag family matching '{tag_family_raw}' in this project."})
@@ -216,10 +237,21 @@ def handle_automate_tag_nlp(request, nlp_data):
     
     # Skip to the right step based on what we have
     if view_name:
-        # Specific view → skip to tag family
+        # Specific view → resolve then ask tag family
         views = _filter_views(request, category, "", "", view_name)
         if not views:
             return Response({"message": f"I couldn't find a view named '{view_name}'. Please check the name and try again."})
+        
+        if len(views) > 1:
+            view_list = "\n".join([f"• {v['name']}" for v in views])
+            state["step"] = "awaiting_specific_view"
+            state["matched_views"] = views
+            _set_state(request, state)
+            return Response({
+                "message": f"I found {len(views)} views matching '{view_name}':\n{view_list}\n\n"
+                           f"Please provide the exact view name, including the suffix (e.g. the part in parentheses):"
+            })
+        
         state["matched_views"] = views
         state["view_ids"] = [v["id"] for v in views]
         return _ask_tag_family(request, state)
@@ -325,11 +357,20 @@ def handle_nlp_tag_conversation(request, user_text):
         if len(views) > 1:
             view_list = "\n".join([f"• {v['name']}" for v in views[:10]])
             suffix = f"\n  ...and {len(views) - 10} more" if len(views) > 10 else ""
-            state["step"] = "awaiting_view_confirm"
+            state["step"] = "awaiting_specific_view"
             _set_state(request, state)
             return Response({
-                "message": f"I found {len(views)} views matching '{txt}':\n{view_list}{suffix}\n\nTag all {len(views)}, or provide a more specific name?"
+                "message": f"I still found {len(views)} views matching '{txt}':\n{view_list}{suffix}\n\nPlease provide the exact view name including the suffix:"
             })
+        
+        # If we have a saved tag_family_raw from power user path, resolve and dispatch
+        saved_family_raw = state.get("tag_family_raw", "")
+        if saved_family_raw:
+            family, ftype = _resolve_tag_family_from_text(request, category, saved_family_raw)
+            if family:
+                state["tag_family"] = family
+                state["tag_type"] = ftype
+                return _dispatch_tag(request, state)
         
         return _ask_tag_family(request, state)
     

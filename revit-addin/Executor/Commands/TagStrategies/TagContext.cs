@@ -59,7 +59,7 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
         ///       (i.e. the wall is parallel to the section cut plane).
         ///
         ///   SKIP — Anything beyond the far clip, or elements on side walls
-        ///           not intersected by the cut.
+        ///           not intersected by the cut. 
         /// </summary>
         public static bool IsElementVisibleInSection(View sectionView, FamilyInstance element, XYZ elementPoint)
         {

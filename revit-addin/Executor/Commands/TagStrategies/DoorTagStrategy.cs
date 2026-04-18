@@ -20,7 +20,7 @@
 //   - ZONE 2 (far-clip zone): Tag doors on the facing back wall
 //   - Skips doors on side walls and doors beyond the far clip
 //   - Tag at door bounding-box center in the view
-//   - No leader
+//   - No leader 
 // ============================================================================
 
 using System;

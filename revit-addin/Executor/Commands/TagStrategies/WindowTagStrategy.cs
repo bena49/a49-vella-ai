@@ -21,7 +21,7 @@
 //   - ZONE 2 (far-clip zone): Tag windows on the facing back wall
 //   - Skips windows on side walls and windows beyond the far clip
 //   - Tag at window bounding-box center in the view
-//   - No leader
+//   - No leader 
 // ============================================================================
 
 using Autodesk.Revit.DB;

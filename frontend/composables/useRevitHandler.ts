@@ -130,21 +130,19 @@ function formatAutoTagResult(r: any): string {
     return "❌ Auto-Tag Error: " + r.message;
   }
 
-  // 1. Resolve the Category Label (e.g., "door" -> "Door", "room" -> "Room")
-  // We fall back to "Element" if the category is missing for some reason.
   const rawCat = r.category || "element";
   const label = rawCat.charAt(0).toUpperCase() + rawCat.slice(1);
-  
-  // 2. Handle Pluralization (e.g., Door -> Doors, Ceiling -> Ceilings)
   const pluralLabel = label.endsWith('y') ? label.slice(0, -1) + 'ies' : label + 's';
+  const lowerPlural = pluralLabel.toLowerCase();
 
   let msg = `🏷️ ${pluralLabel.toUpperCase()} TAG REPORT\n━━━━━━━━━━━━━━━━━━\n\n`;
 
   msg += `Tag Family: ${r.tag_family || "—"} : ${r.tag_type || "—"}\n`;
   msg += `Views Processed: ${r.views_processed || 0}\n`;
-  
-  // 3. Dynamic row for tagged count
-  msg += `${pluralLabel} Tagged: ${r.tagged_count || 0} ✅\n`;
+
+  // Dynamic Icon for Count: ❌ if zero, ✅ if some were tagged
+  const statusIcon = r.tagged_count > 0 ? "✅" : "❌";
+  msg += `${pluralLabel} Tagged: ${r.tagged_count || 0} ${statusIcon}\n`;
 
   if (r.skipped_count > 0) {
     msg += `Already Tagged (Skipped): ${r.skipped_count} ⏭️\n`;
@@ -152,16 +150,33 @@ function formatAutoTagResult(r: any): string {
 
   if (r.errors && r.errors.length > 0) {
     msg += `\n⚠️ Warnings (${r.errors.length}):\n`;
-    r.errors.forEach((err: string) => {
-      msg += `• ${err}\n`;
-    });
+    r.errors.forEach((err: string) => { msg += `• ${err}\n`; });
   }
 
-  // 4. Dynamic success message
-  if (r.status === "success") {
-    msg += `\n✅ All ${pluralLabel.toLowerCase()} tagged successfully!`;
-  } else if (r.status === "partial") {
-    msg += `\n⚠️ Tagging completed with some warnings.`;
+  // =====================================================================
+  // SMART FOOTER LOGIC (Scenarios 1-5)
+  // =====================================================================
+  const tagged = r.tagged_count || 0;
+  const skipped = r.skipped_count || 0;
+  const total = tagged + skipped;
+
+  msg += "\n"; // Padding before footer
+
+  if (total === 0) {
+    // Scenario 3: No elements found at all
+    msg += `⚠️ Please check your view/s for available '${lowerPlural}' to tag!`;
+  } 
+  else if (tagged > 0 && skipped === 0) {
+    // Scenario 1: Fresh tagging, everything successful
+    msg += `✅ All ${lowerPlural} tagged successfully!`;
+  } 
+  else if (tagged > 0 && skipped > 0) {
+    // Scenario 2 & 5: Mixed results across one or many views
+    msg += `✅ Remaining untagged ${lowerPlural} tagged successfully!`;
+  } 
+  else if (tagged === 0 && skipped > 0) {
+    // Scenario 4: Nothing to do, all already tagged
+    msg += `⚠️ All ${lowerPlural} have already been tagged!`;
   }
 
   return msg;

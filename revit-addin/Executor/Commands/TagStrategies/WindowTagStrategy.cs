@@ -4,24 +4,26 @@
 // Tags windows in Plan, Elevation, and Section views.
 //
 // PLAN (FloorPlan / AreaPlan / EngineeringPlan):
+//   - Skips windows whose location is outside the view's crop region
 //   - Cast 850mm test points on each side along FacingOrientation
 //   - GetRoomAtPoint() determines exterior vs interior wall
 //   - Exterior wall: tag on the side WITHOUT a room
 //   - Interior wall: tag on the OPERABLE side (FacingOrientation)
 //   - 700mm offset from wall face (wall half-width + offset)
+//   - Tag head clamped inside crop region (200mm margin from edge)
 //   - No leader
 //
 // ELEVATION:
-//   - Tag at window bounding-box center in the view
 //   - Only tags windows on the FACING wall of the elevation
+//   - Tag at window bounding-box center in the view
 //   - No leader
 //
 // SECTION:
 //   - ZONE 1 (cut plane ±300mm): Tag windows directly cut by the section
-//   - ZONE 2 (far-clip zone): Tag windows on the facing back wall
+//   - ZONE 2 (far-clip zone): Tag windows on the facing back wall only
 //   - Skips windows on side walls and windows beyond the far clip
 //   - Tag at window bounding-box center in the view
-//   - No leader 
+//   - No leader
 // ============================================================================
 
 using Autodesk.Revit.DB;
@@ -42,6 +44,9 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
 
         // Ray-cast distance for room detection (mm → feet)
         private const double ROOM_TEST_DISTANCE_FEET = 850.0 / 304.8;
+
+        // Margin from crop edge when clamping tag head (mm → feet)
+        private const double CROP_MARGIN_FEET = 200.0 / 304.8;
 
         public bool SupportsViewType(ViewType viewType)
         {
@@ -112,27 +117,33 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
                         continue;
                     }
 
-                    // For non-plan views: apply visibility filters
-                    if (!isPlan)
-                    {
-                        LocationPoint lp = window.Location as LocationPoint;
-                        if (lp != null)
-                        {
-                            // SECTION: two-zone visibility check
-                            if (view.ViewType == ViewType.Section &&
-                                !TagHelpers.IsElementVisibleInSection(view, window, lp.Point))
-                            {
-                                result.Skipped++;
-                                continue;
-                            }
+                    LocationPoint lp = window.Location as LocationPoint;
 
-                            // ELEVATION: only tag windows on the facing wall
-                            if (view.ViewType == ViewType.Elevation &&
-                                !TagHelpers.IsElementOnFacingWall(view, window))
-                            {
-                                result.Skipped++;
-                                continue;
-                            }
+                    if (isPlan)
+                    {
+                        // Skip windows outside the view's crop region (scope box boundary)
+                        if (lp != null && !TagHelpers.IsElementInCropRegion(view, lp.Point))
+                        {
+                            result.Skipped++;
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        // SECTION: two-zone visibility check
+                        if (view.ViewType == ViewType.Section && lp != null &&
+                            !TagHelpers.IsElementVisibleInSection(view, window, lp.Point))
+                        {
+                            result.Skipped++;
+                            continue;
+                        }
+
+                        // ELEVATION: only tag windows on the facing wall
+                        if (view.ViewType == ViewType.Elevation &&
+                            !TagHelpers.IsElementOnFacingWall(view, window))
+                        {
+                            result.Skipped++;
+                            continue;
                         }
                     }
 
@@ -145,6 +156,10 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
                         result.Errors.Add($"Could not calculate position for window {window.Id.Value} in '{view.Name}'.");
                         continue;
                     }
+
+                    // Clamp plan tag head inside the crop region
+                    if (isPlan)
+                        tagPoint = TagHelpers.ClampTagPointToCropRegion(view, tagPoint, CROP_MARGIN_FEET);
 
                     var windowRef = new Reference(window);
                     var newTag = IndependentTag.Create(

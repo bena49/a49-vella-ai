@@ -3,15 +3,23 @@
 // ============================================================================
 // Tags doors in Plan, Elevation, and Section views.
 //
-// PLAN (FloorPlan / AreaPlan / EngineeringPlan) — from AutoTagDoorsCommand:
-//   - Tag on non-swing side of door
+// PLAN (FloorPlan / AreaPlan / EngineeringPlan):
+//   - Tag on non-swing side of door (FacingOrientation)
 //   - 350mm offset if wall is horizontal on page (parallel tag)
 //   - 700mm offset if wall is vertical or angled (perpendicular tag)
 //   - Offset measured from wall FACE (accounts for wall thickness)
 //   - No leader
 //
-// ELEVATION / SECTION:
-//   - Tag at door center point in view (bounding-box center)
+// ELEVATION:
+//   - Tag at door bounding-box center in the view
+//   - Only tags doors on the FACING wall of the elevation
+//   - No leader
+//
+// SECTION:
+//   - ZONE 1 (cut plane ±300mm): Tag doors directly cut by the section
+//   - ZONE 2 (far-clip zone): Tag doors on the facing back wall
+//   - Skips doors on side walls and doors beyond the far clip
+//   - Tag at door bounding-box center in the view
 //   - No leader
 // ============================================================================
 
@@ -48,13 +56,12 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
         {
             var result = new TagResult();
 
-            // Collect all doors visible in this view
             var doorCollector = new FilteredElementCollector(doc, view.Id)
                 .OfCategory(TargetCategory)
                 .OfClass(typeof(FamilyInstance));
 
             // Pre-collect already-tagged door IDs in this view
-            HashSet<long> alreadyTaggedIds = new HashSet<long>();
+            var alreadyTaggedIds = new HashSet<long>();
             if (skipTagged)
             {
                 var tagCollector = new FilteredElementCollector(doc, view.Id)
@@ -74,7 +81,7 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
                             }
                         }
                     }
-                    catch { /* skip unreadable tags */ }
+                    catch { }
                 }
             }
 
@@ -92,21 +99,21 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
                         continue;
                     }
 
-                    // For non-plan views: apply section-cut and facing-wall filters
+                    // For non-plan views: apply visibility filters
                     if (!isPlan)
                     {
                         LocationPoint lp = door.Location as LocationPoint;
                         if (lp != null)
                         {
-                            // Section views: only tag doors cut by the section plane
+                            // SECTION: two-zone visibility check
                             if (view.ViewType == ViewType.Section &&
-                                !TagHelpers.IsElementCutBySection(view, lp.Point))
+                                !TagHelpers.IsElementVisibleInSection(view, door, lp.Point))
                             {
                                 result.Skipped++;
                                 continue;
                             }
 
-                            // Elevation views: only tag doors on the facing wall
+                            // ELEVATION: only tag doors on the facing wall
                             if (view.ViewType == ViewType.Elevation &&
                                 !TagHelpers.IsElementOnFacingWall(view, door))
                             {
@@ -151,17 +158,12 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
         // ============================================================================
         // PLAN VIEW PLACEMENT
         // ============================================================================
-        // Same logic as AutoTagDoorsCommand (which is already tested and approved).
-        // ============================================================================
         private XYZ CalculatePlanTagPosition(FamilyInstance door)
         {
             LocationPoint locPt = door.Location as LocationPoint;
             if (locPt == null) return null;
 
             XYZ doorPoint = locPt.Point;
-
-            // FacingOrientation is a LIVE vector that points toward the correct
-            // TAG side (non-swing side) in this firm's family setup.
             XYZ tagSideDir = door.FacingOrientation;
 
             Wall hostWall = door.Host as Wall;
@@ -171,33 +173,27 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
                 ? PARALLEL_OFFSET_FEET
                 : PERPENDICULAR_OFFSET_FEET;
 
-            double totalOffset = wallHalfWidth + faceOffset;
-            return doorPoint + tagSideDir.Multiply(totalOffset);
+            return doorPoint + tagSideDir.Multiply(wallHalfWidth + faceOffset);
         }
 
         // ============================================================================
         // ELEVATION / SECTION PLACEMENT
         // ============================================================================
-        // Tag at the center of the door's bounding box IN THE VIEW.
-        // ============================================================================
         private XYZ CalculateElevSectionTagPosition(FamilyInstance door, View view)
         {
             BoundingBoxXYZ bbox = door.get_BoundingBox(view);
             if (bbox == null) return null;
-
             return (bbox.Min + bbox.Max) * 0.5;
         }
 
         // ============================================================================
-        // WALL ORIENTATION DETECTION (same as AutoTagDoorsCommand)
+        // WALL ORIENTATION DETECTION
         // ============================================================================
         private bool IsHorizontalWall(Wall wall)
         {
             if (wall == null) return false;
-
             LocationCurve locCurve = wall.Location as LocationCurve;
             if (locCurve == null) return false;
-
             Line line = locCurve.Curve as Line;
             if (line == null) return false;
 

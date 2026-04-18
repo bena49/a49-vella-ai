@@ -4,18 +4,22 @@
 // Tags windows in Plan, Elevation, and Section views.
 //
 // PLAN (FloorPlan / AreaPlan / EngineeringPlan):
-//   - Determine which side of the wall is "outside":
-//       Cast a test point 850mm on each side of the window along FacingOrientation
-//       and check GetRoomAtPoint() at both points.
-//       • One side has a room, the other doesn't → window is in an EXTERIOR wall.
-//         Tag goes on the EXTERIOR side (the side without a room).
-//       • Both sides have rooms → window is in an INTERIOR wall.
-//         Tag goes on the OPERABLE side (= FacingOrientation direction).
-//       • Edge case (neither side has a room) → default to FacingOrientation side.
-//   - Offset: 700mm from wall face (adds wall half-thickness for wall-centerline math)
+//   - Cast 850mm test points on each side along FacingOrientation
+//   - GetRoomAtPoint() determines exterior vs interior wall
+//   - Exterior wall: tag on the side WITHOUT a room
+//   - Interior wall: tag on the OPERABLE side (FacingOrientation)
+//   - 700mm offset from wall face (wall half-width + offset)
 //   - No leader
 //
-// ELEVATION / SECTION:
+// ELEVATION:
+//   - Tag at window bounding-box center in the view
+//   - Only tags windows on the FACING wall of the elevation
+//   - No leader
+//
+// SECTION:
+//   - ZONE 1 (cut plane ±300mm): Tag windows directly cut by the section
+//   - ZONE 2 (far-clip zone): Tag windows on the facing back wall
+//   - Skips windows on side walls and windows beyond the far clip
 //   - Tag at window bounding-box center in the view
 //   - No leader
 // ============================================================================
@@ -37,7 +41,6 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
         private const double PLAN_OFFSET_FEET = 700.0 / 304.8;
 
         // Ray-cast distance for room detection (mm → feet)
-        // 850mm clears any reasonable wall thickness (walls are typically < 500mm)
         private const double ROOM_TEST_DISTANCE_FEET = 850.0 / 304.8;
 
         public bool SupportsViewType(ViewType viewType)
@@ -109,21 +112,21 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
                         continue;
                     }
 
-                    // For non-plan views: apply section-cut and facing-wall filters
+                    // For non-plan views: apply visibility filters
                     if (!isPlan)
                     {
                         LocationPoint lp = window.Location as LocationPoint;
                         if (lp != null)
                         {
-                            // Section views: only tag windows cut by the section plane
+                            // SECTION: two-zone visibility check
                             if (view.ViewType == ViewType.Section &&
-                                !TagHelpers.IsElementCutBySection(view, lp.Point))
+                                !TagHelpers.IsElementVisibleInSection(view, window, lp.Point))
                             {
                                 result.Skipped++;
                                 continue;
                             }
 
-                            // Elevation views: only tag windows on the facing wall
+                            // ELEVATION: only tag windows on the facing wall
                             if (view.ViewType == ViewType.Elevation &&
                                 !TagHelpers.IsElementOnFacingWall(view, window))
                             {
@@ -168,8 +171,6 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
         // ============================================================================
         // PLAN VIEW PLACEMENT
         // ============================================================================
-        // Uses ray-cast room detection to determine exterior vs operable side.
-        // ============================================================================
         private XYZ CalculatePlanTagPosition(Document doc, FamilyInstance window, Phase viewPhase)
         {
             LocationPoint locPt = window.Location as LocationPoint;
@@ -178,47 +179,39 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
             XYZ windowPoint = locPt.Point;
             XYZ facingDir = window.FacingOrientation;
 
-            // Test points 850mm on each side of the window along FacingOrientation
             XYZ facingSideTestPoint = windowPoint + facingDir.Multiply(ROOM_TEST_DISTANCE_FEET);
             XYZ oppositeSideTestPoint = windowPoint - facingDir.Multiply(ROOM_TEST_DISTANCE_FEET);
 
             Room facingSideRoom = GetRoomAtPoint(doc, facingSideTestPoint, viewPhase);
             Room oppositeSideRoom = GetRoomAtPoint(doc, oppositeSideTestPoint, viewPhase);
 
-            // Determine the tag-side direction (unit vector from window toward tag location)
             XYZ tagSideDir;
 
             if (facingSideRoom != null && oppositeSideRoom == null)
             {
-                // Exterior wall — facing side has room (interior), opposite side has no room (exterior)
-                // Tag goes on the EXTERIOR side = opposite of FacingOrientation
+                // Exterior wall: interior on facing side → tag on exterior (opposite)
                 tagSideDir = facingDir.Negate();
             }
             else if (facingSideRoom == null && oppositeSideRoom != null)
             {
-                // Exterior wall — opposite side has room, facing side is exterior
-                // Tag goes on the EXTERIOR side = FacingOrientation direction
+                // Exterior wall: interior on opposite side → tag on exterior (facing)
                 tagSideDir = facingDir;
             }
             else if (facingSideRoom != null && oppositeSideRoom != null)
             {
-                // Interior wall — rooms on both sides
-                // Tag goes on the OPERABLE side = FacingOrientation direction
+                // Interior wall: tag on operable side (FacingOrientation)
                 tagSideDir = facingDir;
             }
             else
             {
-                // Edge case: no room on either side (e.g. unplaced rooms, exterior walls to nowhere)
-                // Fallback: FacingOrientation side
+                // No rooms detected: fallback to FacingOrientation
                 tagSideDir = facingDir;
             }
 
-            // Add wall half-thickness so the offset is measured from the wall FACE
             Wall hostWall = window.Host as Wall;
             double wallHalfWidth = hostWall != null ? hostWall.Width / 2.0 : 0.0;
 
-            double totalOffset = wallHalfWidth + PLAN_OFFSET_FEET;
-            return windowPoint + tagSideDir.Multiply(totalOffset);
+            return windowPoint + tagSideDir.Multiply(wallHalfWidth + PLAN_OFFSET_FEET);
         }
 
         // ============================================================================
@@ -228,14 +221,11 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
         {
             BoundingBoxXYZ bbox = window.get_BoundingBox(view);
             if (bbox == null) return null;
-
             return (bbox.Min + bbox.Max) * 0.5;
         }
 
         // ============================================================================
         // ROOM LOOKUP HELPER
-        // ============================================================================
-        // Wraps Document.GetRoomAtPoint with phase awareness and null safety.
         // ============================================================================
         private Room GetRoomAtPoint(Document doc, XYZ point, Phase phase)
         {

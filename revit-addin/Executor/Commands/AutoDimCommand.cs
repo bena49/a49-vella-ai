@@ -56,22 +56,30 @@ namespace A49AIRevitAssistant.Executor.Commands
 
             try
             {
-                // ── 1. Parse request ─────────────────────────────────────
+                // ── 1. Parse settings (everything except view ids) ───────────
 
-                DimRequest request = ParseRequest(payload, out string parseError);
-                if (request == null)
+                DimSettings settings = ParseSettings(payload, out string parseError);
+                if (settings == null)
                     return Error(parseError);
 
-                // ── 2. Resolve view ──────────────────────────────────────
+                // ── 2. Collect view ids from payload ─────────────────────────
+                // Payload sends "view_ids": [123, 456, 789]
 
-                View view = _doc.GetElement(request.TargetView.Id) as View;
-                if (view == null)
-                    return Error("Target view not found in document.");
+                var viewIdTokens = payload["view_ids"] as JArray;
+                if (viewIdTokens == null || viewIdTokens.Count == 0)
+                    return Error("No view_ids provided in payload.");
 
-                if (view.ViewType != ViewType.FloorPlan)
-                    return Error("Dimensioning is only supported for Floor Plan views.");
+                var viewIds = new List<long>();
+                foreach (var token in viewIdTokens)
+                {
+                    if (long.TryParse(token.ToString(), out long vid))
+                        viewIds.Add(vid);
+                }
 
-                // ── 3. Resolve DimensionType ─────────────────────────────
+                if (viewIds.Count == 0)
+                    return Error("Could not parse any valid view_ids from payload.");
+
+                // ── 3. Resolve DimensionType once for all views ──────────────
 
                 string dimTypeName = payload.Value<string>("dim_type_name") ?? "";
                 DimensionType dimType = ResolveDimensionType(dimTypeName);
@@ -79,92 +87,125 @@ namespace A49AIRevitAssistant.Executor.Commands
                     return Error($"DimensionType '{dimTypeName}' not found in project. " +
                                  "Please check the dimension type name.");
 
-                // ── 4. Pre-collect walls and grids in view ───────────────
-
-                List<Wall> wallsInView = CollectWallsInView(view, request.WallIds);
-                List<Grid> gridsInView = request.IncludeGrids
-                    ? CollectGridsInView(view)
-                    : new List<Grid>();
-
-                if (wallsInView.Count == 0)
-                    return Error("No suitable walls found in the selected view.");
-
-                // ── 5. Build context ─────────────────────────────────────
-
-                var context = new DimContext
-                {
-                    Document = _doc,
-                    Request = request,
-                    AllWallsInView = wallsInView,
-                    AllGridsInView = gridsInView,
-                    LinearDimensionType = dimType
-                };
-
-                // ── 6. Initialise strategy ───────────────────────────────
+                // ── 4. Process each view ─────────────────────────────────────
 
                 var strategy = new WallDimStrategy();
+                int totalSucceeded = 0;
+                int totalSkipped = 0;
+                int totalFailed = 0;
+                int totalWalls = 0;
+                var allSkipReasons = new List<string>();
+                var allErrors = new List<string>();
 
-                // ── 7. Run in transaction ────────────────────────────────
-
-                int succeeded = 0;
-                int skipped = 0;
-                int failed = 0;
-                var skipReasons = new List<string>();
-                var errors = new List<string>();
-
-                using (var tx = new Transaction(_doc, "Vella AI — Auto Dimension Walls"))
+                foreach (long viewIdLong in viewIds)
                 {
-                    tx.Start();
+                    var viewId = new ElementId(viewIdLong);
+                    var view = _doc.GetElement(viewId) as View;
 
-                    foreach (Wall wall in wallsInView)
+                    if (view == null)
                     {
-                        if (!strategy.CanDimension(wall, view))
+                        allErrors.Add($"View {viewIdLong}: not found in document.");
+                        totalFailed++;
+                        continue;
+                    }
+
+                    if (view.ViewType != ViewType.FloorPlan)
+                    {
+                        allSkipReasons.Add($"View '{view.Name}': not a Floor Plan — skipped.");
+                        totalSkipped++;
+                        continue;
+                    }
+
+                    // Build a DimRequest for this specific view
+                    var request = new DimRequest
+                    {
+                        TargetView = view,
+                        WallIds = new List<ElementId>(), // all walls in view
+                        IncludeOpenings = settings.IncludeOpenings,
+                        IncludeIntersectingWalls = settings.IncludeIntersectingWalls,
+                        IncludeGrids = settings.IncludeGrids,
+                        OffsetDistance = settings.OffsetDistance,
+                        SmartExteriorPlacement = settings.SmartExteriorPlacement,
+                    };
+
+                    List<Wall> wallsInView = CollectWallsInView(view, request.WallIds);
+                    List<Grid> gridsInView = request.IncludeGrids
+                        ? CollectGridsInView(view)
+                        : new List<Grid>();
+
+                    if (wallsInView.Count == 0)
+                    {
+                        allSkipReasons.Add($"View '{view.Name}': no suitable walls found.");
+                        totalSkipped++;
+                        continue;
+                    }
+
+                    totalWalls += wallsInView.Count;
+
+                    var context = new DimContext
+                    {
+                        Document = _doc,
+                        Request = request,
+                        AllWallsInView = wallsInView,
+                        AllGridsInView = gridsInView,
+                        LinearDimensionType = dimType
+                    };
+
+                    int succeeded = 0, skipped = 0, failed = 0;
+
+                    using (var tx = new Transaction(_doc, $"Vella AI — Auto Dimension: {view.Name}"))
+                    {
+                        tx.Start();
+
+                        foreach (Wall wall in wallsInView)
                         {
-                            skipped++;
-                            skipReasons.Add($"Wall {wall.Id}: CanDimension returned false.");
-                            continue;
+                            if (!strategy.CanDimension(wall, view))
+                            {
+                                skipped++;
+                                continue;
+                            }
+
+                            DimResult result = strategy.Dimension(wall, context);
+
+                            if (result.Success)
+                                succeeded++;
+                            else if (!string.IsNullOrEmpty(result.ErrorMessage))
+                            {
+                                failed++;
+                                allErrors.Add($"View '{view.Name}' Wall {wall.Id}: {result.ErrorMessage}");
+                            }
+                            else
+                            {
+                                skipped++;
+                                if (!string.IsNullOrEmpty(result.SkipReason))
+                                    allSkipReasons.Add($"View '{view.Name}' Wall {wall.Id}: {result.SkipReason}");
+                            }
                         }
 
-                        DimResult result = strategy.Dimension(wall, context);
-
-                        if (result.Success)
-                        {
-                            succeeded++;
-                        }
-                        else if (!string.IsNullOrEmpty(result.ErrorMessage))
-                        {
-                            failed++;
-                            errors.Add($"Wall {wall.Id}: {result.ErrorMessage}");
-                        }
+                        if (failed > 0 && succeeded == 0)
+                            tx.RollBack();
                         else
-                        {
-                            skipped++;
-                            if (!string.IsNullOrEmpty(result.SkipReason))
-                                skipReasons.Add($"Wall {wall.Id}: {result.SkipReason}");
-                        }
+                            tx.Commit();
                     }
 
-                    if (failed > 0 && succeeded == 0)
-                    {
-                        tx.RollBack();
-                        return Error($"All walls failed. First error: {errors.FirstOrDefault()}");
-                    }
-
-                    tx.Commit();
+                    totalSucceeded += succeeded;
+                    totalSkipped += skipped;
+                    totalFailed += failed;
                 }
 
-                // ── 8. Return result ─────────────────────────────────────
+                // ── 5. Return aggregated result ──────────────────────────────
 
                 return JsonConvert.SerializeObject(new
                 {
                     status = "success",
                     command = "auto_dim",
-                    total_walls = wallsInView.Count,
-                    dimensioned = succeeded,
-                    skipped = skipped,
-                    failed = failed,
-                    skip_reasons = skipReasons,
-                    errors = errors
+                    views_processed = viewIds.Count,
+                    total_walls = totalWalls,
+                    dimensioned = totalSucceeded,
+                    skipped = totalSkipped,
+                    failed = totalFailed,
+                    skip_reasons = allSkipReasons,
+                    errors = allErrors
                 });
             }
             catch (Exception ex)
@@ -174,54 +215,36 @@ namespace A49AIRevitAssistant.Executor.Commands
         }
 
         // ------------------------------------------------------------------
-        //  ParseRequest
+        //  DimSettings — lightweight settings-only struct (no view)
         // ------------------------------------------------------------------
 
-        private DimRequest ParseRequest(JObject payload, out string error)
+        private class DimSettings
+        {
+            public bool IncludeOpenings { get; set; }
+            public bool IncludeIntersectingWalls { get; set; }
+            public bool IncludeGrids { get; set; }
+            public double OffsetDistance { get; set; }
+            public bool SmartExteriorPlacement { get; set; }
+        }
+
+        // ------------------------------------------------------------------
+        //  ParseSettings — parses everything except view ids
+        // ------------------------------------------------------------------
+
+        private DimSettings ParseSettings(JObject payload, out string error)
         {
             error = null;
 
-            // Resolve view
-            string viewIdStr = payload.Value<string>("view_id");
-            if (!long.TryParse(viewIdStr, out long viewIdLong))
-            {
-                error = $"Invalid view_id: '{viewIdStr}'";
-                return null;
-            }
-
-            var viewId = new ElementId(viewIdLong);
-            var view = _doc.GetElement(viewId) as View;
-            if (view == null)
-            {
-                error = $"View with id {viewIdStr} not found.";
-                return null;
-            }
-
-            // Optional explicit wall ids
-            var wallIds = new List<ElementId>();
-            var wallIdTokens = payload["wall_ids"] as JArray;
-            if (wallIdTokens != null)
-            {
-                foreach (var token in wallIdTokens)
-                {
-                    if (long.TryParse(token.ToString(), out long wid))
-                        wallIds.Add(new ElementId(wid));
-                }
-            }
-
-            // Convert mm offset to feet (Revit internal units)
             double offsetMm = payload.Value<double?>("offset_mm") ?? 800.0;
             double offsetFt = offsetMm / 304.8;
 
-            return new DimRequest
+            return new DimSettings
             {
-                TargetView = view,
-                WallIds = wallIds,
                 IncludeOpenings = payload.Value<bool?>("include_openings") ?? true,
                 IncludeIntersectingWalls = payload.Value<bool?>("include_intersecting") ?? true,
                 IncludeGrids = payload.Value<bool?>("include_grids") ?? true,
                 OffsetDistance = offsetFt,
-                SmartExteriorPlacement = payload.Value<bool?>("smart_exterior_placement") ?? true
+                SmartExteriorPlacement = payload.Value<bool?>("smart_exterior_placement") ?? true,
             };
         }
 

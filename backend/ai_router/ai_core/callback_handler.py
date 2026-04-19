@@ -184,4 +184,10 @@ def handle_revit_callbacks(request, finalize_router_fn):
     if "list_scope_boxes_result" in data_keys:
         return handle_list_scope_boxes_result(request, finalize_router_fn)
 
+    # auto_dim_result arrives via Django if the C# bridge routes through backend.
+    # In the standard flow it is sent directly via SendRawMessage to the frontend,
+    # but this guard ensures it is silently consumed if it arrives here instead.
+    if "auto_dim_result" in data_keys:
+        return Response({"status": "silent"})
+
     return None

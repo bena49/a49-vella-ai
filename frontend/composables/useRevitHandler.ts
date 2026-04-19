@@ -183,6 +183,51 @@ function formatAutoTagResult(r: any): string {
 }
 
 // =====================================================================
+// AUTO-DIM RESULT FORMATTER
+// =====================================================================
+
+function formatAutoDimResult(r: any): string {
+  if (r.status === "error") {
+    return "❌ Auto-Dim Error: " + r.message;
+  }
+
+  const dimensioned    = r.dimensioned    || 0;
+  const skipped        = r.skipped        || 0;
+  const failed         = r.failed         || 0;
+  const viewsProcessed = r.views_processed || 0;
+  const totalWalls     = r.total_walls    || 0;
+
+  let msg = `📐 DIMENSION REPORT\n━━━━━━━━━━━━━━━━━━\n\n`;
+  msg += `Views Processed: ${viewsProcessed}\n`;
+  msg += `Walls Found: ${totalWalls}\n`;
+
+  const statusIcon = dimensioned > 0 ? "✅" : "❌";
+  msg += `Walls Dimensioned: ${dimensioned} ${statusIcon}\n`;
+
+  if (skipped > 0) msg += `Skipped: ${skipped} ⏭️\n`;
+  if (failed  > 0) msg += `Failed: ${failed} ⚠️\n`;
+
+  if (r.errors && r.errors.length > 0) {
+    msg += `\n⚠️ Warnings (${r.errors.length}):\n`;
+    r.errors.slice(0, 5).forEach((err: string) => { msg += `• ${err}\n`; });
+    if (r.errors.length > 5) msg += `  ...and ${r.errors.length - 5} more\n`;
+  }
+
+  msg += "\n";
+  if (totalWalls === 0) {
+    msg += `⚠️ No walls found in the selected view(s). Check your view filters.`;
+  } else if (dimensioned > 0 && failed === 0) {
+    msg += `✅ Dimensioning complete!`;
+  } else if (dimensioned > 0 && failed > 0) {
+    msg += `⚠️ Partially complete — some walls could not be dimensioned.`;
+  } else {
+    msg += `❌ No walls were dimensioned. Check the warnings above.`;
+  }
+
+  return msg;
+}
+
+// =====================================================================
 // MAIN HANDLER FACTORY
 // =====================================================================
 
@@ -213,7 +258,10 @@ export function useRevitHandler(
     }
 
     // --- PROJECT INVENTORY (Rename wizard data)
-    if (data.project_inventory) {
+    // Guard: only process if the key is present AND non-empty.
+    // Stale queued messages from previous sessions can otherwise
+    // trigger the Rename Wizard unexpectedly behind other wizards.
+    if (data.project_inventory && Object.keys(data.project_inventory).length > 0) {
       updateInventoryProps(data.project_inventory);
       return;
     }
@@ -261,6 +309,14 @@ export function useRevitHandler(
     // --- AUTO-TAG RESULT ---
     if (data.auto_tag_result) {
       const msg = formatAutoTagResult(data.auto_tag_result);
+      messages.value.push({ from: "vella", text: msg });
+      scrollToBottom();
+      return;
+    }
+
+    // --- AUTO-DIM RESULT ---
+    if (data.auto_dim_result) {
+      const msg = formatAutoDimResult(data.auto_dim_result);
       messages.value.push({ from: "vella", text: msg });
       scrollToBottom();
       return;

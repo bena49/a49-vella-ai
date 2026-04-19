@@ -159,9 +159,35 @@ namespace A49AIRevitAssistant.Executor
                             var uiDoc = _uiapp.ActiveUIDocument;
                             var dimCmd = new AutoDimCommand(doc, uiDoc);
                             string dimPayload = env.raw != null
-                                ? env.raw.ToString(Formatting.None)
+                                ? JsonConvert.SerializeObject(env.raw)
                                 : "{}";
-                            return dimCmd.Execute(dimPayload);
+
+                            // Execute and wrap result for frontend handler
+                            string dimResultJson = dimCmd.Execute(dimPayload);
+
+                            // Parse the inner result and re-wrap as {"auto_dim_result": {...}}
+                            // so useRevitHandler.ts picks it up via data.auto_dim_result
+                            try
+                            {
+                                var inner = JObject.Parse(dimResultJson);
+                                var wrapped = new JObject { ["auto_dim_result"] = inner };
+                                string wrappedJson = wrapped.ToString(Newtonsoft.Json.Formatting.None);
+
+                                A49AIRevitAssistant.UI.DockablePaneViewer.Instance.Dispatcher.Invoke(() =>
+                                {
+                                    A49AIRevitAssistant.UI.DockablePaneViewer.Instance.SendRawMessage(wrappedJson);
+                                });
+                            }
+                            catch
+                            {
+                                // If wrapping fails, send the raw result so it still surfaces
+                                A49AIRevitAssistant.UI.DockablePaneViewer.Instance.Dispatcher.Invoke(() =>
+                                {
+                                    A49AIRevitAssistant.UI.DockablePaneViewer.Instance.SendRawMessage(dimResultJson);
+                                });
+                            }
+
+                            return "{\"status\":\"silent\"}";
                         }
 
                     default:

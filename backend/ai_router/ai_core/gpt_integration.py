@@ -22,9 +22,12 @@ def fast_route_intent(user_text):
     txt = user_text.lower().strip()
 
     # --- WIZARDS & INTERACTIVE TOOLS ---
-    # 💥 CACHE TAG INVENTORY must be checked BEFORE "inventory" keyword match
+    # 💥 CACHE INVENTORIES must be checked BEFORE "inventory" keyword match
     if txt == "cache_tag_inventory":
         return {"intent": "cache_tag_inventory"}
+
+    if txt == "cache_dim_inventory":
+        return {"intent": "cache_dim_inventory"}
     
     if any(word in txt for word in ["renumber", "rename", "inventory"]):
         return {"intent": "fetch_project_inventory"}
@@ -188,7 +191,6 @@ def fast_route_intent(user_text):
 
     # Return None to let gpt-4o-mini handle complex requests
     return None
-
 
 # =====================================================================
 # GPT WRAPPER

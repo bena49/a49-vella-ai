@@ -72,12 +72,12 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
                 }
 
                 // 1c. Intersecting wall faces
-                if (request.IncludeIntersectingWalls)
-                {
-                    var intersectRefs = DimHelpers.GetIntersectingWallReferences(
-                        wall, context.AllWallsInView, doc);
-                    allRefs.AddRange(intersectRefs);
-                }
+                // NOTE: Disabled for now — intersecting wall face normals point in
+                // a different direction to the target wall end-cap normals, causing
+                // Revit's "References are no longer parallel" error in NewDimension().
+                // This requires a separate dimension string per intersecting wall,
+                // which is a future enhancement.
+                // if (request.IncludeIntersectingWalls) { ... }
 
                 // 1d. Grid intersections
                 if (request.IncludeGrids)

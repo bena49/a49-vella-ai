@@ -166,12 +166,14 @@ namespace A49AIRevitAssistant.Executor
                             string dimResultJson = dimCmd.Execute(dimPayload);
 
                             // Parse the inner result and re-wrap as {"auto_dim_result": {...}}
-                            // so useRevitHandler.ts picks it up via data.auto_dim_result
+                            // so useRevitHandler.ts picks it up via data.auto_dim_result.
+                            // NOTE: Use JsonConvert.SerializeObject — NOT JToken.ToString(Formatting)
+                            // which causes a Newtonsoft version conflict with Revit's loaded DLL.
                             try
                             {
                                 var inner = JObject.Parse(dimResultJson);
                                 var wrapped = new JObject { ["auto_dim_result"] = inner };
-                                string wrappedJson = wrapped.ToString(Newtonsoft.Json.Formatting.None);
+                                string wrappedJson = JsonConvert.SerializeObject(wrapped);
 
                                 A49AIRevitAssistant.UI.DockablePaneViewer.Instance.Dispatcher.Invoke(() =>
                                 {

@@ -63,7 +63,7 @@
   <ItemGroup>
     <Reference Include="A49LicenseManager, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\Users\Ben Pongprot\OneDrive\00_REVIT API\00_A49 License Manager\A49LicenseManager.dll</HintPath>
+      <HintPath>C:\Users\Bunda.A49local\OneDrive\00_REVIT API\00_A49 License Manager\A49LicenseManager.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.Web.WebView2.Core, Version=1.0.2792.45, Culture=neutral, PublicKeyToken=2a8ab48044d2601e, processorArchitecture=MSIL">
       <HintPath>packages\Microsoft.Web.WebView2.1.0.2792.45\lib\net462\Microsoft.Web.WebView2.Core.dll</HintPath>
@@ -80,11 +80,11 @@
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
     <Reference Include="RevitAPI">
-      <HintPath>..\..\..\Users\Ben Pongprot\OneDrive\00_REVIT API\00_RevitAPIs_DLLs\Revit2024\RevitAPI.dll</HintPath>
+      <HintPath>C:\Users\Bunda.A49local\OneDrive\00_REVIT API\00_RevitAPIs_DLLs\Revit2024\RevitAPI.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="RevitAPIUI">
-      <HintPath>..\..\..\Users\Ben Pongprot\OneDrive\00_REVIT API\00_RevitAPIs_DLLs\Revit2024\RevitAPIUI.dll</HintPath>
+      <HintPath>C:\Users\Bunda.A49local\OneDrive\00_REVIT API\00_RevitAPIs_DLLs\Revit2024\RevitAPIUI.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System" />

@@ -235,6 +235,7 @@ const selectedDimType  = ref('');
 const includeOpenings  = ref(true);
 const includeGrids     = ref(true);
 const offsetMm         = ref(800);
+const insetMm          = ref(1000);
 const smartExterior    = ref(true);
 const activeStages     = ref([]);
 const activeLevels     = ref([]);

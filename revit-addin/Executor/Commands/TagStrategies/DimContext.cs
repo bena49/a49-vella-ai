@@ -446,21 +446,21 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
         {
             var result = new List<TaggedRef>();
 
-            // FIX: Use directional logic rather than proximity.
-            // Find the grid with the SMALLEST u-value that is at or before
-            // the start end-cap (within 0.5ft tolerance to catch grids that
-            // sit just inside the corner due to wall thickness).
-            // This handles thick exterior walls where the grid may be offset
-            // from the end-cap face by more than the old 1.0ft tolerance.
+            // Directional snap logic:
+            // Find the grid sitting at or BEYOND each end-cap (outside the wall).
+            // Tolerance of 2.0ft (~600mm) safely covers any wall thickness
+            // so that corner grids (which may be offset by a full wall width
+            // from the end-cap face) are always snapped to.
+            // Without grids the end-cap face is used as fallback.
+
             TaggedRef startGridSnap = gridRefs
-                .Where(g => g.U <= startCap.U + 0.5)
-                .OrderBy(g => g.U)
+                .Where(g => g.U <= startCap.U + 2.0)   // grid at or before start cap
+                .OrderBy(g => g.U)                       // pick the outermost (smallest U)
                 .FirstOrDefault();
 
-            // Find the grid with the LARGEST u-value at or beyond the end cap.
             TaggedRef endGridSnap = gridRefs
-                .Where(g => g.U >= endCap.U - 0.5)
-                .OrderByDescending(g => g.U)
+                .Where(g => g.U >= endCap.U - 2.0)      // grid at or after end cap
+                .OrderByDescending(g => g.U)             // pick the outermost (largest U)
                 .FirstOrDefault();
 
             // Terminal references: prefer grid over end-cap

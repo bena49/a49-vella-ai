@@ -267,14 +267,14 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
         // KEY INSIGHT: You MUST use grid.Curve.Reference and set ComputeReferences=true
         // This matches how Revit API successfully dimensions grids [citation:3][citation:5]
 
-        // =========================================================================
-        // THE COMPLETELY REWRITTEN GRID REFERENCE METHOD
+        /// =========================================================================
+        // THE CORRECTED GRID REFERENCE METHOD
         // =========================================================================
         public static List<TaggedRef> GetGridRefs(Wall wall, List<Grid> allGrids)
         {
             var result = new List<TaggedRef>();
 
-            // 1. Get the wall's data. If it's not a line, we can't dimension it.
+            // 1. Get the wall's data.
             var wallCurve = GetWallCenterLine(wall);
             if (wallCurve == null) return result;
 
@@ -283,8 +283,7 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             XYZ wallDirection = (wallEnd - wallOrigin).Normalize();
             double wallLength = wallCurve.Length;
 
-            // 2. CRITICAL: Set up the geometry extraction options correctly.
-            //    ComputeReferences MUST be true. IncludeNonVisibleObjects helps.
+            // 2. Set up geometry options correctly.
             var geoOptions = new Options
             {
                 ComputeReferences = true,
@@ -292,29 +291,12 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
                 DetailLevel = ViewDetailLevel.Fine,
             };
 
-            // 3. Loop through each grid in the project.
+            // 3. Loop through each grid.
             foreach (Grid grid in allGrids)
             {
                 try
                 {
-                    // 4. THE FIX: Get the grid's geometry to find its line reference.
-                    Reference gridReference = null;
-                    GeometryElement gridGeometry = grid.get_Geometry(geoOptions);
-
-                    foreach (GeometryObject geomObj in gridGeometry)
-                    {
-                        // We are looking for a Line.
-                        if (geomObj is Line gridLine && gridLine.Reference != null)
-                        {
-                            gridReference = gridLine.Reference;
-                            break; // Found it, exit the loop.
-                        }
-                    }
-
-                    // If we couldn't find a valid reference for the grid, skip it.
-                    if (gridReference == null) continue;
-
-                    // 5. Now we have the grid's reference. We need its curve to calculate the intersection point.
+                    // 4. Get the grid's geometric curve.
                     Curve gridCurve = grid.Curve;
                     if (gridCurve == null) continue;
 
@@ -322,30 +304,49 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
                     XYZ gridEnd = gridCurve.GetEndPoint(1);
                     XYZ gridDirection = (gridEnd - gridStart).Normalize();
 
-                    // 6. Check if the grid is parallel to the wall. If so, it can't be dimensioned on this wall.
+                    // 5. Check if the grid is parallel to the wall.
                     double dotProduct = Math.Abs(wallDirection.X * gridDirection.X + wallDirection.Y * gridDirection.Y);
-                    if (dotProduct > 0.9999) continue; // Use a high tolerance for "parallel"
+                    if (dotProduct > 0.9999) continue;
 
-                    // 7. Calculate the intersection point between the wall's infinite line and the grid's infinite line.
+                    // 6. Calculate the intersection point between the wall's and grid's infinite lines.
                     double denominator = (wallDirection.X * gridDirection.Y - wallDirection.Y * gridDirection.X);
-                    if (Math.Abs(denominator) < 0.0001) continue; // Lines are parallel
+                    if (Math.Abs(denominator) < 0.0001) continue;
 
                     XYZ delta = gridStart - wallOrigin;
                     double t = (delta.X * gridDirection.Y - delta.Y * gridDirection.X) / denominator;
-                    double u = t; // 'u' is the coordinate along the wall.
+                    double u = t;
 
-                    // 8. Check if the intersection point is within a reasonable distance of the wall.
-                    const double tolerance = 2.0; // 2 feet tolerance for corner conditions.
+                    // 7. Check if the intersection is within a reasonable distance.
+                    const double tolerance = 2.0;
                     if (u < -tolerance || u > wallLength + tolerance) continue;
 
-                    // 9. Snap to the exact start or end of the wall for cleaner dimensions.
+                    // 8. Snap to the exact start or end of the wall.
                     if (Math.Abs(u) < 0.5) u = 0;
                     if (Math.Abs(u - wallLength) < 0.5) u = wallLength;
 
-                    // 10. If we passed all checks, add this grid as a valid reference.
+                    // 9. --- THE CRITICAL FIX ---
+                    //    Calculate the exact XYZ point of intersection on the grid line.
+                    XYZ intersectionPointOnGrid = gridStart + (u * gridDirection);
+
+                    // 10. Get the specific geometric reference for the grid AT that intersection point.
+                    //     This is what the NewDimension method requires.
+                    Reference gridRef = gridCurve.GetEndPointReference(0); // Fallback, but we'll find the right one.
+
+                    // Find the closest endpoint on the grid curve to the intersection point.
+                    double distToStart = intersectionPointOnGrid.DistanceTo(gridStart);
+                    double distToEnd = intersectionPointOnGrid.DistanceTo(gridEnd);
+
+                    if (distToStart < distToEnd)
+                        gridRef = gridCurve.GetEndPointReference(0);
+                    else
+                        gridRef = gridCurve.GetEndPointReference(1);
+
+                    if (gridRef == null) continue;
+
+                    // 11. Add the valid grid reference.
                     result.Add(new TaggedRef
                     {
-                        Ref = gridReference,
+                        Ref = gridRef,
                         U = u,
                         Kind = "grid",
                         SourceId = grid.Id
@@ -353,24 +354,27 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
                 }
                 catch (Exception ex)
                 {
-                    // Log or ignore errors for individual grids.
-                    System.Diagnostics.Debug.WriteLine($"Error processing grid {grid.Id}: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"Error processing grid: {ex.Message}");
                 }
             }
 
-            // 11. Remove any duplicate grid references at the same 'U' position.
+            // 12. Remove any duplicate grid references at the same 'U' position.
             result = result
                 .GroupBy(r => Math.Round(r.U, 2))
                 .Select(g => g.First())
                 .OrderBy(r => r.U)
                 .ToList();
 
-            // Optional: Show a popup to confirm grids are found.
+            // 13. Popup to confirm grids are found.
             if (result.Count > 0)
             {
-                string msg = $"Found {result.Count} grids for wall:\n";
+                string msg = $"Found {result.Count} valid grid references for wall:\n";
                 foreach (var r in result) msg += $"  Grid {r.SourceId}: U={r.U:F2} ft\n";
                 TaskDialog.Show("Grid Detection Success", msg);
+            }
+            else
+            {
+                TaskDialog.Show("Grid Detection", "No valid grid references could be created for this wall.");
             }
 
             return result;

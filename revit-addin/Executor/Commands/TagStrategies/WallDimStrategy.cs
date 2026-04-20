@@ -9,8 +9,6 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
     {
         public string StrategyName => "WallDimStrategy";
 
-        // ── CanDimension ─────────────────────────────────────────────────────
-
         public bool CanDimension(Element element, View view)
         {
             if (!(element is Wall wall)) return false;
@@ -24,8 +22,6 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             };
             return planTypes.Contains(view.ViewType);
         }
-
-        // ── Dimension ────────────────────────────────────────────────────────
 
         public DimResult Dimension(Element element, DimContext context)
         {
@@ -42,36 +38,24 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
 
             try
             {
-                // ── 1. End-cap references ─────────────────────────────────
-
                 var (startCap, endCap) = DimHelpers.GetWallEndCapRefs(wall);
                 if (startCap == null) return DimResult.Skipped($"{tag}: startCap null.");
                 if (endCap == null) return DimResult.Skipped($"{tag}: endCap null.");
-
-                // ── 2. Grid references ────────────────────────────────────
 
                 var gridRefs = new List<TaggedRef>();
                 if (request.IncludeGrids && context.AllGridsInView.Count > 0)
                     gridRefs = DimHelpers.GetGridRefs(wall, context.AllGridsInView);
 
-                // ── 3. Merge: replace end-caps with nearby grids ──────────
-                //
-                // If a grid is within ~300mm of a wall end-cap, the grid
-                // replaces the end-cap so the string terminates at the grid
-                // line (outside corner) rather than the wall face (inside corner).
-
                 List<TaggedRef> baseRefs;
                 if (gridRefs.Count > 0)
                 {
                     baseRefs = DimHelpers.MergeEndCapsWithGrids(
-                        startCap, endCap, gridRefs, snapTol: 1.0);
+                        startCap, endCap, gridRefs, 10.0);  // 10.0 ft search distance
                 }
                 else
                 {
                     baseRefs = new List<TaggedRef> { startCap, endCap };
                 }
-
-                // ── 4. Opening edges ──────────────────────────────────────
 
                 if (request.IncludeOpenings)
                 {
@@ -80,34 +64,21 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
                     baseRefs.AddRange(openingRefs);
                 }
 
-                // ── 5. Minimum refs check ─────────────────────────────────
-
                 if (baseRefs.Count < 2)
                     return DimResult.Skipped($"{tag}: fewer than 2 refs.");
-
-                // ── 6. Build ordered ReferenceArray ───────────────────────
 
                 ReferenceArray refArray = DimHelpers.BuildOrderedRefArray(baseRefs);
                 if (refArray.Size < 2)
                     return DimResult.Skipped($"{tag}: fewer than 2 refs after dedup.");
 
-                // ── 7. Offset direction ───────────────────────────────────
-
                 XYZ offsetDir = DimHelpers.GetDimLineOffsetDirection(
                     wall, doc, view, request.SmartExteriorPlacement);
 
-                // ── 8. Dimension line spans full u-range ──────────────────
-
-                double minU = baseRefs.Min(t => t.U);
-                double maxU = baseRefs.Max(t => t.U);
-
                 Line dimLine = DimHelpers.BuildDimensionLine(
-                    wall, offsetDir, request.OffsetDistance, minU, maxU);
+                    wall, offsetDir, request.OffsetDistance, baseRefs);
 
                 if (dimLine == null)
                     return DimResult.Skipped($"{tag}: BuildDimensionLine null.");
-
-                // ── 9. Create dimension ───────────────────────────────────
 
                 Dimension dim = doc.Create.NewDimension(
                     view, dimLine, refArray, context.LinearDimensionType);

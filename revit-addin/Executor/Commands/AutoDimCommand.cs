@@ -162,6 +162,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                             if (!strategy.CanDimension(wall, view))
                             {
                                 skipped++;
+                                allSkipReasons.Add($"Wall {wall.Id} (type: {wall.WallType?.Name}): CanDimension=false. View type: {view.ViewType}");
                                 continue;
                             }
 
@@ -177,8 +178,10 @@ namespace A49AIRevitAssistant.Executor.Commands
                             else
                             {
                                 skipped++;
-                                if (!string.IsNullOrEmpty(result.SkipReason))
-                                    allSkipReasons.Add($"View '{view.Name}' Wall {wall.Id}: {result.SkipReason}");
+                                string reason = !string.IsNullOrEmpty(result.SkipReason)
+                                    ? result.SkipReason
+                                    : "No reason given";
+                                allSkipReasons.Add($"Wall {wall.Id}: {reason}");
                             }
                         }
 

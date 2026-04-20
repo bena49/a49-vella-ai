@@ -31,8 +31,16 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             if (!(wall.Location is LocationCurve lc)) return false;
             if (!(lc.Curve is Line)) return false;
 
-            // Must be a floor-plan view
-            if (view.ViewType != ViewType.FloorPlan) return false;
+            // Accept all plan view types — FloorPlan, CeilingPlan, EngineeringPlan, AreaPlan
+            // Some projects use EngineeringPlan for structural floor plans
+            var planTypes = new[]
+            {
+                ViewType.FloorPlan,
+                ViewType.CeilingPlan,
+                ViewType.EngineeringPlan,
+                ViewType.AreaPlan
+            };
+            if (!planTypes.Contains(view.ViewType)) return false;
 
             return true;
         }

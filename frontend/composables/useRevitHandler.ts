@@ -207,6 +207,13 @@ function formatAutoDimResult(r: any): string {
   if (skipped > 0) msg += `Skipped: ${skipped} ⏭️\n`;
   if (failed  > 0) msg += `Failed: ${failed} ⚠️\n`;
 
+  // Show skip reasons — critical for diagnosing why walls were not dimensioned
+  if (r.skip_reasons && r.skip_reasons.length > 0) {
+    msg += `\n⏭️ Skip Reasons (${r.skip_reasons.length}):\n`;
+    r.skip_reasons.slice(0, 8).forEach((s: string) => { msg += `• ${s}\n`; });
+    if (r.skip_reasons.length > 8) msg += `  ...and ${r.skip_reasons.length - 8} more\n`;
+  }
+
   if (r.errors && r.errors.length > 0) {
     msg += `\n⚠️ Warnings (${r.errors.length}):\n`;
     r.errors.slice(0, 5).forEach((err: string) => { msg += `• ${err}\n`; });

@@ -147,6 +147,7 @@ export function useWizards(
       include_openings: payload.include_openings,
       include_grids:    payload.include_grids,
       offset_mm:        payload.offset_mm,
+      inset_mm:         payload.inset_mm ?? 1000,
       smart_exterior:   payload.smart_exterior,
       dim_type_name:    payload.dim_type_name,
       session_key:      sessionKey.value,

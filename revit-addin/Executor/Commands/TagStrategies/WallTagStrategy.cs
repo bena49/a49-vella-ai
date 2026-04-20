@@ -39,7 +39,7 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
         public BuiltInCategory TagCategory => BuiltInCategory.OST_WallTags;
 
         // Offset from wall center for the tag head (mm → feet)
-        private const double TAG_OFFSET_FEET = 350.0 / 304.8;
+        private const double TAG_OFFSET_FEET = 700.0 / 304.8;
 
         // Sampling interval along the wall for room detection (mm → feet)
         private const double SAMPLE_INTERVAL_FEET = 300.0 / 304.8;
@@ -164,8 +164,15 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
 
                         if (newTag != null)
                         {
-                            // Force tag head position (Revit leader logic can override placement)
-                            try { newTag.TagHeadPosition = tagHeadPoint; } catch { }
+                            // Set tag head position explicitly.
+                            // LeaderEndCondition must be Free so Revit doesn't
+                            // snap the head back to the element after placement.
+                            try
+                            {
+                                newTag.LeaderEndCondition = LeaderEndCondition.Free;
+                                newTag.TagHeadPosition = tagHeadPoint;
+                            }
+                            catch { }
                             result.Tagged++;
                         }
                     }

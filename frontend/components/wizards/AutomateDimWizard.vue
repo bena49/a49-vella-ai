@@ -108,6 +108,23 @@
           </div>
         </div>
 
+        <!-- INTERIOR STRING INSET -->
+        <div class="bg-black/10 border border-white/10 rounded-xl p-3">
+          <div class="flex justify-between items-center mb-2">
+            <label class="text-[10px] uppercase tracking-wider text-white/50 font-bold">
+              Interior String Inset
+            </label>
+            <span class="text-xs font-bold text-[#00BCD4]">{{ insetMm }} mm</span>
+          </div>
+          <div class="text-[10px] text-white/40 mb-2">Distance from wall edge for interior location strings</div>
+          <input type="range" min="200" max="3000" step="100"
+                 v-model.number="insetMm"
+                 class="w-full h-1.5 rounded-full appearance-none cursor-pointer dim-slider" />
+          <div class="flex justify-between text-[9px] text-white/30 mt-1">
+            <span>200</span><span>1500</span><span>3000</span>
+          </div>
+        </div>
+
         <!-- SMART EXTERIOR PLACEMENT -->
         <div class="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl px-4 py-3">
           <div>
@@ -297,6 +314,7 @@ function submit() {
     include_openings: includeOpenings.value,
     include_grids:    includeGrids.value,
     offset_mm:        offsetMm.value,
+    inset_mm:         insetMm.value,
     smart_exterior:   smartExterior.value,
     dim_type_name:    selectedDimType.value,
   });

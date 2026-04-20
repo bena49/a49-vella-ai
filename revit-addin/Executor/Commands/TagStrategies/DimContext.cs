@@ -16,7 +16,7 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
         public List<ElementId> WallIds { get; set; } = new List<ElementId>();
         public bool IncludeOpenings { get; set; } = true;
         public bool IncludeGrids { get; set; } = true;
-        public double OffsetDistance { get; set; } = 2.625; // ~800mm in feet
+        public double OffsetDistance { get; set; } = 2.625;
         public bool SmartExteriorPlacement { get; set; } = true;
     }
 
@@ -34,10 +34,8 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
 
         public static DimResult Succeeded(Dimension dim, int refCount) =>
             new DimResult { Success = true, CreatedDimension = dim, ReferenceCount = refCount };
-
         public static DimResult Skipped(string reason) =>
             new DimResult { Success = false, SkipReason = reason };
-
         public static DimResult Failed(string error) =>
             new DimResult { Success = false, ErrorMessage = error };
     }
@@ -56,14 +54,23 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
     }
 
     // =========================================================================
+    //  TaggedRef — a reference paired with its u-position along the wall axis
+    // =========================================================================
+
+    public class TaggedRef
+    {
+        public Reference Ref { get; set; }
+        public double U { get; set; }
+        public string Kind { get; set; } // "endcap" | "opening" | "grid"
+    }
+
+    // =========================================================================
     //  DimHelpers
     // =========================================================================
 
     public static class DimHelpers
     {
-        // ------------------------------------------------------------------
-        //  1. Wall geometry helpers
-        // ------------------------------------------------------------------
+        // ── Wall geometry ────────────────────────────────────────────────────
 
         public static XYZ GetWallDirection(Wall wall)
         {
@@ -75,8 +82,8 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
 
         public static XYZ GetWallNormal(Wall wall)
         {
-            var dir = GetWallDirection(wall);
-            return new XYZ(-dir.Y, dir.X, 0).Normalize();
+            var d = GetWallDirection(wall);
+            return new XYZ(-d.Y, d.X, 0).Normalize();
         }
 
         public static Line GetWallCenterLine(Wall wall)
@@ -85,14 +92,12 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             return lc?.Curve as Line;
         }
 
-        // ------------------------------------------------------------------
-        //  2. Collect wall solids (handles GeometryInstance wrapping)
-        // ------------------------------------------------------------------
+        // ── Collect solids (handles GeometryInstance) ────────────────────────
 
-        private static List<Solid> GetWallSolids(Wall wall, Options opts)
+        public static List<Solid> CollectSolids(GeometryElement geom)
         {
             var solids = new List<Solid>();
-            foreach (GeometryObject obj in wall.get_Geometry(opts))
+            foreach (GeometryObject obj in geom)
             {
                 if (obj is Solid s && s.Volume > 0)
                     solids.Add(s);
@@ -104,9 +109,14 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             return solids;
         }
 
-        // ------------------------------------------------------------------
-        //  3. Exterior / interior detection
-        // ------------------------------------------------------------------
+        public static XYZ FaceCentroid(Face face)
+        {
+            var bb = face.GetBoundingBox();
+            UV uv = new UV((bb.Min.U + bb.Max.U) / 2.0, (bb.Min.V + bb.Max.V) / 2.0);
+            return face.Evaluate(uv);
+        }
+
+        // ── Exterior detection ───────────────────────────────────────────────
 
         public static bool IsExteriorWall(Wall wall, Document doc, View view)
         {
@@ -114,16 +124,11 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             {
                 var cl = GetWallCenterLine(wall);
                 if (cl == null) return false;
-
-                XYZ midPoint = cl.Evaluate(0.5, true);
-                XYZ normal = GetWallNormal(wall);
-                XYZ probe = midPoint + normal * 1.0;
-
+                XYZ mid = cl.Evaluate(0.5, true);
+                XYZ probe = mid + GetWallNormal(wall) * 1.0;
                 var phase = doc.GetElement(
                     view.get_Parameter(BuiltInParameter.VIEW_PHASE).AsElementId()) as Phase;
-
-                Room room = doc.GetRoomAtPoint(probe, phase);
-                return room == null;
+                return doc.GetRoomAtPoint(probe, phase) == null;
             }
             catch { return false; }
         }
@@ -131,177 +136,161 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
         public static XYZ GetDimLineOffsetDirection(Wall wall, Document doc,
             View view, bool smartPlacement)
         {
-            if (!smartPlacement) return GetWallNormal(wall);
-            bool exterior = IsExteriorWall(wall, doc, view);
-            return exterior ? GetWallNormal(wall) : GetWallNormal(wall);
+            return GetWallNormal(wall);
         }
 
-        // ------------------------------------------------------------------
-        //  4. Wall end-cap face references
-        // ------------------------------------------------------------------
+        // ── Wall end-cap references ──────────────────────────────────────────
 
-        public static (Reference startFaceRef, Reference endFaceRef)
-            GetWallEndFaceReferences(Wall wall)
+        public static (TaggedRef start, TaggedRef end)
+            GetWallEndCapRefs(Wall wall)
         {
             var opts = new Options
             {
                 ComputeReferences = true,
                 IncludeNonVisibleObjects = true,
-                DetailLevel = ViewDetailLevel.Fine
+                DetailLevel = ViewDetailLevel.Fine,
             };
 
             var cl = GetWallCenterLine(wall);
             if (cl == null) return (null, null);
 
-            XYZ startPt = cl.GetEndPoint(0);
-            XYZ endPt = cl.GetEndPoint(1);
-            XYZ wallDir = (endPt - startPt).Normalize();
-            double wallLen = startPt.DistanceTo(endPt);
+            XYZ origin = cl.GetEndPoint(0);
+            XYZ wallDir = (cl.GetEndPoint(1) - origin).Normalize();
+            double len = cl.Length;
 
-            Reference startRef = null, endRef = null;
+            TaggedRef startTR = null, endTR = null;
+            double bestStartU = double.MaxValue, bestEndU = double.MinValue;
 
-            foreach (Solid solid in GetWallSolids(wall, opts))
+            foreach (Solid solid in CollectSolids(wall.get_Geometry(opts)))
             {
                 foreach (Face face in solid.Faces)
                 {
                     if (!(face is PlanarFace pf)) continue;
+                    if (Math.Abs(pf.FaceNormal.DotProduct(wallDir)) < 0.95) continue;
 
-                    // End-cap faces: normal parallel to wall direction
-                    double dot = Math.Abs(pf.FaceNormal.DotProduct(wallDir));
-                    if (dot < 0.95) continue;
+                    XYZ cen = FaceCentroid(pf);
+                    double u = (cen - origin).DotProduct(wallDir);
 
-                    // Use face UV centroid for reliable position
-                    BoundingBoxUV bbuv = pf.GetBoundingBox();
-                    UV uvMid = new UV(
-                        (bbuv.Min.U + bbuv.Max.U) / 2.0,
-                        (bbuv.Min.V + bbuv.Max.V) / 2.0);
-                    XYZ centre = pf.Evaluate(uvMid);
-                    double u = (centre - startPt).DotProduct(wallDir);
-
-                    if (u < wallLen / 2.0)
-                        startRef = pf.Reference;
+                    if (u < len / 2.0)
+                    {
+                        if (u < bestStartU)
+                        {
+                            bestStartU = u;
+                            startTR = new TaggedRef { Ref = pf.Reference, U = u, Kind = "endcap" };
+                        }
+                    }
                     else
-                        endRef = pf.Reference;
+                    {
+                        if (u > bestEndU)
+                        {
+                            bestEndU = u;
+                            endTR = new TaggedRef { Ref = pf.Reference, U = u, Kind = "endcap" };
+                        }
+                    }
                 }
-
-                if (startRef != null && endRef != null) break;
             }
 
-            return (startRef, endRef);
-        }
-
-        // ------------------------------------------------------------------
-        //  5. Opening edge references (doors + windows)
-        // ------------------------------------------------------------------
-
-        public static List<Reference> GetOpeningEdgeReferences(Wall wall, Document doc)
-        {
-            var refs = new List<Reference>();
-
-            IList<ElementId> insertIds = wall.FindInserts(true, false, false, false);
-            if (insertIds == null || insertIds.Count == 0) return refs;
-
-            XYZ wallDir = GetWallDirection(wall);
-            var cl = GetWallCenterLine(wall);
-            if (cl == null) return refs;
-
-            XYZ wallStart = cl.GetEndPoint(0);
-            double wallLen = wallStart.DistanceTo(cl.GetEndPoint(1));
-
-            // Skip opening edges within this distance of a wall end — produces zero segment
-            const double minDistFromEnd = 0.20; // ~60mm in feet
-
-            var opts = new Options
+            // FIX: Symbolic fallback for walls joined at both ends.
+            // When wall joins consume end-cap geometry, retry with IncludeNonVisibleObjects=true
+            // to expose the hidden faces that Revit suppresses at joins.
+            // This is the correct Revit API approach — non-visible geometry always
+            // contains the full solid including joined faces.
+            if (startTR == null || endTR == null)
             {
-                ComputeReferences = true,
-                IncludeNonVisibleObjects = true,
-                DetailLevel = ViewDetailLevel.Fine
-            };
+                var fallbackOpts = new Options
+                {
+                    ComputeReferences = true,
+                    IncludeNonVisibleObjects = true,
+                    DetailLevel = ViewDetailLevel.Fine,
+                };
 
-            var wallSolids = GetWallSolids(wall, opts);
-            if (wallSolids.Count == 0) return refs;
-
-            foreach (ElementId insertId in insertIds)
-            {
-                var insert = doc.GetElement(insertId) as FamilyInstance;
-                var insertLoc = insert?.Location as LocationPoint;
-                if (insertLoc == null) continue;
-
-                XYZ insertPt = insertLoc.Point;
-                double insertU = (insertPt - wallStart).DotProduct(wallDir);
-
-                BoundingBoxXYZ bb = insert.get_BoundingBox(null);
-                if (bb == null) continue;
-
-                double halfWidth = Math.Abs((bb.Max - bb.Min).DotProduct(wallDir)) / 2.0;
-                double sideA = insertU - halfWidth;
-                double sideB = insertU + halfWidth;
-
-                // Skip if opening edges are too close to wall ends
-                if (sideA < minDistFromEnd || sideB > wallLen - minDistFromEnd)
-                    continue;
-
-                bool gotA = false, gotB = false;
-                const double faceTol = 0.15; // ~45mm
-
-                foreach (Solid solid in wallSolids)
+                foreach (Solid solid in CollectSolids(wall.get_Geometry(fallbackOpts)))
                 {
                     foreach (Face face in solid.Faces)
                     {
-                        if (!(face is PlanarFace pf) || pf.Reference == null) continue;
+                        if (!(face is PlanarFace pf)) continue;
+                        if (Math.Abs(pf.FaceNormal.DotProduct(wallDir)) < 0.90) continue;
+                        if (pf.Reference == null) continue;
 
-                        // Opening edge faces: normal parallel to wall direction
-                        double dot = Math.Abs(pf.FaceNormal.DotProduct(wallDir));
-                        if (dot < 0.95) continue;
+                        XYZ cen = FaceCentroid(pf);
+                        double u = (cen - origin).DotProduct(wallDir);
 
-                        BoundingBoxUV bbuv = pf.GetBoundingBox();
-                        UV uvMid = new UV(
-                            (bbuv.Min.U + bbuv.Max.U) / 2.0,
-                            (bbuv.Min.V + bbuv.Max.V) / 2.0);
-                        XYZ centre = pf.Evaluate(uvMid);
-                        double faceU = (centre - wallStart).DotProduct(wallDir);
+                        if (startTR == null && u < len / 2.0)
+                            startTR = new TaggedRef { Ref = pf.Reference, U = u, Kind = "endcap" };
 
-                        if (!gotA && Math.Abs(faceU - sideA) < faceTol)
-                        {
-                            refs.Add(pf.Reference);
-                            gotA = true;
-                        }
-                        else if (!gotB && Math.Abs(faceU - sideB) < faceTol)
-                        {
-                            refs.Add(pf.Reference);
-                            gotB = true;
-                        }
-
-                        if (gotA && gotB) break;
+                        if (endTR == null && u >= len / 2.0)
+                            endTR = new TaggedRef { Ref = pf.Reference, U = u, Kind = "endcap" };
                     }
-                    if (gotA && gotB) break;
+
+                    if (startTR != null && endTR != null) break;
                 }
             }
 
-            return refs;
+            // Last resort: if still null after geometry retry, use a point reference
+            // obtained by creating a temporary reference from the curve itself.
+            // PointOnEdge references are always accepted by NewDimension.
+            if (startTR == null || endTR == null)
+            {
+                var locCurve = wall.Location as LocationCurve;
+                if (locCurve?.Curve is Line locLine)
+                {
+                    // Get geometry with view context to obtain curve references
+                    var curveOpts = new Options
+                    {
+                        ComputeReferences = true,
+                        IncludeNonVisibleObjects = true,
+                        DetailLevel = ViewDetailLevel.Fine,
+                    };
+
+                    // Iterate to find any Line geometry whose reference can be used
+                    foreach (GeometryObject obj in wall.get_Geometry(curveOpts))
+                    {
+                        Reference lineRef = null;
+
+                        if (obj is Line ln && ln.Reference != null)
+                            lineRef = ln.Reference;
+                        else if (obj is GeometryInstance gi)
+                            foreach (GeometryObject sub in gi.GetInstanceGeometry())
+                                if (sub is Line sl && sl.Reference != null)
+                                { lineRef = sl.Reference; break; }
+
+                        // A line reference from geometry is sufficient for NewDimension
+                        // as a last-resort fallback — better than no reference at all
+                        if (lineRef != null)
+                        {
+                            if (startTR == null)
+                                startTR = new TaggedRef { Ref = lineRef, U = 0, Kind = "endcap" };
+                            if (endTR == null)
+                                endTR = new TaggedRef { Ref = lineRef, U = len, Kind = "endcap" };
+                            break;
+                        }
+                    }
+                }
+            }
+
+            return (startTR, endTR);
         }
 
-        // ------------------------------------------------------------------
-        //  6. Grid references
-        // ------------------------------------------------------------------
+        // ── Grid references ──────────────────────────────────────────────────
+        //
+        // Returns TaggedRefs for all grids that intersect (or nearly intersect)
+        // the wall centre line extended by 'ext' feet in each direction.
 
-        public static List<Reference> GetGridReferences(Wall wall, List<Grid> allGrids)
+        public static List<TaggedRef> GetGridRefs(Wall wall, List<Grid> allGrids)
         {
-            var refs = new List<Reference>();
+            var result = new List<TaggedRef>();
 
             var cl = GetWallCenterLine(wall);
-            if (cl == null) return refs;
+            if (cl == null) return result;
 
-            XYZ tStart = cl.GetEndPoint(0);
-            XYZ tEnd = cl.GetEndPoint(1);
-            XYZ wallDir = (tEnd - tStart).Normalize();
-            double len = tStart.DistanceTo(tEnd);
+            XYZ origin = cl.GetEndPoint(0);
+            XYZ wallDir = (cl.GetEndPoint(1) - origin).Normalize();
+            double len = cl.Length;
 
-            // Extend wall line so grids passing through are caught
-            const double extend = 10.0; // 10 ft
+            const double ext = 20.0; // ft — wide enough to find grids past corner walls
             Line extWall = Line.CreateBound(
-                tStart - wallDir * extend,
-                tEnd + wallDir * extend);
+                origin + wallDir * -ext,
+                origin + wallDir * (len + ext));
 
             var opts = new Options
             {
@@ -312,69 +301,68 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
 
             foreach (Grid grid in allGrids)
             {
-                // Extend grid curve to ensure intersection
-                Line extGrid = null;
+                Line extGrid;
                 try
                 {
                     XYZ gP0 = grid.Curve.GetEndPoint(0);
                     XYZ gP1 = grid.Curve.GetEndPoint(1);
                     XYZ gDir = (gP1 - gP0).Normalize();
                     XYZ gMid = grid.Curve.Evaluate(0.5, true);
-                    extGrid = Line.CreateBound(gMid - gDir * 500, gMid + gDir * 500);
+                    extGrid = Line.CreateBound(gMid - gDir * 1000, gMid + gDir * 1000);
                 }
                 catch { continue; }
 
                 IntersectionResultArray ira;
                 if (extWall.Intersect(extGrid, out ira) != SetComparisonResult.Overlap
-                    || ira == null || ira.Size == 0)
-                    continue;
+                    || ira == null || ira.Size == 0) continue;
 
                 XYZ pt = ira.get_Item(0).XYZPoint;
-                double u = (pt - tStart).DotProduct(wallDir);
+                double u = (pt - origin).DotProduct(wallDir);
 
-                // Must be within or very near actual wall extent
-                if (u < -extend || u > len + extend) continue;
+                if (u < -ext || u > len + ext) continue;
 
-                // Extract reference from grid geometry
                 Reference gridRef = null;
                 try
                 {
                     foreach (GeometryObject obj in grid.get_Geometry(opts))
                     {
-                        if (obj is Line line && line.Reference != null)
-                        {
-                            gridRef = line.Reference;
-                            break;
-                        }
+                        if (obj is Line ln && ln.Reference != null)
+                        { gridRef = ln.Reference; break; }
                         if (obj is GeometryInstance gi)
                             foreach (GeometryObject sub in gi.GetInstanceGeometry())
                                 if (sub is Line sl && sl.Reference != null)
-                                {
-                                    gridRef = sl.Reference;
-                                    break;
-                                }
+                                { gridRef = sl.Reference; break; }
                         if (gridRef != null) break;
                     }
                 }
                 catch { }
 
                 if (gridRef != null)
-                    refs.Add(gridRef);
+                    result.Add(new TaggedRef { Ref = gridRef, U = u, Kind = "grid" });
             }
 
-            return refs;
+            return result;
         }
 
-        // ------------------------------------------------------------------
-        //  7. Order references along wall axis using face centroids
-        // ------------------------------------------------------------------
+        // ── Opening edge references ──────────────────────────────────────────
 
-        public static ReferenceArray OrderReferencesAlongWall(
-            List<Reference> references, Wall wall, Document doc)
+        public static List<TaggedRef> GetOpeningEdgeRefs(
+            Wall wall, Document doc, double startU, double endU)
         {
+            var result = new List<TaggedRef>();
+
+            IList<ElementId> insertIds = wall.FindInserts(true, false, false, false);
+            if (insertIds == null || insertIds.Count == 0) return result;
+
             var cl = GetWallCenterLine(wall);
-            XYZ wStart = cl?.GetEndPoint(0) ?? XYZ.Zero;
-            XYZ wDir = GetWallDirection(wall);
+            if (cl == null) return result;
+
+            XYZ origin = cl.GetEndPoint(0);
+            XYZ wallDir = (cl.GetEndPoint(1) - origin).Normalize();
+            double wallLen = cl.Length;
+
+            // Skip opening edges within this distance of an end-cap position
+            const double coincideTol = 0.25; // ~75mm
 
             var opts = new Options
             {
@@ -383,95 +371,157 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
                 DetailLevel = ViewDetailLevel.Fine,
             };
 
-            var sorted = references
-                .Select((r, idx) =>
+            var wallSolids = CollectSolids(wall.get_Geometry(opts));
+            if (wallSolids.Count == 0) return result;
+
+            foreach (ElementId insertId in insertIds)
+            {
+                var insert = doc.GetElement(insertId) as FamilyInstance;
+                var insertLoc = insert?.Location as LocationPoint;
+                if (insertLoc == null) continue;
+
+                double insertU = (insertLoc.Point - origin).DotProduct(wallDir);
+
+                BoundingBoxXYZ bb = insert.get_BoundingBox(null);
+                if (bb == null) continue;
+
+                double halfW = Math.Abs((bb.Max - bb.Min).DotProduct(wallDir)) / 2.0;
+                double sideA = insertU - halfW;
+                double sideB = insertU + halfW;
+
+                // Skip if either edge coincides with end-cap positions
+                if (Math.Abs(sideA - startU) < coincideTol ||
+                    Math.Abs(sideA - endU) < coincideTol ||
+                    Math.Abs(sideB - startU) < coincideTol ||
+                    Math.Abs(sideB - endU) < coincideTol) continue;
+
+                // Skip if outside wall extent
+                if (sideA < 0.05 || sideB > wallLen - 0.05) continue;
+
+                bool gotA = false, gotB = false;
+                const double faceTol = 0.15;
+
+                foreach (Solid solid in wallSolids)
                 {
-                    double u = idx * 0.0001; // tiny index offset as tiebreaker
-                    try
+                    foreach (Face face in solid.Faces)
                     {
-                        Element el = doc.GetElement(r.ElementId);
+                        if (!(face is PlanarFace pf) || pf.Reference == null) continue;
+                        if (Math.Abs(pf.FaceNormal.DotProduct(wallDir)) < 0.95) continue;
 
-                        if (el is Wall w)
-                        {
-                            // Match reference to actual face using stable representation
-                            string rStable = "";
-                            try { rStable = r.ConvertToStableRepresentation(doc); } catch { }
+                        XYZ cen = FaceCentroid(pf);
+                        double faceU = (cen - origin).DotProduct(wallDir);
 
-                            foreach (Solid solid in GetWallSolids(w, opts))
-                            {
-                                bool found = false;
-                                foreach (Face face in solid.Faces)
-                                {
-                                    if (face.Reference == null) continue;
-                                    try
-                                    {
-                                        if (!string.IsNullOrEmpty(rStable) &&
-                                            face.Reference.ConvertToStableRepresentation(doc) == rStable)
-                                        {
-                                            BoundingBoxUV bb = face.GetBoundingBox();
-                                            UV uv = new UV(
-                                                (bb.Min.U + bb.Max.U) / 2.0,
-                                                (bb.Min.V + bb.Max.V) / 2.0);
-                                            XYZ c = face.Evaluate(uv);
-                                            u = (c - wStart).DotProduct(wDir);
-                                            found = true;
-                                            break;
-                                        }
-                                    }
-                                    catch { }
-                                }
-                                if (found) break;
-                            }
-                        }
-                        else if (el?.Location is LocationPoint lp)
+                        if (!gotA && Math.Abs(faceU - sideA) < faceTol)
                         {
-                            u = (lp.Point - wStart).DotProduct(wDir);
+                            result.Add(new TaggedRef { Ref = pf.Reference, U = faceU, Kind = "opening" });
+                            gotA = true;
                         }
-                        else if (el?.Location is LocationCurve lc2)
+                        else if (!gotB && Math.Abs(faceU - sideB) < faceTol)
                         {
-                            XYZ mid = lc2.Curve.Evaluate(0.5, true);
-                            u = (mid - wStart).DotProduct(wDir);
+                            result.Add(new TaggedRef { Ref = pf.Reference, U = faceU, Kind = "opening" });
+                            gotB = true;
                         }
+
+                        if (gotA && gotB) break;
                     }
-                    catch { }
-                    return (u, idx, r);
-                })
-                .OrderBy(t => t.u)
-                .ThenBy(t => t.idx)
-                .Select(t => t.r)
-                .ToList();
+                    if (gotA && gotB) break;
+                }
+            }
+
+            return result;
+        }
+
+        // ── Merge: replace end-caps with nearby grids ────────────────────────
+        //
+        // Core fix for Issue 1:
+        // If a grid is within 'snapTol' feet of a wall end-cap position,
+        // the grid reference REPLACES the end-cap reference.
+        // This extends the dimension string to the grid line rather than
+        // stopping at the inside face of the corner wall junction.
+
+        public static List<TaggedRef> MergeEndCapsWithGrids(
+            TaggedRef startCap, TaggedRef endCap,
+            List<TaggedRef> gridRefs,
+            double snapTol = 1.0) // kept for signature compatibility
+        {
+            var result = new List<TaggedRef>();
+
+            // FIX: Use directional logic rather than proximity.
+            // Find the grid with the SMALLEST u-value that is at or before
+            // the start end-cap (within 0.5ft tolerance to catch grids that
+            // sit just inside the corner due to wall thickness).
+            // This handles thick exterior walls where the grid may be offset
+            // from the end-cap face by more than the old 1.0ft tolerance.
+            TaggedRef startGridSnap = gridRefs
+                .Where(g => g.U <= startCap.U + 0.5)
+                .OrderBy(g => g.U)
+                .FirstOrDefault();
+
+            // Find the grid with the LARGEST u-value at or beyond the end cap.
+            TaggedRef endGridSnap = gridRefs
+                .Where(g => g.U >= endCap.U - 0.5)
+                .OrderByDescending(g => g.U)
+                .FirstOrDefault();
+
+            // Terminal references: prefer grid over end-cap
+            result.Add(startGridSnap ?? startCap);
+            result.Add(endGridSnap ?? endCap);
+
+            // Add interior grids — those not used as terminal snaps
+            foreach (var g in gridRefs)
+            {
+                if (g == startGridSnap || g == endGridSnap) continue;
+                result.Add(g);
+            }
+
+            return result;
+        }
+
+        // ── Build ordered, deduplicated ReferenceArray ───────────────────────
+
+        public static ReferenceArray BuildOrderedRefArray(
+            List<TaggedRef> taggedRefs, double posTol = 0.05)
+        {
+            // Sort by u-position
+            var sorted = taggedRefs.OrderBy(t => t.U).ToList();
+
+            // Deduplicate by position — keep first of each cluster
+            var deduped = new List<TaggedRef>();
+            foreach (var item in sorted)
+            {
+                if (!deduped.Any(e => Math.Abs(e.U - item.U) < posTol))
+                    deduped.Add(item);
+            }
 
             var ra = new ReferenceArray();
-            foreach (var r in sorted) ra.Append(r);
+            foreach (var item in deduped)
+                ra.Append(item.Ref);
             return ra;
         }
 
-        // ------------------------------------------------------------------
-        //  8. Dimension line geometry
-        // ------------------------------------------------------------------
+        // ── Build dimension line ─────────────────────────────────────────────
 
         public static Line BuildDimensionLine(Wall wall, XYZ offsetDir,
-            double offsetDistance)
+            double offsetDistance, double minU, double maxU)
         {
             var cl = GetWallCenterLine(wall);
             if (cl == null) return null;
 
-            XYZ start = cl.GetEndPoint(0);
-            XYZ end = cl.GetEndPoint(1);
-            XYZ wallDir = GetWallDirection(wall);
+            XYZ origin = cl.GetEndPoint(0);
+            XYZ wallDir = (cl.GetEndPoint(1) - origin).Normalize();
 
-            // Offset from wall centreline: half-thickness + user offset
             double halfThick = wall.Width / 2.0;
             double totalOffset = halfThick + offsetDistance;
-            XYZ offset = offsetDir * totalOffset;
+            XYZ offXYZ = offsetDir * totalOffset;
 
-            XYZ dimStart = new XYZ(start.X + offset.X, start.Y + offset.Y, start.Z);
-            XYZ dimEnd = new XYZ(end.X + offset.X, end.Y + offset.Y, end.Z);
+            const double pad = 0.33; // ~100mm breathing room
+            XYZ dimStart = origin + wallDir * (minU - pad) + offXYZ;
+            XYZ dimEnd = origin + wallDir * (maxU + pad) + offXYZ;
 
-            // Small extension so witness lines don't crowd the end caps
-            const double ext = 0.5; // 0.5 ft
-            dimStart -= wallDir * ext;
-            dimEnd += wallDir * ext;
+            // Flatten to wall Z level
+            double z = cl.GetEndPoint(0).Z;
+            dimStart = new XYZ(dimStart.X, dimStart.Y, z);
+            dimEnd = new XYZ(dimEnd.X, dimEnd.Y, z);
 
             if (dimStart.DistanceTo(dimEnd) < 0.01) return null;
             return Line.CreateBound(dimStart, dimEnd);

@@ -164,6 +164,7 @@ def envelope_automate_dim(
     include_openings=True,
     include_grids=True,
     offset_mm=800,
+    inset_mm=1000,
     smart_exterior=True,
     dim_type_name="",
 ):
@@ -185,8 +186,10 @@ def envelope_automate_dim(
             "include_openings": include_openings,
             "include_grids":    include_grids,
             "offset_mm":        offset_mm,
+            "inset_mm":         inset_mm,
             "smart_exterior":   smart_exterior,
             "dim_type_name":    dim_type_name,
         }
     }
+
 

@@ -162,36 +162,31 @@ def envelope_automate_tag(tag_category, tag_family, tag_type, view_ids, skip_tag
 def envelope_automate_dim(
     view_ids,
     include_openings=True,
-    include_intersecting=True,
     include_grids=True,
     offset_mm=800,
-    smart_exterior_placement=True,
+    smart_exterior=True,
     dim_type_name="",
 ):
     """
     Builds the envelope for the auto_dim C# command.
-    Each view in view_ids is sent as a separate envelope so the C#
-    orchestrator always works with one view at a time — mirrors
-    the automate_tag pattern.
 
     Args:
-        view_ids:                 list of int Revit ElementId values
-        include_openings:         include door/window edge references
-        include_intersecting:     include intersecting wall face references
-        include_grids:            include structural grid references
-        offset_mm:                dimension line offset from wall face (mm)
-        smart_exterior_placement: exterior walls dim outward, interior inward
-        dim_type_name:            name of DimensionType in Revit project
+        view_ids:         list of int Revit ElementId values
+        include_openings: include door/window edge references
+        include_grids:    include structural grid references
+        offset_mm:        dimension line offset from wall face (mm)
+        smart_exterior:   exterior walls dim outward, interior on normal side
+        dim_type_name:    name of DimensionType in Revit project (empty = auto)
     """
     return {
         "command": "auto_dim",
         "raw": {
-            "view_ids":                  view_ids,
-            "include_openings":          include_openings,
-            "include_intersecting":      include_intersecting,
-            "include_grids":             include_grids,
-            "offset_mm":                 offset_mm,
-            "smart_exterior_placement":  smart_exterior_placement,
-            "dim_type_name":             dim_type_name,
+            "view_ids":         view_ids,
+            "include_openings": include_openings,
+            "include_grids":    include_grids,
+            "offset_mm":        offset_mm,
+            "smart_exterior":   smart_exterior,
+            "dim_type_name":    dim_type_name,
         }
     }
+

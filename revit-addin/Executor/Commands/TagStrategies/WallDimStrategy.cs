@@ -5,48 +5,33 @@ using Autodesk.Revit.DB;
 
 namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
 {
-    /// <summary>
-    /// Dimensions a single straight wall in a floor-plan view.
-    /// Collects references for: wall end caps, opening edges,
-    /// intersecting wall faces, and grid intersections — then
-    /// calls doc.Create.NewDimension() once per wall.
-    ///
-    /// Placement follows A49 standard:
-    ///   Exterior walls → dimension line placed outward from building perimeter
-    ///   Interior walls → dimension line placed on the +normal side
-    /// </summary>
     public class WallDimStrategy : IDimStrategy
     {
         public string StrategyName => "WallDimStrategy";
 
         // ------------------------------------------------------------------
-        //  CanDimension — routing check
+        //  CanDimension
         // ------------------------------------------------------------------
 
         public bool CanDimension(Element element, View view)
         {
             if (!(element is Wall wall)) return false;
-
-            // Only straight walls (not curved)
             if (!(wall.Location is LocationCurve lc)) return false;
             if (!(lc.Curve is Line)) return false;
 
-            // Accept all plan view types — FloorPlan, CeilingPlan, EngineeringPlan, AreaPlan
-            // Some projects use EngineeringPlan for structural floor plans
+            // Accept all plan-family view types
             var planTypes = new[]
             {
                 ViewType.FloorPlan,
                 ViewType.CeilingPlan,
                 ViewType.EngineeringPlan,
-                ViewType.AreaPlan
+                ViewType.AreaPlan,
             };
-            if (!planTypes.Contains(view.ViewType)) return false;
-
-            return true;
+            return planTypes.Contains(view.ViewType);
         }
 
         // ------------------------------------------------------------------
-        //  Dimension — main entry point
+        //  Dimension
         // ------------------------------------------------------------------
 
         public DimResult Dimension(Element element, DimContext context)
@@ -58,110 +43,91 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             var request = context.Request;
             var view = request.TargetView;
 
+            string wallInfo =
+                $"Wall {wall.Id} ({wall.WallType?.Name ?? "?"}, " +
+                $"len={Math.Round((DimHelpers.GetWallCenterLine(wall)?.Length ?? 0), 2)}ft)";
+
             try
             {
-                // ── 1. Collect all references ────────────────────────────
-
-                var allRefs = new List<Reference>();
-
-                // 1a. Wall end-cap faces (always included — these are the outer bounds)
+                // ── 1a. End-cap references ───────────────────────────────
                 var (startRef, endRef) = DimHelpers.GetWallEndFaceReferences(wall);
-                if (startRef == null || endRef == null)
-                    return DimResult.Skipped("Could not extract wall end-face references.");
+                if (startRef == null)
+                    return DimResult.Skipped($"{wallInfo}: startRef null — end-cap not found.");
+                if (endRef == null)
+                    return DimResult.Skipped($"{wallInfo}: endRef null — end-cap not found.");
 
-                allRefs.Add(startRef);
-                allRefs.Add(endRef);
+                var allRefs = new List<Reference> { startRef, endRef };
 
-                // 1b. Opening edges (doors + windows)
+                // ── 1b. Opening edges ────────────────────────────────────
                 if (request.IncludeOpenings)
-                {
-                    var openingRefs = DimHelpers.GetOpeningEdgeReferences(wall, doc);
-                    allRefs.AddRange(openingRefs);
-                }
+                    allRefs.AddRange(DimHelpers.GetOpeningEdgeReferences(wall, doc));
 
-                // 1c. Intersecting wall faces
-                // NOTE: Disabled for now — intersecting wall face normals point in
-                // a different direction to the target wall end-cap normals, causing
-                // Revit's "References are no longer parallel" error in NewDimension().
-                // This requires a separate dimension string per intersecting wall,
-                // which is a future enhancement.
-                // if (request.IncludeIntersectingWalls) { ... }
-
-                // 1d. Grid intersections
+                // ── 1c. Grid references ──────────────────────────────────
                 if (request.IncludeGrids)
-                {
-                    var gridRefs = DimHelpers.GetGridReferences(wall, context.AllGridsInView);
-                    allRefs.AddRange(gridRefs);
-                }
+                    allRefs.AddRange(DimHelpers.GetGridReferences(wall, context.AllGridsInView));
 
-                // ── 2. Need at least 2 references to create a dimension ──
-
-                // Deduplicate (same reference can appear from multiple passes)
-                allRefs = DeduplicateReferences(allRefs);
-
+                // ── 2. Deduplicate ───────────────────────────────────────
+                allRefs = Deduplicate(allRefs);
                 if (allRefs.Count < 2)
                     return DimResult.Skipped(
-                        $"Only {allRefs.Count} reference(s) collected — need at least 2.");
+                        $"{wallInfo}: Only {allRefs.Count} ref(s) after dedup.");
 
-                // ── 3. Order references along the wall axis ──────────────
+                // ── 3. Order along wall axis ─────────────────────────────
+                ReferenceArray refArray =
+                    DimHelpers.OrderReferencesAlongWall(allRefs, wall, doc);
 
-                ReferenceArray refArray = DimHelpers.OrderReferencesAlongWall(
-                    allRefs, wall, doc);
-
-                // ── 4. Determine offset direction ────────────────────────
-
+                // ── 4. Offset direction ──────────────────────────────────
                 XYZ offsetDir = DimHelpers.GetDimLineOffsetDirection(
                     wall, doc, view, request.SmartExteriorPlacement);
 
-                // ── 5. Build the dimension line ──────────────────────────
-
+                // ── 5. Build dimension line ──────────────────────────────
                 Line dimLine = DimHelpers.BuildDimensionLine(
-                    wall, offsetDir, request.OffsetDistance, doc, view);
-
+                    wall, offsetDir, request.OffsetDistance);
                 if (dimLine == null)
-                    return DimResult.Skipped("Could not build dimension line geometry.");
+                    return DimResult.Skipped($"{wallInfo}: BuildDimensionLine returned null.");
 
-                // ── 6. Create the dimension ──────────────────────────────
-
+                // ── 6. Create dimension ──────────────────────────────────
                 Dimension dim = doc.Create.NewDimension(
-                    view,
-                    dimLine,
-                    refArray,
-                    context.LinearDimensionType);
+                    view, dimLine, refArray, context.LinearDimensionType);
 
                 if (dim == null)
-                    return DimResult.Skipped("NewDimension() returned null.");
+                    return DimResult.Skipped($"{wallInfo}: NewDimension() returned null.");
 
                 return DimResult.Succeeded(dim, refArray.Size);
             }
             catch (Exception ex)
             {
-                return DimResult.Failed($"[{StrategyName}] {ex.Message}");
+                return DimResult.Failed($"{wallInfo}: {ex.Message}");
             }
         }
 
         // ------------------------------------------------------------------
-        //  Private helpers
+        //  Deduplicate — index-based fallback prevents false collapse
         // ------------------------------------------------------------------
 
-        /// <summary>
-        /// Removes duplicate references by comparing ElementId + stable representation.
-        /// NewDimension() will throw if the same reference appears twice.
-        /// </summary>
-        private static List<Reference> DeduplicateReferences(List<Reference> refs)
+        private static List<Reference> Deduplicate(List<Reference> refs)
         {
             var seen = new HashSet<string>();
             var result = new List<Reference>();
+            int idx = 0;
 
             foreach (var r in refs)
             {
-                // ConvertToStableRepresentation is the canonical uniqueness key
                 string key;
-                try { key = r.ConvertToStableRepresentation(null) ?? r.ElementId.ToString(); }
-                catch { key = r.ElementId.ToString(); }
+                try
+                {
+                    string stable = r.ConvertToStableRepresentation(null);
+                    key = string.IsNullOrEmpty(stable)
+                        ? $"idx_{idx}_{r.ElementId}"
+                        : stable;
+                }
+                catch
+                {
+                    key = $"idx_{idx}_{r.ElementId}";
+                }
 
-                if (seen.Add(key))
-                    result.Add(r);
+                if (seen.Add(key)) result.Add(r);
+                idx++;
             }
 
             return result;

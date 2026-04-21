@@ -233,26 +233,64 @@ namespace A49AIRevitAssistant.Executor.Commands
             if (allRefs.Count < 2)
                 return DimResult.Skipped("Collinear group: <2 refs.");
 
-            string debugMsg = $"Final references for wall group:\n";
-            foreach (var refItem in allRefs.OrderBy(r => r.U))
-            {
-                debugMsg += $"  {refItem.Kind} at U={refItem.U:F2} ft (ID: {refItem.SourceId})\n";
-            }
-            TaskDialog.Show("Dimension References", debugMsg);
-
             ReferenceArray refArray = DimHelpers.BuildOrderedRefArray(allRefs);
             if (refArray.Size < 2)
                 return DimResult.Skipped("Collinear group: <2 after dedup.");
 
-            // Add debug to see what made it through deduplication
-            string finalDebug = $"After deduplication ({refArray.Size} references):\n";
-            var finalRefs = allRefs.OrderBy(r => r.U).ToList();
-            for (int i = 0; i < finalRefs.Count && i < 20; i++)
-            {
-                finalDebug += $"  {finalRefs[i].Kind} at U={finalRefs[i].U:F2}\n";
-            }
-            TaskDialog.Show("Final References After Dedup", finalDebug);
+            // ========== INSERT THE FILTER CODE RIGHT HERE ==========
+            // Filter out tiny segments (0.2 ft wall thickness)
+            const double minSegmentLength = 0.5; // 0.5 ft = 150mm minimum segment
+            var filteredRefs = new List<Reference>();
 
+            for (int i = 0; i < refArray.Size; i++)
+            {
+                // Always keep first and last reference
+                if (i == 0 || i == refArray.Size - 1)
+                {
+                    filteredRefs.Add(refArray.get_Item(i));
+                    continue;
+                }
+
+                // Calculate U positions (need to get from allRefs)
+                // Find matching references in allRefs to get U positions
+                Reference currentRef = refArray.get_Item(i);
+                Reference prevRef = refArray.get_Item(i - 1);
+                Reference nextRef = refArray.get_Item(i + 1);
+
+                // Find corresponding TaggedRef to get U positions
+                var currentTagged = allRefs.FirstOrDefault(r => r.Ref == currentRef);
+                var prevTagged = allRefs.FirstOrDefault(r => r.Ref == prevRef);
+                var nextTagged = allRefs.FirstOrDefault(r => r.Ref == nextRef);
+
+                if (currentTagged != null && prevTagged != null && nextTagged != null)
+                {
+                    double distToPrev = currentTagged.U - prevTagged.U;
+                    double distToNext = nextTagged.U - currentTagged.U;
+
+                    // Keep if both adjacent segments are large enough
+                    // OR if this is a grid reference (grids are important)
+                    if (distToPrev >= minSegmentLength && distToNext >= minSegmentLength)
+                    {
+                        filteredRefs.Add(currentRef);
+                    }
+                    else if (currentTagged.Kind == "grid")
+                    {
+                        // Always keep grid references
+                        filteredRefs.Add(currentRef);
+                    }
+                    // Otherwise skip (removes 0.2 wall thickness segments)
+                }
+                else
+                {
+                    filteredRefs.Add(currentRef);
+                }
+            }
+
+            // Rebuild reference array with filtered references
+            var finalRefArray = new ReferenceArray();
+            foreach (var r in filteredRefs)
+                finalRefArray.Append(r);
+            // ========== END OF FILTER CODE ==========
 
             XYZ offsetDir = DimHelpers.GetDimLineOffsetDirection(
                 primary, doc, view, request.SmartExteriorPlacement);
@@ -265,10 +303,11 @@ namespace A49AIRevitAssistant.Executor.Commands
 
             try
             {
+                // USE finalRefArray instead of refArray
                 Dimension dim = doc.Create.NewDimension(
-                    view, dimLine, refArray, context.LinearDimensionType);
+                    view, dimLine, finalRefArray, context.LinearDimensionType);
                 return dim != null
-                    ? DimResult.Succeeded(dim, refArray.Size)
+                    ? DimResult.Succeeded(dim, finalRefArray.Size)
                     : DimResult.Skipped("Collinear group: NewDimension null.");
             }
             catch (Exception ex)
@@ -354,23 +393,41 @@ namespace A49AIRevitAssistant.Executor.Commands
 
                 var entries = new List<RefEntry>();
 
+                // Calculate building centroid from all walls (to determine interior side)
+                XYZ buildingCentroid = XYZ.Zero;
+                int wallCount = 0;
+                foreach (Wall wall in dWalls)
+                {
+                    var cl = DimHelpers.GetWallCenterLine(wall);
+                    if (cl != null)
+                    {
+                        buildingCentroid += cl.GetEndPoint(0);
+                        buildingCentroid += cl.GetEndPoint(1);
+                        wallCount += 2;
+                    }
+                }
+                if (wallCount > 0)
+                    buildingCentroid /= wallCount;
+
+                // For each wall, pick the appropriate face (Exterior for edge walls, Interior for others)
                 foreach (Wall wall in dWalls)
                 {
                     XYZ wallNormal = DimHelpers.GetWallNormal(wall);
 
                     var wallFaces = new List<RefEntry>();
-                    foreach (Solid solid in
-                        DimHelpers.CollectSolids(wall.get_Geometry(geomOpts)))
+                    // Collect all potential planar faces for this wall
+                    foreach (Solid solid in DimHelpers.CollectSolids(wall.get_Geometry(geomOpts)))
                     {
                         foreach (Face face in solid.Faces)
                         {
-                            if (!(face is PlanarFace pf)) continue;
-                            if (pf.Reference == null) continue;
-                            if (Math.Abs(pf.FaceNormal.DotProduct(wallNormal)) < 0.95)
-                                continue;
+                            if (!(face is PlanarFace pf) || pf.Reference == null) continue;
+
+                            // Only take faces perpendicular to our dimension normal
+                            if (Math.Abs(pf.FaceNormal.DotProduct(wallNormal)) < 0.95) continue;
 
                             XYZ cen = DimHelpers.FaceCentroid(pf);
                             double pos = cen.DotProduct(normal);
+
                             wallFaces.Add(new RefEntry
                             {
                                 Ref = pf.Reference,
@@ -383,15 +440,33 @@ namespace A49AIRevitAssistant.Executor.Commands
 
                     if (wallFaces.Count == 0) continue;
 
-                    RefEntry outerFace = wallFaces.OrderBy(f => f.Pos).First();
+                    // --- REVISION START ---
+                    RefEntry chosenFace;
 
-                    if (!entries.Any(e => e.Kind == "wall" &&
-                            Math.Abs(e.Pos - outerFace.Pos) < 0.164))
-                        entries.Add(outerFace);
+                    // Check if this specific wall is flagged as Exterior.
+                    // In Revit, Exterior walls should terminate on the "Outside" face for exterior strings.
+                    if (DimHelpers.IsExteriorWall(wall, _doc, view))
+                    {
+                        // For Exterior/Outside corners (Pink/Brown dots):
+                        // Pick the face FARTHEST from the building centroid.
+                        chosenFace = wallFaces.OrderByDescending(f => f.Pt.DistanceTo(buildingCentroid)).First();
+                    }
+                    else
+                    {
+                        // For Interior walls:
+                        // Pick the face CLOSEST to the building centroid.
+                        chosenFace = wallFaces.OrderBy(f => f.Pt.DistanceTo(buildingCentroid)).First();
+                    }
+                    // --- REVISION END ---
+
+                    // Deduplicate: Don't add the same position twice
+                    if (!entries.Any(e => Math.Abs(e.Pos - chosenFace.Pos) < 0.1))
+                        entries.Add(chosenFace);
                 }
 
                 if (entries.Count == 0) { sk++; continue; }
 
+                // Add grid references
                 foreach (Grid grid in allGrids)
                 {
                     try
@@ -418,20 +493,8 @@ namespace A49AIRevitAssistant.Executor.Commands
                     catch { }
                 }
 
-                var wallEntries = entries.Where(e => e.Kind == "wall")
-                                         .OrderBy(e => e.Pos).ToList();
-                var gridEntries = entries.Where(e => e.Kind == "grid").ToList();
-
-                var filteredWall = new List<RefEntry>();
-                foreach (RefEntry we in wallEntries)
-                {
-                    if (!filteredWall.Any(existing =>
-                            Math.Abs(existing.Pos - we.Pos) < 0.66))
-                        filteredWall.Add(we);
-                }
-
-                var allEntries = filteredWall.Concat(gridEntries)
-                                             .OrderBy(e => e.Pos).ToList();
+                // Sort all entries by position
+                var allEntries = entries.OrderBy(e => e.Pos).ToList();
 
                 if (allEntries.Count < 2)
                 { sk++; skips.Add("P2 dir: <2 entries after wall-face filter."); continue; }
@@ -516,19 +579,8 @@ namespace A49AIRevitAssistant.Executor.Commands
 
         private static Reference GetGridRef(Grid grid, Options opts)
         {
-            try
-            {
-                foreach (GeometryObject obj in grid.get_Geometry(opts))
-                {
-                    if (obj is Line ln && ln.Reference != null) return ln.Reference;
-                    if (obj is GeometryInstance gi)
-                        foreach (GeometryObject sub in gi.GetInstanceGeometry())
-                            if (sub is Line sl && sl.Reference != null)
-                                return sl.Reference;
-                }
-            }
-            catch { }
-            return null;
+            try { return new Reference(grid); }
+            catch { return null; }
         }
 
         // ======================================================================

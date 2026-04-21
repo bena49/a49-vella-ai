@@ -55,14 +55,14 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
     }
 
     // =========================================================================
-    //  TaggedRef — a reference paired with its u-position along the wall axis
+    //  TaggedRef
     // =========================================================================
 
     public class TaggedRef
     {
         public Reference Ref { get; set; }
         public double U { get; set; }
-        public string Kind { get; set; } // "endcap" | "opening" | "grid"
+        public string Kind { get; set; }
         public ElementId SourceId { get; set; }
     }
 
@@ -224,57 +224,15 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
                 }
             }
 
-            // Last resort fallback
-            if (startTR == null || endTR == null)
-            {
-                var locCurve = wall.Location as LocationCurve;
-                if (locCurve?.Curve is Line locLine)
-                {
-                    var curveOpts = new Options
-                    {
-                        ComputeReferences = true,
-                        IncludeNonVisibleObjects = true,
-                        DetailLevel = ViewDetailLevel.Fine,
-                    };
-
-                    foreach (GeometryObject obj in wall.get_Geometry(curveOpts))
-                    {
-                        Reference lineRef = null;
-
-                        if (obj is Line ln && ln.Reference != null)
-                            lineRef = ln.Reference;
-                        else if (obj is GeometryInstance gi)
-                            foreach (GeometryObject sub in gi.GetInstanceGeometry())
-                                if (sub is Line sl && sl.Reference != null)
-                                { lineRef = sl.Reference; break; }
-
-                        if (lineRef != null)
-                        {
-                            if (startTR == null)
-                                startTR = new TaggedRef { Ref = lineRef, U = 0, Kind = "endcap", SourceId = wall.Id };
-                            if (endTR == null)
-                                endTR = new TaggedRef { Ref = lineRef, U = len, Kind = "endcap", SourceId = wall.Id };
-                            break;
-                        }
-                    }
-                }
-            }
-
             return (startTR, endTR);
         }
 
-        // ── Grid references - THE FIXED VERSION based on research ──────────────
-        // KEY INSIGHT: You MUST use grid.Curve.Reference and set ComputeReferences=true
-        // This matches how Revit API successfully dimensions grids [citation:3][citation:5]
+        // ── Grid references - WORKING VERSION (preserved from your working code) ──
 
-        /// =========================================================================
-        // THE CORRECTED GRID REFERENCE METHOD
-        // =========================================================================
         public static List<TaggedRef> GetGridRefs(Wall wall, List<Grid> allGrids)
         {
             var result = new List<TaggedRef>();
 
-            // 1. Get the wall's data.
             var wallCurve = GetWallCenterLine(wall);
             if (wallCurve == null) return result;
 
@@ -283,7 +241,6 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             XYZ wallDirection = (wallEnd - wallOrigin).Normalize();
             double wallLength = wallCurve.Length;
 
-            // 2. Set up geometry options correctly.
             var geoOptions = new Options
             {
                 ComputeReferences = true,
@@ -291,24 +248,32 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
                 DetailLevel = ViewDetailLevel.Fine,
             };
 
-            // 3. Loop through each grid.
             foreach (Grid grid in allGrids)
             {
                 try
                 {
-                    // 4. Get the grid's geometric curve.
                     Curve gridCurve = grid.Curve;
                     if (gridCurve == null) continue;
 
                     XYZ gridStart = gridCurve.GetEndPoint(0);
                     XYZ gridEnd = gridCurve.GetEndPoint(1);
-                    XYZ gridDirection = (gridEnd - gridStart).Normalize();
+                    if (gridStart == null || gridEnd == null) continue;
 
-                    // 5. Check if the grid is parallel to the wall.
+                    XYZ gridDirection = (gridEnd - gridStart).Normalize();
+                    if (gridDirection == null || (gridDirection.X == 0 && gridDirection.Y == 0)) continue;
+
+                    // 1. REVISION: Strict Perpendicularity Check
+                    // To prevent "References are no longer parallel" errors, the grid must be 
+                    // almost perfectly perpendicular to the wall direction.
+                    // DotProduct of perpendicular vectors must be near 0.
+                    double parallelCheck = Math.Abs(wallDirection.DotProduct(gridDirection));
+                    if (parallelCheck > 0.0001) continue;
+
+                    // 2. Skip strictly parallel grids (Legacy check, kept for safety)
                     double dotProduct = Math.Abs(wallDirection.X * gridDirection.X + wallDirection.Y * gridDirection.Y);
                     if (dotProduct > 0.9999) continue;
 
-                    // 6. Calculate the intersection point between the wall's and grid's infinite lines.
+                    // 3. Calculate intersection
                     double denominator = (wallDirection.X * gridDirection.Y - wallDirection.Y * gridDirection.X);
                     if (Math.Abs(denominator) < 0.0001) continue;
 
@@ -316,34 +281,19 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
                     double t = (delta.X * gridDirection.Y - delta.Y * gridDirection.X) / denominator;
                     double u = t;
 
-                    // 7. Check if the intersection is within a reasonable distance.
+                    // 4. Boundary Check
                     const double tolerance = 2.0;
                     if (u < -tolerance || u > wallLength + tolerance) continue;
 
-                    // 8. Snap to the exact start or end of the wall.
-                    if (Math.Abs(u) < 0.5) u = 0;
-                    if (Math.Abs(u - wallLength) < 0.5) u = wallLength;
+                    // 5. REVISION: Tighter Snapping
+                    // Snap to wall ends if within 0.25ft (~75mm) to align with architectural standards.
+                    if (Math.Abs(u) < 0.25) u = 0;
+                    if (Math.Abs(u - wallLength) < 0.25) u = wallLength;
 
-                    // 9. --- THE CRITICAL FIX ---
-                    //    Calculate the exact XYZ point of intersection on the grid line.
-                    XYZ intersectionPointOnGrid = gridStart + (u * gridDirection);
-
-                    // 10. Get the specific geometric reference for the grid AT that intersection point.
-                    //     This is what the NewDimension method requires.
-                    Reference gridRef = gridCurve.GetEndPointReference(0); // Fallback, but we'll find the right one.
-
-                    // Find the closest endpoint on the grid curve to the intersection point.
-                    double distToStart = intersectionPointOnGrid.DistanceTo(gridStart);
-                    double distToEnd = intersectionPointOnGrid.DistanceTo(gridEnd);
-
-                    if (distToStart < distToEnd)
-                        gridRef = gridCurve.GetEndPointReference(0);
-                    else
-                        gridRef = gridCurve.GetEndPointReference(1);
-
+                    // 6. Create grid reference
+                    Reference gridRef = new Reference(grid);
                     if (gridRef == null) continue;
 
-                    // 11. Add the valid grid reference.
                     result.Add(new TaggedRef
                     {
                         Ref = gridRef,
@@ -352,64 +302,17 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
                         SourceId = grid.Id
                     });
                 }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Error processing grid: {ex.Message}");
-                }
+                catch { }
             }
 
-            // 12. Remove any duplicate grid references at the same 'U' position.
+            // Remove duplicates
             result = result
                 .GroupBy(r => Math.Round(r.U, 2))
                 .Select(g => g.First())
                 .OrderBy(r => r.U)
                 .ToList();
 
-            // 13. Popup to confirm grids are found.
-            if (result.Count > 0)
-            {
-                string msg = $"Found {result.Count} valid grid references for wall:\n";
-                foreach (var r in result) msg += $"  Grid {r.SourceId}: U={r.U:F2} ft\n";
-                TaskDialog.Show("Grid Detection Success", msg);
-            }
-            else
-            {
-                TaskDialog.Show("Grid Detection", "No valid grid references could be created for this wall.");
-            }
-
             return result;
-        }
-
-        // CRITICAL: This method gets a valid grid reference that NewDimension will accept
-        private static Reference GetValidGridReference(Grid grid, Options opts)
-        {
-            try
-            {
-                // Method 1: Use the grid's Curve reference directly [citation:5][citation:8]
-                // This is the most reliable method according to Revit API docs
-                Curve curve = grid.Curve;
-                if (curve != null && curve.Reference != null)
-                    return curve.Reference;
-
-                // Method 2: Get from geometry with ComputeReferences=true [citation:3]
-                GeometryElement geom = grid.get_Geometry(opts);
-                foreach (GeometryObject obj in geom)
-                {
-                    if (obj is Line line && line.Reference != null)
-                        return line.Reference;
-
-                    if (obj is GeometryInstance instance)
-                    {
-                        foreach (GeometryObject subObj in instance.GetInstanceGeometry())
-                        {
-                            if (subObj is Line subLine && subLine.Reference != null)
-                                return subLine.Reference;
-                        }
-                    }
-                }
-            }
-            catch { }
-            return null;
         }
 
         // ── Opening edge references ──────────────────────────────────────────
@@ -496,17 +399,16 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             return result;
         }
 
-        // ── Merge: replace end-caps with nearby grids ────────────────────────
-
-        // ── Merge: replace end-caps with nearby grids ────────────────────────
+        // ── Merge: prioritize grids over wall ends at same position ────────────────────────
 
         public static List<TaggedRef> MergeEndCapsWithGrids(
-            TaggedRef startCap, TaggedRef endCap,
-            List<TaggedRef> gridRefs,
-            double searchDistance = 10.0)
+    TaggedRef startCap, TaggedRef endCap,
+    List<TaggedRef> gridRefs,
+    double searchDistance = 10.0)
         {
             var result = new List<TaggedRef>();
 
+            // 1. Safety check: if no grids, just return the wall endcaps
             if (gridRefs == null || gridRefs.Count == 0)
             {
                 result.Add(startCap);
@@ -514,84 +416,82 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
                 return result;
             }
 
-            // Find grids at or near the start and end positions
-            TaggedRef startGrid = null;
-            TaggedRef endGrid = null;
+            // 2. REVISION: Tight tolerance for conditional termination
+            // This solves the Pink Dot (Grid at face) and Brown Dot (Wall corner) logic.
+            const double snapTol = 0.1; // approx 30mm
 
-            double startDist = searchDistance;
-            double endDist = searchDistance;
-
-            foreach (var grid in gridRefs)
+            // Start Terminus Logic
+            var startGrid = gridRefs.FirstOrDefault(g => Math.Abs(g.U - startCap.U) < snapTol);
+            if (startGrid != null)
             {
-                double distToStart = Math.Abs(grid.U - startCap.U);
-                double distToEnd = Math.Abs(grid.U - endCap.U);
-
-                if (distToStart < startDist)
-                {
-                    startDist = distToStart;
-                    startGrid = grid;
-                }
-
-                if (distToEnd < endDist)
-                {
-                    endDist = distToEnd;  // FIXED: was "endDist = endDist;" which did nothing
-                    endGrid = grid;
-                }
+                // Grid is effectively AT the wall face -> Snap to Grid (Pink Dot solved)
+                result.Add(startGrid);
+            }
+            else
+            {
+                // No grid at the face -> Snap to Wall Exterior Corner (Brown Dot solved)
+                result.Add(startCap);
             }
 
-            // CRITICAL: Use grid if found, even at same position
-            result.Add(startGrid ?? startCap);
-            result.Add(endGrid ?? endCap);
+            // 3. Add all interior grids (strictly between the wall ends)
+            double minU = startCap.U + snapTol;
+            double maxU = endCap.U - snapTol;
+            var interiorGrids = gridRefs.Where(g => g.U > minU && g.U < maxU);
+            result.AddRange(interiorGrids);
 
-            // Add interior grids
-            double minU = result.Min(r => r.U);
-            double maxU = result.Max(r => r.U);
-
-            foreach (var grid in gridRefs)
+            // End Terminus Logic
+            var endGrid = gridRefs.FirstOrDefault(g => Math.Abs(g.U - endCap.U) < snapTol);
+            if (endGrid != null)
             {
-                if ((startGrid != null && grid.U == startGrid.U) ||
-                    (endGrid != null && grid.U == endGrid.U))
-                    continue;
-
-                if (grid.U > minU + 0.01 && grid.U < maxU - 0.01)
-                    result.Add(grid);
+                // Grid is at the face -> Snap to Grid
+                result.Add(endGrid);
+            }
+            else
+            {
+                // No grid -> Snap to Wall Exterior Corner
+                result.Add(endCap);
             }
 
-            result = result.OrderBy(r => r.U).ToList();
-            return result;
+            // 4. Final sorting and deduplication by position
+            return result
+                .GroupBy(r => Math.Round(r.U, 3))
+                .Select(g => g.First())
+                .OrderBy(r => r.U)
+                .ToList();
         }
 
-        // ── Build ordered ReferenceArray with grid priority ───────────────────
+        // ── Build ordered ReferenceArray with small segment filtering ───────────────────
 
-        public static ReferenceArray BuildOrderedRefArray(
-            List<TaggedRef> taggedRefs, double posTol = 0.05)
+        public static ReferenceArray BuildOrderedRefArray(List<TaggedRef> taggedRefs, double posTol = 0.25) // Increased tolerance
         {
             var sorted = taggedRefs.OrderBy(t => t.U).ToList();
-
-            // Deduplicate - when grid and endcap share position, KEEP GRID
             var deduped = new List<TaggedRef>();
+
             foreach (var item in sorted)
             {
+                // Find existing ref within tolerance
                 var existing = deduped.FirstOrDefault(e => Math.Abs(e.U - item.U) < posTol);
+
                 if (existing == null)
                 {
                     deduped.Add(item);
                 }
-                else if (item.Kind == "grid" && existing.Kind != "grid")
+                else
                 {
-                    // Replace endcap with grid at same position
-                    deduped.Remove(existing);
-                    deduped.Add(item);
+                    // CRITICAL: If we have a Grid and a Wall endcap at the same spot, 
+                    // ALWAYS keep only the Grid. This prevents the '0' dimension.
+                    if (item.Kind == "grid" && existing.Kind != "grid")
+                    {
+                        deduped.Remove(existing);
+                        deduped.Add(item);
+                    }
                 }
             }
-
-            deduped = deduped.OrderBy(t => t.U).ToList();
 
             var ra = new ReferenceArray();
             foreach (var item in deduped)
             {
-                if (item.Ref != null)
-                    ra.Append(item.Ref);
+                if (item.Ref != null) ra.Append(item.Ref);
             }
             return ra;
         }
@@ -616,15 +516,10 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             double totalOffset = halfThick + offsetDistance;
             XYZ offXYZ = offsetDir * totalOffset;
 
-            // Minimal padding for grid-terminated dimensions
-            var minRef = allRefs.OrderBy(r => r.U).First();
-            var maxRef = allRefs.OrderByDescending(r => r.U).First();
+            const double pad = 0.33;
 
-            double startPad = (minRef.Kind == "grid") ? 0.08 : 0.33;
-            double endPad = (maxRef.Kind == "grid") ? 0.08 : 0.33;
-
-            XYZ dimStart = origin + wallDir * (minU - startPad) + offXYZ;
-            XYZ dimEnd = origin + wallDir * (maxU + endPad) + offXYZ;
+            XYZ dimStart = origin + wallDir * (minU - pad) + offXYZ;
+            XYZ dimEnd = origin + wallDir * (maxU + pad) + offXYZ;
 
             double z = cl.GetEndPoint(0).Z;
             dimStart = new XYZ(dimStart.X, dimStart.Y, z);

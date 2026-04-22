@@ -505,8 +505,8 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             XYZ origin = cl.GetEndPoint(0);
             XYZ wallDir = (cl.GetEndPoint(1) - origin).Normalize();
 
-            double halfThick = wall.Width / 2.0;
-            double totalOffset = halfThick + offsetDistance;
+            // REVISION: Use a standard offset from the centerline to keep strings parallel
+            double totalOffset = (wall.Width / 2.0) + offsetDistance;
             XYZ offXYZ = offsetDir * totalOffset;
 
             const double pad = 0.33;
@@ -514,7 +514,8 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             XYZ dimStart = origin + wallDir * (minU - pad) + offXYZ;
             XYZ dimEnd = origin + wallDir * (maxU + pad) + offXYZ;
 
-            double z = cl.GetEndPoint(0).Z;
+            // CRITICAL: Force Z to the view origin to kill "Non-Parallel" errors
+            double z = wall.Document.ActiveView.Origin.Z;
             dimStart = new XYZ(dimStart.X, dimStart.Y, z);
             dimEnd = new XYZ(dimEnd.X, dimEnd.Y, z);
 

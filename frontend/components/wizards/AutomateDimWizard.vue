@@ -97,15 +97,20 @@
           <div class="text-[10px] uppercase tracking-wider text-white/50 font-bold mb-1">Layers (Exterior Stack)</div>
           
           <label class="flex items-center justify-between cursor-pointer py-1" @click="includeTotal = !includeTotal">
-            <span class="text-xs text-white/70">Layer 1: Overall (Total)</span>
-            <input type="checkbox" v-model="includeTotal" class="hidden" />
+            <div class="flex items-center gap-2">
+              <Icon name="lucide:layers" class="text-sm text-[#00BCD4]" />
+              <span class="text-xs">Layer 1: Overall (Total)</span>
+            </div>
             <div :class="includeTotal ? 'bg-[#00BCD4]' : 'bg-white/20'" class="w-8 h-5 rounded-full transition-all flex items-center px-0.5">
               <div :class="includeTotal ? 'translate-x-3' : 'translate-x-0'" class="w-4 h-4 rounded-full bg-white shadow-sm transition-transform"></div>
             </div>
           </label>
 
           <label class="flex items-center justify-between cursor-pointer py-1" @click="includeGridsOnly = !includeGridsOnly">
-            <span class="text-xs text-white/70">Layer 2: Grid-to-Grid</span>
+            <div class="flex items-center gap-2">
+              <Icon name="lucide:grid-3x3" class="text-sm text-[#00BCD4]" />
+              <span class="text-xs">Layer 2: Grid-to-Grid</span>
+            </div>
             <div :class="includeGridsOnly ? 'bg-[#00BCD4]' : 'bg-white/20'" class="w-8 h-5 rounded-full transition-all flex items-center px-0.5">
               <div :class="includeGridsOnly ? 'translate-x-3' : 'translate-x-0'" class="w-4 h-4 rounded-full bg-white shadow-sm transition-transform"></div>
             </div>
@@ -261,6 +266,8 @@ const activeStages     = ref([]);
 const activeLevels     = ref([]);
 const selectedViewIds  = ref([]);
 const isDimTypeOpen    = ref(false);
+const includeTotal     = ref(true); // Layer 1
+const includeGridsOnly = ref(true); // Layer 2
 
 // ── Computed ─────────────────────────────────────────────────────────────────
 const availableLevels = computed(() => {

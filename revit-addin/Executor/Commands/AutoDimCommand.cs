@@ -118,44 +118,37 @@ namespace A49AIRevitAssistant.Executor.Commands
                         }
 
                         // =========================================================
-                        // PASS 2: Perpendicular location strings - REVISED
+                        // PASS 2: Perpendicular location strings
                         // =========================================================
 
-                        // Layer 1: Overall/Total Dimension (Outermost) - FURTHEST OUT
+                        double baseOffsetFt = settings.OffsetDistance;
+                        double baseInsetFt = settings.InsetDistance;
+
+                        // Layer 1: Overall/Total Dimension (Outermost)
                         if (settings.IncludeTotalString)
                         {
-                            double originalOffset = settings.OffsetDistance;
-                            settings.OffsetDistance = originalOffset * 4.0; // 4x further out for clear separation
-
-                            var pTotal = Pass2(allWalls, allGrids, view, dimType, settings, true, false);
+                            double totalOffset = baseOffsetFt * 3.5;
+                            var pTotal = Pass2(allWalls, allGrids, view, dimType, settings, true, false, totalOffset);
                             succeeded += pTotal.s;
                             skipped += pTotal.sk;
                             failed += pTotal.f;
                             allErrors.AddRange(pTotal.errors);
                             allSkipReasons.AddRange(pTotal.skips);
-
-                            settings.OffsetDistance = originalOffset;
                         }
 
-                        // Layer 2: Grid-to-Grid Only (Middle) - ONLY if more than 2 grids
+                        // Layer 2: Grid-to-Grid Only (Middle)
                         if (settings.IncludeGridsOnlyString)
                         {
-                            // Count unique grid lines that intersect the building
                             int gridCount = allGrids.Count;
-
                             if (gridCount > 2)
                             {
-                                double originalOffset = settings.OffsetDistance;
-                                settings.OffsetDistance = originalOffset * 2.0; // 2x offset for middle layer
-
-                                var pGrids = Pass2(allWalls, allGrids, view, dimType, settings, false, true);
+                                double gridOffset = baseOffsetFt * 2.0;
+                                var pGrids = Pass2(allWalls, allGrids, view, dimType, settings, false, true, gridOffset);
                                 succeeded += pGrids.s;
                                 skipped += pGrids.sk;
                                 failed += pGrids.f;
                                 allErrors.AddRange(pGrids.errors);
                                 allSkipReasons.AddRange(pGrids.skips);
-
-                                settings.OffsetDistance = originalOffset;
                             }
                             else
                             {
@@ -163,14 +156,12 @@ namespace A49AIRevitAssistant.Executor.Commands
                             }
                         }
 
-                        // Layer 3: Detail Perimeter (Innermost) - Use INSET distance
-                        double originalOffsetForDetail = settings.OffsetDistance;
-                        settings.OffsetDistance = settings.InsetDistance; // Use inset_mm for interior strings
-                        var p2 = Pass2(allWalls, allGrids, view, dimType, settings, false, false);
+                        // Layer 3: Detail Perimeter (Innermost)
+                        double detailOffset = baseInsetFt;
+                        var p2 = Pass2(allWalls, allGrids, view, dimType, settings, false, false, detailOffset);
                         succeeded += p2.s; skipped += p2.sk; failed += p2.f;
                         allErrors.AddRange(p2.errors);
                         allSkipReasons.AddRange(p2.skips);
-                        settings.OffsetDistance = originalOffsetForDetail;
 
                         if (failed > 0 && succeeded == 0) tx.RollBack();
                         else tx.Commit();
@@ -201,7 +192,7 @@ namespace A49AIRevitAssistant.Executor.Commands
         }
 
         // ======================================================================
-        //  PASS 1 helpers (unchanged from original)
+        //  PASS 1 helpers
         // ======================================================================
 
         private DimResult DimensionSingleWall(Wall wall, DimContext context)
@@ -398,7 +389,7 @@ namespace A49AIRevitAssistant.Executor.Commands
         }
 
         // ======================================================================
-        //  PASS 2 — REVISED AND SIMPLIFIED
+        //  PASS 2 — Perpendicular location strings
         // ======================================================================
 
         private class RefEntry
@@ -413,7 +404,7 @@ namespace A49AIRevitAssistant.Executor.Commands
         private (int s, int sk, int f, List<string> errors, List<string> skips)
             Pass2(List<Wall> allWalls, List<Grid> allGrids,
                 View view, DimensionType dimType, DimSettings settings,
-                bool isTotalOnly, bool isGridOnly)
+                bool isTotalOnly, bool isGridOnly, double explicitOffsetFt)
         {
             int s = 0, sk = 0, f = 0;
             var errors = new List<string>();
@@ -678,9 +669,8 @@ namespace A49AIRevitAssistant.Executor.Commands
                     continue;
                 }
 
-                // Calculate offset position
-                double finalOffset = settings.OffsetDistance; // Already in feet
-                double offset = extremeLimit + (normal.X + normal.Y > 0 ? finalOffset : -finalOffset);
+                // Calculate offset position using the explicit offset
+                double offset = extremeLimit + (normal.X + normal.Y > 0 ? explicitOffsetFt : -explicitOffsetFt);
 
                 // Use envelope bounds
                 double minU = (Math.Abs(normal.Y) > 0.9) ? envelope.Min.X : envelope.Min.Y;
@@ -715,7 +705,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                     if (dim != null)
                     {
                         s++;
-                        System.Diagnostics.Debug.WriteLine($"✅ Created {layerName} dimension on side {normal} with {ra.Size} refs");
+                        System.Diagnostics.Debug.WriteLine($"✅ Created {layerName} dimension on side {normal} with offset {explicitOffsetFt}ft, {ra.Size} refs");
                     }
                 }
                 catch (Exception ex)

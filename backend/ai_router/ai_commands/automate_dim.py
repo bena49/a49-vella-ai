@@ -18,6 +18,8 @@ def handle_automate_dim(request):
         - view_ids:           list of int (Revit ElementId values)
         - include_openings:   bool (default True)
         - include_grids:      bool (default True)
+        - include_total:      bool (Layer 1)
+        - include_grids_only: bool (Layer 2)
         - offset_mm:          int  (default 800)
         - smart_exterior:     bool (default True)
         - dim_type_name:      str  (e.g. "A49_Linear")

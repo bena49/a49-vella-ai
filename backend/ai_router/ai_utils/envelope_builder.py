@@ -177,6 +177,8 @@ def envelope_automate_dim(
         view_ids:         list of int Revit ElementId values
         include_openings: include door/window edge references
         include_grids:    include structural grid references
+        include_total:    include overall dimension (Layer 1)
+        include_grids_only: include grid-only dimension layer (Layer 2)
         offset_mm:        dimension line offset from wall face (mm)
         smart_exterior:   exterior walls dim outward, interior on normal side
         dim_type_name:    name of DimensionType in Revit project (empty = auto)
@@ -187,7 +189,7 @@ def envelope_automate_dim(
             "view_ids":         view_ids,
             "include_openings": include_openings,
             "include_grids":    include_grids,
-            "include_total": include_total,           # Send to C#
+            "include_total":    include_total,           # Send to C#
             "include_grids_only": include_grids_only, # Send to C#
             "offset_mm":        offset_mm,
             "inset_mm":         inset_mm,

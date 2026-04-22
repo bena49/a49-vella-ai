@@ -401,21 +401,24 @@ namespace A49AIRevitAssistant.Executor.Commands
             foreach (XYZ normal in sides)
             {
 
-        // 2a. GRID HEAD DETECTION: Only dimension sides with Grid Bubbles for Grid/Total layers
-        if (isGridOnly || isTotalOnly)
-        {
-            // Standard: Top (BasisY) and Left (-BasisX) are always dimensioned.
-            // For Bottom (-BasisY) and Right (BasisX), check if bubbles are actually visible.
-            bool isTopOrLeft = normal.Y > 0.9 || normal.X < -0.9;
-            bool hasBubbles = allGrids.Any(g => 
-                g.IsBubbleVisibleInView(DatumEnds.End0, view) || 
-                g.IsBubbleVisibleInView(DatumEnds.End1, view));
+                // 2a. REFINED GRID HEAD DETECTION: Detect bubbles on this specific side
+                if (isGridOnly || isTotalOnly)
+                {
+                    // Find if ANY grid that is perpendicular to this side has a bubble visible on this side
+                    bool sideHasBubbles = allGrids.Any(g => {
+                        Curve c = g.Curve;
+                        // Get the end of the grid closer to our 'normal' direction
+                        int endIdx = (c.GetEndPoint(1).DotProduct(normal) > c.GetEndPoint(0).DotProduct(normal)) ? 1 : 0;
+                        return g.IsBubbleVisibleInView((endIdx == 0 ? DatumEnds.End0 : DatumEnds.End1), view);
+                    });
 
-            if (!isTopOrLeft && !hasBubbles) continue; 
-        }
+                    // Professional Standard: Always keep Top/Left, but only keep Bottom/Right if Bubbles exist
+                    bool isTopOrLeft = normal.Y > 0.9 || normal.X < -0.9;
+                    if (!isTopOrLeft && !sideHasBubbles) continue;
+                }
 
-        // 'dir' is the direction ALONG the dimension string
-        XYZ dir = new XYZ(normal.Y, -normal.X, 0).Normalize();
+                // 'dir' is the direction ALONG the dimension string
+                XYZ dir = new XYZ(normal.Y, -normal.X, 0).Normalize();
 
         double extremeLimit = (Math.Abs(normal.X) > 0.9)
             ? (normal.X > 0 ? envelope.Max.X : envelope.Min.X)
@@ -485,66 +488,70 @@ namespace A49AIRevitAssistant.Executor.Commands
                 }
 
                 // 4. Add Grids (Strict Parallel Check)
-                if (!isTotalOnly) // Overall string usually skips intermediate grids
-        {
-            foreach (Grid grid in allGrids)
-            {
-                try
+                // REVISION: If we are in 'Total Only' mode, we MUST NOT add intermediate grids
+                if (!isTotalOnly)
                 {
-                    XYZ gDir = (grid.Curve.GetEndPoint(1) - grid.Curve.GetEndPoint(0)).Normalize();
-                    
-                    // REVISION: Tighten tolerance to 0.0001 to prevent Non-Parallel errors
-                    if (Math.Abs(gDir.DotProduct(dir)) > 0.0001) continue; 
-
-                    XYZ gPt = grid.Curve.Evaluate(0.5, true);
-                    double gPos = gPt.DotProduct(dir);
-
-                    if (!entries.Any(e => Math.Abs(e.Pos - gPos) < 0.05))
+                    foreach (Grid grid in allGrids)
                     {
-                        entries.Add(new RefEntry { 
-                            Ref = new Reference(grid), 
-                            Pos = gPos, 
-                            Kind = "grid", 
-                            Pt = gPt 
-                        });
+                        try
+                        {
+                            XYZ gDir = (grid.Curve.GetEndPoint(1) - grid.Curve.GetEndPoint(0)).Normalize();
+                            if (Math.Abs(gDir.DotProduct(dir)) > 0.0001) continue;
+
+                            XYZ gPt = grid.Curve.Evaluate(0.5, true);
+                            double gPos = gPt.DotProduct(dir);
+
+                            if (!entries.Any(e => Math.Abs(e.Pos - gPos) < 0.05))
+                            {
+                                entries.Add(new RefEntry
+                                {
+                                    Ref = new Reference(grid),
+                                    Pos = gPos,
+                                    Kind = "grid",
+                                    Pt = gPt
+                                });
+                            }
+                        }
+                        catch { }
                     }
                 }
-                catch { }
-            }
-        }
 
-        // 5. Build the Dimension Line
-        var sorted = entries.OrderBy(e => e.Pos).ToList();
-        if (sorted.Count < 2) continue;
+                // 5. Build the Dimension Line
+                var sorted = entries.OrderBy(e => e.Pos).ToList();
+                if (sorted.Count < 2) continue;
 
-        // --- Filter for total string ---
-        if (isTotalOnly)
-        {
-            // Keep only the first and last entry to create an "Overall" dimension
-            var totalOnlyEntries = new List<RefEntry> { sorted.First(), sorted.Last() };
-            sorted = totalOnlyEntries;
-        }
+                // REVISION: Mutually Exclusive Layer Logic
+                if (isTotalOnly)
+                {
+                    // Layer 1: Strictly ONLY the absolute start and end
+                    sorted = new List<RefEntry> { sorted.First(), sorted.Last() };
+                }
+                else if (isGridOnly)
+                {
+                    // Layer 2: Strictly ONLY Grid references
+                    sorted = sorted.Where(e => e.Kind == "grid").ToList();
+                    if (sorted.Count < 2) continue;
+                }
 
-        ReferenceArray ra = new ReferenceArray();
-        foreach (var e in sorted) ra.Append(e.Ref);
+                ReferenceArray ra = new ReferenceArray();
+                foreach (var e in sorted) ra.Append(e.Ref);
 
-                // 6. THE OFFSET STACK: Place string outside the envelope based on layer
-                // Layer 1 (Total): 3x offset | Layer 2 (Grids): 2x offset | Layer 3 (Detail): 1x offset
+                // 6. THE OFFSET STACK & BUTT-JOINT FIX
                 double layerMult = isTotalOnly ? 3.0 : (isGridOnly ? 2.0 : 1.0);
                 double currentOffsetDist = settings.OffsetDistance * layerMult;
-
                 double offset = extremeLimit + (normal.X + normal.Y > 0 ? currentOffsetDist : -currentOffsetDist);
 
-                // REVISION: Use Envelope coordinates for p1/p2 to bridge the "Butt-Joint" gap
+                // Use Envelope bounds to bridge butt-joints
                 double minU = (Math.Abs(normal.Y) > 0.9) ? envelope.Min.X : envelope.Min.Y;
                 double maxU = (Math.Abs(normal.Y) > 0.9) ? envelope.Max.X : envelope.Max.Y;
 
+                // Force perfectly parallel Z to kill the "Non-parallel" error
                 double viewZ = view.Origin.Z;
                 XYZ p1 = (Math.Abs(normal.X) > 0.9) ? new XYZ(offset, minU, viewZ) : new XYZ(minU, offset, viewZ);
                 XYZ p2 = (Math.Abs(normal.X) > 0.9) ? new XYZ(offset, maxU, viewZ) : new XYZ(maxU, offset, viewZ);
 
                 try
-        {
+                {
             Dimension dim = _doc.Create.NewDimension(view, Line.CreateBound(p1, p2), ra, dimType);
             if (dim != null) s++;
         }

@@ -38,14 +38,16 @@ def handle_automate_dim(request):
     reset_pending(request)
 
     env = envelope_automate_dim(
-        view_ids=view_ids,
-        include_openings=include_openings,
-        include_grids=include_grids,
-        offset_mm=offset_mm,
-        inset_mm=inset_mm,
-        smart_exterior=smart_exterior,
-        dim_type_name=dim_type_name,
-    )
+    view_ids=view_ids,
+    include_openings=include_openings,
+    include_grids=include_grids,
+    include_total=request.data.get("include_total", True),      
+    include_grids_only=request.data.get("include_grids_only", True),
+    offset_mm=offset_mm,
+    inset_mm=inset_mm,
+    smart_exterior=smart_exterior,
+    dim_type_name=dim_type_name,
+)
     return send_envelope(request, env)
 
 

@@ -92,6 +92,26 @@
           </label>
         </div>
 
+        <!-- DIMENSION LAYER SELECTION -->
+        <div class="space-y-2 bg-black/10 border border-white/10 rounded-xl p-3">
+          <div class="text-[10px] uppercase tracking-wider text-white/50 font-bold mb-1">Layers (Exterior Stack)</div>
+          
+          <label class="flex items-center justify-between cursor-pointer py-1" @click="includeTotal = !includeTotal">
+            <span class="text-xs text-white/70">Layer 1: Overall (Total)</span>
+            <input type="checkbox" v-model="includeTotal" class="hidden" />
+            <div :class="includeTotal ? 'bg-[#00BCD4]' : 'bg-white/20'" class="w-8 h-5 rounded-full transition-all flex items-center px-0.5">
+              <div :class="includeTotal ? 'translate-x-3' : 'translate-x-0'" class="w-4 h-4 rounded-full bg-white shadow-sm transition-transform"></div>
+            </div>
+          </label>
+
+          <label class="flex items-center justify-between cursor-pointer py-1" @click="includeGridsOnly = !includeGridsOnly">
+            <span class="text-xs text-white/70">Layer 2: Grid-to-Grid</span>
+            <div :class="includeGridsOnly ? 'bg-[#00BCD4]' : 'bg-white/20'" class="w-8 h-5 rounded-full transition-all flex items-center px-0.5">
+              <div :class="includeGridsOnly ? 'translate-x-3' : 'translate-x-0'" class="w-4 h-4 rounded-full bg-white shadow-sm transition-transform"></div>
+            </div>
+          </label>
+        </div>
+
         <!-- OFFSET FROM WALL FACE -->
         <div class="bg-black/10 border border-white/10 rounded-xl p-3">
           <div class="flex justify-between items-center mb-2">
@@ -311,13 +331,15 @@ function toggleSelectAll() {
 function submit() {
   if (!canSubmit.value) return;
   emit('submit', {
-    view_ids:         selectedViewIds.value,
-    include_openings: includeOpenings.value,
-    include_grids:    includeGrids.value,
-    offset_mm:        offsetMm.value,
-    inset_mm:         insetMm.value,
-    smart_exterior:   smartExterior.value,
-    dim_type_name:    selectedDimType.value,
+    view_ids:           selectedViewIds.value,
+    include_openings:   includeOpenings.value,
+    include_grids:      includeGrids.value,
+    include_total:      includeTotal.value,      // New
+    include_grids_only: includeGridsOnly.value, // New
+    offset_mm:          offsetMm.value,
+    inset_mm:           insetMm.value,
+    smart_exterior:     smartExterior.value,
+    dim_type_name:      selectedDimType.value,
   });
 }
 

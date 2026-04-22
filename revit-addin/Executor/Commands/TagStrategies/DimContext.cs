@@ -1,4 +1,7 @@
-﻿using Autodesk.Revit.DB;
+﻿// ============================================================================
+// A49AIRevitAssistant/Executor/Commands/TagStrategies/DimContext.cs
+// ============================================================================
+using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Architecture;
 using Autodesk.Revit.UI;
 using System;
@@ -19,6 +22,9 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
         public bool IncludeGrids { get; set; } = true;
         public double OffsetDistance { get; set; } = 2.625;
         public bool SmartExteriorPlacement { get; set; } = true;
+
+        public bool IsTotalOnly { get; set; } = false;
+        public bool IsGridOnly { get; set; } = false;
     }
 
     // =========================================================================
@@ -257,42 +263,29 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
 
                     XYZ gridStart = gridCurve.GetEndPoint(0);
                     XYZ gridEnd = gridCurve.GetEndPoint(1);
-                    if (gridStart == null || gridEnd == null) continue;
 
+                    // REVISION: Vector-based parallel check (The "Non-Parallel" Killer)
                     XYZ gridDirection = (gridEnd - gridStart).Normalize();
-                    if (gridDirection == null || (gridDirection.X == 0 && gridDirection.Y == 0)) continue;
-
-                    // 1. REVISION: Strict Perpendicularity Check
-                    // To prevent "References are no longer parallel" errors, the grid must be 
-                    // almost perfectly perpendicular to the wall direction.
-                    // DotProduct of perpendicular vectors must be near 0.
                     double parallelCheck = Math.Abs(wallDirection.DotProduct(gridDirection));
-                    if (parallelCheck > 0.0001) continue;
 
-                    // 2. Skip strictly parallel grids (Legacy check, kept for safety)
-                    double dotProduct = Math.Abs(wallDirection.X * gridDirection.X + wallDirection.Y * gridDirection.Y);
-                    if (dotProduct > 0.9999) continue;
+                    // If the grid isn't almost perfectly perpendicular (Dot ~ 0), skip it.
+                    // We use an even tighter tolerance here.
+                    if (parallelCheck > 0.00005) continue;
 
-                    // 3. Calculate intersection
+                    // Intersection calculation...
                     double denominator = (wallDirection.X * gridDirection.Y - wallDirection.Y * gridDirection.X);
                     if (Math.Abs(denominator) < 0.0001) continue;
 
                     XYZ delta = gridStart - wallOrigin;
-                    double t = (delta.X * gridDirection.Y - delta.Y * gridDirection.X) / denominator;
-                    double u = t;
+                    double u = (delta.X * gridDirection.Y - delta.Y * gridDirection.X) / denominator;
 
-                    // 4. Boundary Check
-                    const double tolerance = 2.0;
-                    if (u < -tolerance || u > wallLength + tolerance) continue;
-
-                    // 5. REVISION: Tighter Snapping
-                    // Snap to wall ends if within 0.25ft (~75mm) to align with architectural standards.
+                    // Boundary + Snap Logic...
+                    if (u < -2.0 || u > wallLength + 2.0) continue;
                     if (Math.Abs(u) < 0.25) u = 0;
                     if (Math.Abs(u - wallLength) < 0.25) u = wallLength;
 
-                    // 6. Create grid reference
+                    // CRITICAL: Ensure the reference is obtained directly from the grid object
                     Reference gridRef = new Reference(grid);
-                    if (gridRef == null) continue;
 
                     result.Add(new TaggedRef
                     {
@@ -402,10 +395,10 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
         // ── Merge: prioritize grids over wall ends at same position ────────────────────────
 
         public static List<TaggedRef> MergeEndCapsWithGrids(
-    TaggedRef startCap, TaggedRef endCap,
-    List<TaggedRef> gridRefs,
-    double searchDistance = 10.0)
-        {
+        TaggedRef startCap, TaggedRef endCap,
+        List<TaggedRef> gridRefs,
+        double searchDistance = 10.0)
+            {
             var result = new List<TaggedRef>();
 
             // 1. Safety check: if no grids, just return the wall endcaps
@@ -527,6 +520,31 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
 
             if (dimStart.DistanceTo(dimEnd) < 0.01) return null;
             return Line.CreateBound(dimStart, dimEnd);
+        }
+
+        // ── Building Envelope Calculator ─────────────────────────────────────────────
+        public static BoundingBoxXYZ GetProjectEnvelope(List<Wall> walls)
+        {
+            if (walls.Count == 0) return null;
+
+            double minX = double.MaxValue, minY = double.MaxValue;
+            double maxX = double.MinValue, maxY = double.MinValue;
+
+            foreach (var wall in walls)
+            {
+                var bb = wall.get_BoundingBox(null);
+                if (bb == null) continue;
+
+                if (bb.Min.X < minX) minX = bb.Min.X;
+                if (bb.Min.Y < minY) minY = bb.Min.Y;
+                if (bb.Max.X > maxX) maxX = bb.Max.X;
+                if (bb.Max.Y > maxY) maxY = bb.Max.Y;
+            }
+
+            var result = new BoundingBoxXYZ();
+            result.Min = new XYZ(minX, minY, 0);
+            result.Max = new XYZ(maxX, maxY, 0);
+            return result;
         }
     }
 }

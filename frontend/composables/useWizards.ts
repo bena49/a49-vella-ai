@@ -146,6 +146,8 @@ export function useWizards(
       view_ids:         payload.view_ids,
       include_openings: payload.include_openings,
       include_grids:    payload.include_grids,
+      include_total: payload.include_total,           // Add this
+      include_grids_only: payload.include_grids_only, // Add this
       offset_mm:        payload.offset_mm,
       inset_mm:         payload.inset_mm ?? 1000,
       smart_exterior:   payload.smart_exterior,

@@ -2,6 +2,8 @@
 # Automate Dimensioning command handler.
 # Dispatches to the strategy-based C# orchestrator (AutoDimCommand).
 
+from urllib import request
+
 from rest_framework.response import Response
 
 from ..ai_core.session_manager import reset_pending, debug_session
@@ -25,6 +27,10 @@ def handle_automate_dim(request):
     view_ids        = request.data.get("view_ids", [])
     include_openings = request.data.get("include_openings", True)
     include_grids   = request.data.get("include_grids", True)
+
+    include_total = request.data.get("include_total", True)
+    include_grids_only = request.data.get("include_grids_only", True)
+
     offset_mm       = request.data.get("offset_mm", 800)
     inset_mm        = request.data.get("inset_mm", 1000)
     smart_exterior  = request.data.get("smart_exterior", True)
@@ -38,15 +44,15 @@ def handle_automate_dim(request):
     reset_pending(request)
 
     env = envelope_automate_dim(
-    view_ids=view_ids,
-    include_openings=include_openings,
-    include_grids=include_grids,
-    include_total=request.data.get("include_total", True),      
-    include_grids_only=request.data.get("include_grids_only", True),
-    offset_mm=offset_mm,
-    inset_mm=inset_mm,
-    smart_exterior=smart_exterior,
-    dim_type_name=dim_type_name,
+        view_ids=view_ids,
+        include_openings=include_openings,
+        include_grids=include_grids,
+        include_total=include_total,       # Pass to envelope
+        include_grids_only=include_grids_only, # Pass to envelope
+        offset_mm=offset_mm,
+        inset_mm=inset_mm,
+        smart_exterior=smart_exterior,
+        dim_type_name=dim_type_name,
 )
     return send_envelope(request, env)
 

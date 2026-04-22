@@ -117,35 +117,69 @@ namespace A49AIRevitAssistant.Executor.Commands
                             { skipped += group.Count; allSkipReasons.Add($"P1 {primary.Id}: {r.SkipReason}"); }
                         }
 
-                        // PASS 2: Perpendicular location strings
-                        // Layer 1: Overall/Total Dimension (Outermost)
+                        // =========================================================
+                        // PASS 2: Perpendicular location strings - REVISED
+                        // =========================================================
+
+                        // Layer 1: Overall/Total Dimension (Outermost) - FURTHEST OUT
                         if (settings.IncludeTotalString)
                         {
+                            double originalOffset = settings.OffsetDistance;
+                            settings.OffsetDistance = originalOffset * 4.0; // 4x further out for clear separation
+
                             var pTotal = Pass2(allWalls, allGrids, view, dimType, settings, true, false);
                             succeeded += pTotal.s;
+                            skipped += pTotal.sk;
+                            failed += pTotal.f;
+                            allErrors.AddRange(pTotal.errors);
+                            allSkipReasons.AddRange(pTotal.skips);
+
+                            settings.OffsetDistance = originalOffset;
                         }
 
-                        // Layer 2: Grid-to-Grid Only (Middle)
-                        if (settings.IncludeGridsOnlyString) // Ensure this is in your DimSettings
+                        // Layer 2: Grid-to-Grid Only (Middle) - ONLY if more than 2 grids
+                        if (settings.IncludeGridsOnlyString)
                         {
-                            var pGrids = Pass2(allWalls, allGrids, view, dimType, settings, false, true);
-                            succeeded += pGrids.s;
+                            // Count unique grid lines that intersect the building
+                            int gridCount = allGrids.Count;
+
+                            if (gridCount > 2)
+                            {
+                                double originalOffset = settings.OffsetDistance;
+                                settings.OffsetDistance = originalOffset * 2.0; // 2x offset for middle layer
+
+                                var pGrids = Pass2(allWalls, allGrids, view, dimType, settings, false, true);
+                                succeeded += pGrids.s;
+                                skipped += pGrids.sk;
+                                failed += pGrids.f;
+                                allErrors.AddRange(pGrids.errors);
+                                allSkipReasons.AddRange(pGrids.skips);
+
+                                settings.OffsetDistance = originalOffset;
+                            }
+                            else
+                            {
+                                allSkipReasons.Add($"Grid layer skipped: only {gridCount} grids (redundant with Total)");
+                            }
                         }
 
-                        // Layer 3: Detail Perimeter (Innermost: Openings + Walls + Grids)
+                        // Layer 3: Detail Perimeter (Innermost) - Use INSET distance
+                        double originalOffsetForDetail = settings.OffsetDistance;
+                        settings.OffsetDistance = settings.InsetDistance; // Use inset_mm for interior strings
                         var p2 = Pass2(allWalls, allGrids, view, dimType, settings, false, false);
                         succeeded += p2.s; skipped += p2.sk; failed += p2.f;
                         allErrors.AddRange(p2.errors);
                         allSkipReasons.AddRange(p2.skips);
+                        settings.OffsetDistance = originalOffsetForDetail;
 
                         if (failed > 0 && succeeded == 0) tx.RollBack();
                         else tx.Commit();
 
-                        if (succeeded > 0) totalSucceeded++; // Count this VIEW as a success
+                        if (succeeded > 0) totalSucceeded++;
                         else if (failed > 0) totalFailed++;
                     }
 
-                    totalSucceeded += (succeeded > 0) ? 1 : 0; // Count 1 success per view, not per string
+                    totalSucceeded += (succeeded > 0) ? 1 : 0;
                     totalSkipped += skipped;
                     totalFailed += failed;
                 }
@@ -167,7 +201,7 @@ namespace A49AIRevitAssistant.Executor.Commands
         }
 
         // ======================================================================
-        //  PASS 1 helpers
+        //  PASS 1 helpers (unchanged from original)
         // ======================================================================
 
         private DimResult DimensionSingleWall(Wall wall, DimContext context)
@@ -257,27 +291,22 @@ namespace A49AIRevitAssistant.Executor.Commands
             if (refArray.Size < 2)
                 return DimResult.Skipped("Collinear group: <2 after dedup.");
 
-            // ========== INSERT THE FILTER CODE RIGHT HERE ==========
-            // Filter out tiny segments (0.2 ft wall thickness)
-            const double minSegmentLength = 0.5; // 0.5 ft = 150mm minimum segment
+            // Filter out tiny segments
+            const double minSegmentLength = 0.5;
             var filteredRefs = new List<Reference>();
 
             for (int i = 0; i < refArray.Size; i++)
             {
-                // Always keep first and last reference
                 if (i == 0 || i == refArray.Size - 1)
                 {
                     filteredRefs.Add(refArray.get_Item(i));
                     continue;
                 }
 
-                // Calculate U positions (need to get from allRefs)
-                // Find matching references in allRefs to get U positions
                 Reference currentRef = refArray.get_Item(i);
                 Reference prevRef = refArray.get_Item(i - 1);
                 Reference nextRef = refArray.get_Item(i + 1);
 
-                // Find corresponding TaggedRef to get U positions
                 var currentTagged = allRefs.FirstOrDefault(r => r.Ref == currentRef);
                 var prevTagged = allRefs.FirstOrDefault(r => r.Ref == prevRef);
                 var nextTagged = allRefs.FirstOrDefault(r => r.Ref == nextRef);
@@ -287,18 +316,14 @@ namespace A49AIRevitAssistant.Executor.Commands
                     double distToPrev = currentTagged.U - prevTagged.U;
                     double distToNext = nextTagged.U - currentTagged.U;
 
-                    // Keep if both adjacent segments are large enough
-                    // OR if this is a grid reference (grids are important)
                     if (distToPrev >= minSegmentLength && distToNext >= minSegmentLength)
                     {
                         filteredRefs.Add(currentRef);
                     }
                     else if (currentTagged.Kind == "grid")
                     {
-                        // Always keep grid references
                         filteredRefs.Add(currentRef);
                     }
-                    // Otherwise skip (removes 0.2 wall thickness segments)
                 }
                 else
                 {
@@ -306,11 +331,9 @@ namespace A49AIRevitAssistant.Executor.Commands
                 }
             }
 
-            // Rebuild reference array with filtered references
             var finalRefArray = new ReferenceArray();
             foreach (var r in filteredRefs)
                 finalRefArray.Append(r);
-            // ========== END OF FILTER CODE ==========
 
             XYZ offsetDir = DimHelpers.GetDimLineOffsetDirection(
                 primary, doc, view, request.SmartExteriorPlacement);
@@ -323,7 +346,6 @@ namespace A49AIRevitAssistant.Executor.Commands
 
             try
             {
-                // USE finalRefArray instead of refArray
                 Dimension dim = doc.Create.NewDimension(
                     view, dimLine, finalRefArray, context.LinearDimensionType);
                 return dim != null
@@ -376,13 +398,22 @@ namespace A49AIRevitAssistant.Executor.Commands
         }
 
         // ======================================================================
-        //  PASS 2 — Perpendicular location strings
+        //  PASS 2 — REVISED AND SIMPLIFIED
         // ======================================================================
 
+        private class RefEntry
+        {
+            public Reference Ref { get; set; }
+            public double Pos { get; set; }
+            public string Kind { get; set; }
+            public XYZ Pt { get; set; }
+            public Wall Wall { get; set; }
+        }
+
         private (int s, int sk, int f, List<string> errors, List<string> skips)
-    Pass2(List<Wall> allWalls, List<Grid> allGrids,
-        View view, DimensionType dimType, DimSettings settings,
-        bool isTotalOnly, bool isGridOnly)
+            Pass2(List<Wall> allWalls, List<Grid> allGrids,
+                View view, DimensionType dimType, DimSettings settings,
+                bool isTotalOnly, bool isGridOnly)
         {
             int s = 0, sk = 0, f = 0;
             var errors = new List<string>();
@@ -391,19 +422,21 @@ namespace A49AIRevitAssistant.Executor.Commands
             var geomOpts = new Options
             {
                 ComputeReferences = true,
+                IncludeNonVisibleObjects = true,
                 DetailLevel = ViewDetailLevel.Fine
             };
 
-            // 1. Get Project Envelope (The absolute box)
+            // Get Project Envelope
             var envelope = DimHelpers.GetProjectEnvelope(allWalls);
             if (envelope == null) return (0, 0, 0, errors, skips);
 
-            // 2. Process each cardinal side (N, S, E, W)
+            // Process each cardinal side
             var sides = new List<XYZ> { XYZ.BasisX, -XYZ.BasisX, XYZ.BasisY, -XYZ.BasisY };
+            string layerName = isTotalOnly ? "TOTAL" : (isGridOnly ? "GRID" : "DETAIL");
 
             foreach (XYZ normal in sides)
             {
-                // 🔧 FIX 3a: Grid bubble detection - only create dimension if bubbles exist on this side
+                // Grid bubble check for Total and Grid layers
                 if (isGridOnly || isTotalOnly)
                 {
                     bool sideHasBubbles = false;
@@ -414,60 +447,46 @@ namespace A49AIRevitAssistant.Executor.Commands
                             Curve c = grid.Curve;
                             if (c == null) continue;
 
-                            // Get the end of the grid closer to our 'normal' direction
                             double dotAtStart = c.GetEndPoint(0).DotProduct(normal);
                             double dotAtEnd = c.GetEndPoint(1).DotProduct(normal);
                             int endIdx = (dotAtEnd > dotAtStart) ? 1 : 0;
                             DatumEnds whichEnd = (endIdx == 0) ? DatumEnds.End0 : DatumEnds.End1;
 
-                            // Check if bubble is visible
                             if (grid.IsBubbleVisibleInView(whichEnd, view))
                             {
                                 sideHasBubbles = true;
                                 break;
                             }
                         }
-                        catch { /* Some grids may not have bubbles */ }
+                        catch { }
                     }
 
-                    // Professional Standard: Always keep Top/Left, but only keep Bottom/Right if Bubbles exist
                     bool isTopOrLeft = normal.Y > 0.9 || normal.X < -0.9;
                     if (!isTopOrLeft && !sideHasBubbles) continue;
                 }
 
-                // 'dir' is the direction ALONG the dimension string
+                // Direction ALONG the dimension string
                 XYZ dir = new XYZ(normal.Y, -normal.X, 0).Normalize();
 
                 double extremeLimit = (Math.Abs(normal.X) > 0.9)
                     ? (normal.X > 0 ? envelope.Max.X : envelope.Min.X)
                     : (normal.Y > 0 ? envelope.Max.Y : envelope.Min.Y);
 
-                // 🔧 FIX 3b: For Total mode, collect ALL walls (remove 5ft buffer)
-                List<Wall> sideWalls;
-                if (isTotalOnly)
-                {
-                    // Total dimension needs ALL walls on this side to find extremes
-                    sideWalls = allWalls
-                        .Where(w => Math.Abs(DimHelpers.GetWallNormal(w).DotProduct(normal)) > 0.9)
-                        .ToList();
-                }
-                else
-                {
-                    // Detail and Grid-only: only walls within 5ft of the edge
-                    sideWalls = allWalls
-                        .Where(w => Math.Abs(DimHelpers.GetWallNormal(w).DotProduct(normal)) > 0.9)
-                        .Where(w => {
-                            XYZ mid = (w.Location as LocationCurve).Curve.Evaluate(0.5, true);
-                            double val = (Math.Abs(normal.X) > 0.9) ? mid.X : mid.Y;
-                            return Math.Abs(val - extremeLimit) < 5.0; // 5ft buffer
-                        }).ToList();
-                }
+                // Collect walls on this side
+                List<Wall> sideWalls = allWalls
+                    .Where(w => {
+                        try
+                        {
+                            return Math.Abs(DimHelpers.GetWallNormal(w).DotProduct(normal)) > 0.8;
+                        }
+                        catch { return false; }
+                    }).ToList();
 
                 if (sideWalls.Count == 0 && !isGridOnly) continue;
 
                 var entries = new List<RefEntry>();
 
-                // 3. Select Outermost Faces - 🔧 FIX 3c: CORNER-AWARE SELECTION
+                // Collect wall face references
                 if (!isGridOnly)
                 {
                     var allCandidates = new List<RefEntry>();
@@ -475,72 +494,103 @@ namespace A49AIRevitAssistant.Executor.Commands
                     foreach (Wall wall in sideWalls)
                     {
                         var wallFaces = new List<RefEntry>();
-                        foreach (Solid solid in DimHelpers.CollectSolids(wall.get_Geometry(geomOpts)))
-                        {
-                            foreach (Face face in solid.Faces)
-                            {
-                                if (!(face is PlanarFace pf) || pf.Reference == null) continue;
-                                if (Math.Abs(pf.FaceNormal.DotProduct(normal)) < 0.95) continue;
 
-                                XYZ cen = DimHelpers.FaceCentroid(pf);
-                                wallFaces.Add(new RefEntry
+                        try
+                        {
+                            GeometryElement geo = wall.get_Geometry(geomOpts);
+                            if (geo == null) continue;
+
+                            foreach (GeometryObject obj in geo)
+                            {
+                                Solid solid = null;
+                                if (obj is Solid solidObj && solidObj.Volume > 0)
+                                    solid = solidObj;
+                                else if (obj is GeometryInstance gi)
                                 {
-                                    Ref = pf.Reference,
-                                    Pos = cen.DotProduct(dir),
-                                    Kind = "wall",
-                                    Pt = cen,
+                                    foreach (GeometryObject sub in gi.GetInstanceGeometry())
+                                        if (sub is Solid subSolid && subSolid.Volume > 0)
+                                            solid = subSolid;
+                                }
+
+                                if (solid == null) continue;
+
+                                foreach (Face face in solid.Faces)
+                                {
+                                    if (!(face is PlanarFace pf)) continue;
+                                    if (pf.Reference == null) continue;
+
+                                    double dot = pf.FaceNormal.DotProduct(normal);
+                                    if (Math.Abs(dot) < 0.8) continue;
+
+                                    XYZ cen = DimHelpers.FaceCentroid(pf);
+                                    double posAlongDim = cen.DotProduct(dir);
+
+                                    wallFaces.Add(new RefEntry
+                                    {
+                                        Ref = pf.Reference,
+                                        Pos = posAlongDim,
+                                        Kind = "wall",
+                                        Pt = cen,
+                                        Wall = wall
+                                    });
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Error getting geometry for wall {wall.Id}: {ex.Message}");
+                        }
+
+                        if (wallFaces.Count == 0)
+                        {
+                            // Fallback: use wall location
+                            var lc = wall.Location as LocationCurve;
+                            if (lc != null && lc.Curve is Line line)
+                            {
+                                XYZ midPoint = line.Evaluate(0.5, true);
+                                double posAlongDim = midPoint.DotProduct(dir);
+
+                                allCandidates.Add(new RefEntry
+                                {
+                                    Ref = new Reference(wall),
+                                    Pos = posAlongDim,
+                                    Kind = "wall_fallback",
+                                    Pt = midPoint,
                                     Wall = wall
                                 });
                             }
+                            continue;
                         }
-                        if (wallFaces.Count == 0) continue;
 
-                        // Pick the face furthest in the 'normal' direction (The Outside Face)
                         var chosen = wallFaces.OrderByDescending(f => f.Pt.DotProduct(normal)).First();
                         allCandidates.Add(chosen);
                     }
 
-                    // CORNER FIX: Find absolute extremes (actual building corners)
-                    if (allCandidates.Count > 0)
+                    if (allCandidates.Count == 0) continue;
+
+                    // Add unique positions
+                    foreach (var candidate in allCandidates)
                     {
-                        double absoluteMinPos = allCandidates.Min(c => c.Pos);
-                        double absoluteMaxPos = allCandidates.Max(c => c.Pos);
+                        bool isDuplicate = entries.Any(e => Math.Abs(e.Pos - candidate.Pos) < 0.2);
+                        if (!isDuplicate)
+                            entries.Add(candidate);
+                    }
 
-                        // Get references for the actual corner faces
-                        var minCandidates = allCandidates.Where(c => Math.Abs(c.Pos - absoluteMinPos) < 0.01).ToList();
-                        var maxCandidates = allCandidates.Where(c => Math.Abs(c.Pos - absoluteMaxPos) < 0.01).ToList();
-
+                    // Ensure we have at least min and max
+                    if (entries.Count < 2 && allCandidates.Count >= 2)
+                    {
+                        double minPos = allCandidates.Min(c => c.Pos);
+                        double maxPos = allCandidates.Max(c => c.Pos);
+                        var minEntry = allCandidates.First(c => Math.Abs(c.Pos - minPos) < 0.01);
+                        var maxEntry = allCandidates.First(c => Math.Abs(c.Pos - maxPos) < 0.01);
                         entries.Clear();
-
-                        // Add the min corner (use the one with the furthest outward face)
-                        if (minCandidates.Any())
-                        {
-                            var cornerRef = minCandidates.OrderByDescending(c => c.Pt.DotProduct(normal)).First();
-                            entries.Add(cornerRef);
-                        }
-
-                        // Add all interior references (walls not at absolute extremes)
-                        var interiorCandidates = allCandidates.Where(c =>
-                            Math.Abs(c.Pos - absoluteMinPos) > 0.01 &&
-                            Math.Abs(c.Pos - absoluteMaxPos) > 0.01).ToList();
-
-                        foreach (var interior in interiorCandidates)
-                        {
-                            if (!entries.Any(e => Math.Abs(e.Pos - interior.Pos) < 0.1))
-                                entries.Add(interior);
-                        }
-
-                        // Add the max corner
-                        if (maxCandidates.Any())
-                        {
-                            var cornerRef = maxCandidates.OrderByDescending(c => c.Pt.DotProduct(normal)).First();
-                            entries.Add(cornerRef);
-                        }
+                        entries.Add(minEntry);
+                        entries.Add(maxEntry);
                     }
                 }
 
-                // 4. Add Grids (Strict Parallel Check)
-                if (!isTotalOnly)  // Total mode doesn't include intermediate grids
+                // Add grid references (for Detail and Grid-only layers)
+                if (!isTotalOnly)
                 {
                     foreach (Grid grid in allGrids)
                     {
@@ -552,7 +602,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                             XYZ gPt = grid.Curve.Evaluate(0.5, true);
                             double gPos = gPt.DotProduct(dir);
 
-                            if (!entries.Any(e => Math.Abs(e.Pos - gPos) < 0.05))
+                            if (!entries.Any(e => Math.Abs(e.Pos - gPos) < 0.2))
                             {
                                 entries.Add(new RefEntry
                                 {
@@ -567,31 +617,39 @@ namespace A49AIRevitAssistant.Executor.Commands
                     }
                 }
 
-                // 5. Build the Dimension Line with Layer Filtering
+                // Sort and filter by layer type
                 var sorted = entries.OrderBy(e => e.Pos).ToList();
-                if (sorted.Count < 2) continue;
+                if (sorted.Count < 2)
+                {
+                    sk++;
+                    skips.Add($"Side {normal}: Only {sorted.Count} references for {layerName}");
+                    continue;
+                }
 
-                // 🔧 FIX 3d: Layer-specific filtering
                 if (isTotalOnly)
                 {
-                    // Layer 1: ONLY the absolute building extents (2 points only)
-                    var totalOnlyEntries = new List<RefEntry> { sorted.First(), sorted.Last() };
-                    sorted = totalOnlyEntries;
+                    // Total: only first and last
+                    sorted = new List<RefEntry> { sorted.First(), sorted.Last() };
                 }
                 else if (isGridOnly)
                 {
-                    // Layer 2: Grids only - filter out walls
+                    // Grid-only: filter to grids only
                     var gridOnlyEntries = sorted.Where(e => e.Kind == "grid").ToList();
-                    if (gridOnlyEntries.Count < 2) continue;
+                    if (gridOnlyEntries.Count < 2)
+                    {
+                        sk++;
+                        skips.Add($"Side {normal}: Only {gridOnlyEntries.Count} grids for Grid layer");
+                        continue;
+                    }
                     sorted = gridOnlyEntries;
                 }
                 else
                 {
-                    // Layer 3: Detail - deduplicate (prefer grids over walls at same position)
+                    // Detail: deduplicate, prefer grids over walls
                     var deduped = new List<RefEntry>();
                     foreach (var e in sorted)
                     {
-                        var existing = deduped.FirstOrDefault(d => Math.Abs(d.Pos - e.Pos) < 0.05);
+                        var existing = deduped.FirstOrDefault(d => Math.Abs(d.Pos - e.Pos) < 0.2);
                         if (existing == null)
                         {
                             deduped.Add(e);
@@ -605,48 +663,44 @@ namespace A49AIRevitAssistant.Executor.Commands
                     sorted = deduped;
                 }
 
+                // Build ReferenceArray
                 ReferenceArray ra = new ReferenceArray();
-                foreach (var e in sorted) ra.Append(e.Ref);
-
-                // 🔧 FIX 3e: Offset stacking - different distances for each layer
-                double offsetDistanceFt = settings.OffsetDistance;
-
-                double finalOffset;
-                if (isTotalOnly)
+                foreach (var e in sorted)
                 {
-                    finalOffset = offsetDistanceFt * 3.5;  // Furthest out
-                }
-                else if (isGridOnly)
-                {
-                    finalOffset = offsetDistanceFt * 2.0;  // Middle layer
-                }
-                else
-                {
-                    finalOffset = offsetDistanceFt * 0.8;  // Closest to building
+                    if (e.Ref != null)
+                        ra.Append(e.Ref);
                 }
 
+                if (ra.Size < 2)
+                {
+                    sk++;
+                    skips.Add($"Side {normal}: Only {ra.Size} valid references for {layerName}");
+                    continue;
+                }
+
+                // Calculate offset position
+                double finalOffset = settings.OffsetDistance; // Already in feet
                 double offset = extremeLimit + (normal.X + normal.Y > 0 ? finalOffset : -finalOffset);
 
-                // Use Envelope bounds to bridge butt-joints
+                // Use envelope bounds
                 double minU = (Math.Abs(normal.Y) > 0.9) ? envelope.Min.X : envelope.Min.Y;
                 double maxU = (Math.Abs(normal.Y) > 0.9) ? envelope.Max.X : envelope.Max.Y;
 
-                // Force perfectly parallel Z
                 double viewZ = view.Origin.Z;
                 XYZ p1, p2;
 
-                if (Math.Abs(normal.X) > 0.9)  // Vertical dimension (X direction)
+                if (Math.Abs(normal.X) > 0.9)
                 {
                     p1 = new XYZ(offset, minU, viewZ);
                     p2 = new XYZ(offset, maxU, viewZ);
                 }
-                else  // Horizontal dimension (Y direction)
+                else
                 {
                     p1 = new XYZ(minU, offset, viewZ);
                     p2 = new XYZ(maxU, offset, viewZ);
                 }
 
-                // Ensure p1 and p2 are in correct order (min to max)
+                // Ensure correct order
                 if (p1.X > p2.X || p1.Y > p2.Y)
                 {
                     var temp = p1;
@@ -658,37 +712,21 @@ namespace A49AIRevitAssistant.Executor.Commands
                 {
                     Line dimLine = Line.CreateBound(p1, p2);
                     Dimension dim = _doc.Create.NewDimension(view, dimLine, ra, dimType);
-                    if (dim != null) s++;
+                    if (dim != null)
+                    {
+                        s++;
+                        System.Diagnostics.Debug.WriteLine($"✅ Created {layerName} dimension on side {normal} with {ra.Size} refs");
+                    }
                 }
                 catch (Exception ex)
                 {
                     f++;
-                    errors.Add($"Side {normal} failed (Total:{isTotalOnly}, Grid:{isGridOnly}): {ex.Message}");
+                    errors.Add($"Side {normal} failed ({layerName}): {ex.Message} - Refs: {ra.Size}");
+                    System.Diagnostics.Debug.WriteLine($"❌ Failed: {ex.Message}");
                 }
             }
+
             return (s, sk, f, errors, skips);
-        }
-
-        private class RefEntry
-        {
-            public Reference Ref { get; set; }
-            public double Pos { get; set; }
-            public string Kind { get; set; }
-            public XYZ Pt { get; set; }
-            public Wall Wall { get; set; }  // 🔧 FIX 2: Add this for corner detection
-        }
-
-        private static XYZ CanonDir(XYZ dir)
-        {
-            if (dir.X < -0.01 || (Math.Abs(dir.X) < 0.01 && dir.Y < 0))
-                return new XYZ(-dir.X, -dir.Y, 0).Normalize();
-            return new XYZ(dir.X, dir.Y, 0).Normalize();
-        }
-
-        private static Reference GetGridRef(Grid grid, Options opts)
-        {
-            try { return new Reference(grid); }
-            catch { return null; }
         }
 
         // ======================================================================
@@ -713,7 +751,6 @@ namespace A49AIRevitAssistant.Executor.Commands
             OffsetDistance = (p.Value<double?>("offset_mm") ?? 800.0) / 304.8,
             InsetDistance = (p.Value<double?>("inset_mm") ?? 1000.0) / 304.8,
             SmartExteriorPlacement = p.Value<bool?>("smart_exterior") ?? true,
-
             IncludeTotalString = p.Value<bool?>("include_total") ?? true,
             IncludeGridsOnlyString = p.Value<bool?>("include_grids_only") ?? true,
         };
@@ -723,7 +760,6 @@ namespace A49AIRevitAssistant.Executor.Commands
                 .OfClass(typeof(Wall))
                 .WhereElementIsNotElementType()
                 .Cast<Wall>()
-                // REVISION: Include all walls that have a location curve (includes Curtain Walls)
                 .Where(w => w.Location is LocationCurve)
                 .ToList();
 

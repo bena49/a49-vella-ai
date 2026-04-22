@@ -18,7 +18,7 @@ from ..ai_engines.conversation_engine import get_fallback_response
 from ..ai_commands.preflight import handle_preflight_check
 from ..ai_commands.automate_tag import handle_automate_tag
 from ..ai_commands.automate_tag_nlp import handle_automate_tag_nlp, handle_nlp_tag_conversation, resume_pending_nlp_tag
-from ..ai_commands.automate_dim import handle_automate_dim
+from ..ai_commands.automate_dim import handle_automate_dim, handle_automate_dim_nlp
 
 
 # =====================================================================

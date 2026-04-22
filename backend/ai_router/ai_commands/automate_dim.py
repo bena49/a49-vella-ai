@@ -239,3 +239,90 @@ def _ask_view_confirmation(request, state):
             f"Shall I dimension all {len(views)}? Say **Yes** to proceed or **No** to name a specific view."
         )
     })
+
+# ============================================================================
+# NLP DIMENSIONING HANDLER (Conversational)
+# ============================================================================
+
+def handle_automate_dim_nlp(request, nlp_data):
+    """
+    Handles natural language dimensioning commands.
+    
+    Expected nlp_data keys (from fast_route_intent):
+        - stage:      "WV", "PD", "DD", "CD" (optional)
+        - view_name:  Specific view name (optional)
+    """
+    debug_session(request, f"📐 NLP Dim: Processing request...")
+    
+    stage = nlp_data.get("stage", "")
+    view_name = nlp_data.get("view_name", "")
+    
+    # Get cached floor plan views
+    cached_views = request.session.get("ai_last_known_floor_plan_views", [])
+    
+    if not cached_views:
+        return Response({
+            "message": (
+                "📐 I don't have your floor plan views loaded yet. "
+                "Open the **Dimension Wizard** first, then try again."
+            ),
+            "intent": "wizard:automate_dim"
+        })
+    
+    # Filter views by stage or view_name
+    filtered_views = []
+    
+    if view_name:
+        # Exact match or contains match
+        view_name_upper = view_name.upper()
+        filtered_views = [v for v in cached_views if view_name_upper in v.get("name", "").upper()]
+        
+        if not filtered_views:
+            return Response({
+                "message": f"Could not find a floor plan view named '{view_name}'. Please check the name."
+            })
+        
+        # If exact match found, use it
+        exact_match = [v for v in filtered_views if v.get("name", "").upper() == view_name_upper]
+        if exact_match:
+            filtered_views = exact_match
+            
+    elif stage:
+        # Filter by stage (WV, PD, DD, CD)
+        filtered_views = [v for v in cached_views if v.get("stage", "") == stage]
+        
+        if not filtered_views:
+            return Response({
+                "message": f"No floor plan views found for stage {stage}. Try a different stage or open the Dimension Wizard."
+            })
+    else:
+        # No filters - use all floor plan views
+        filtered_views = cached_views
+    
+    if not filtered_views:
+        return Response({
+            "message": "No floor plan views found. Please open the Dimension Wizard to load views."
+        })
+    
+    # Build the dimension request
+    view_ids = [v["id"] for v in filtered_views]
+    
+    debug_session(request, f"📐 NLP Dim: Dimensioning {len(view_ids)} view(s)")
+    
+    # Reset any pending state
+    reset_pending(request)
+    
+    # Build and send envelope
+    env = envelope_automate_dim(
+        view_ids=view_ids,
+        include_openings=True,
+        include_grids=True,
+        include_total=True,
+        include_grids_only=True,
+        offset_mm=800,
+        inset_mm=1000,
+        smart_exterior=True,
+        dim_type_name="",
+    )
+    
+    return send_envelope(request, env)

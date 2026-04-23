@@ -128,7 +128,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                         // offset_mm (baseOffsetFt) = distance from building edge to Layer 3.
                         // Each outer layer adds one fixed gap width beyond the previous.
                         // This keeps strings close together regardless of the base offset.
-                        const double fixedGapFt = 500.0 / 304.8; // 500mm between layers
+                        const double fixedGapFt = 900.0 / 304.8; // 900mm between layers — increase this value to space strings further apart
 
                         // Layer 1: Overall/Total Dimension (Outermost)
                         if (settings.IncludeTotalString)
@@ -157,7 +157,8 @@ namespace A49AIRevitAssistant.Executor.Commands
                         // Layer 3: Detail Perimeter (Innermost) — controlled by IncludeDetailString
                         if (settings.IncludeDetailString)
                         {
-                            double detailOffset = baseOffsetFt;
+                            // Negative offset = interior placement (inset FROM building edge INTO rooms)
+                            double detailOffset = -settings.InsetDistance;
                             var p2 = Pass2(allWalls, allGrids, view, dimType, settings, false, false, detailOffset);
                             succeeded += p2.s; skipped += p2.sk; failed += p2.f;
                             allErrors.AddRange(p2.errors);
@@ -464,8 +465,12 @@ namespace A49AIRevitAssistant.Executor.Commands
                             XYZ gEnd0 = c.GetEndPoint(0);
                             XYZ gEnd1 = c.GetEndPoint(1);
 
-                            if ((end0Vis && (gEnd0 - gMid).DotProduct(normal) > -0.01) ||
-                                (end1Vis && (gEnd1 - gMid).DotProduct(normal) > -0.01))
+                            // DatumEnds.End0 in Revit maps to GetEndPoint(1) of the curve
+                            // (the parametric "end"), not GetEndPoint(0) (the "start").
+                            // So we cross-check: End0Vis uses gEnd1's position, End1Vis uses gEnd0.
+                            // Threshold 0.5ft ensures we only accept endpoints clearly on this side.
+                            if ((end0Vis && (gEnd1 - gMid).DotProduct(normal) > 0.5) ||
+                                (end1Vis && (gEnd0 - gMid).DotProduct(normal) > 0.5))
                             {
                                 sideHasBubbles = true;
                                 break;
@@ -562,28 +567,12 @@ namespace A49AIRevitAssistant.Executor.Commands
                 else
                 {
                     // Layer 3 Detail: interior face-to-face room string.
-                    // Part A: building extent from sideWall end caps.
-                    foreach (Wall wall in sideWalls)
-                    {
-                        try
-                        {
-                            var (sc, ec) = DimHelpers.GetWallEndCapRefs(wall);
-                            if (sc == null || ec == null) continue;
-                            var cl = DimHelpers.GetWallCenterLine(wall);
-                            if (cl == null) continue;
-                            XYZ wO = cl.GetEndPoint(0);
-                            XYZ wD = (cl.GetEndPoint(1) - wO).Normalize();
-                            XYZ sPt = wO + wD * sc.U; double sPos = sPt.DotProduct(dir);
-                            XYZ ePt = wO + wD * ec.U; double ePos = ePt.DotProduct(dir);
-                            if (!entries.Any(e => Math.Abs(e.Pos - sPos) < 0.15))
-                                entries.Add(new RefEntry { Ref = sc.Ref, Pos = sPos, Kind = "endcap", Pt = sPt, Wall = wall });
-                            if (!entries.Any(e => Math.Abs(e.Pos - ePos) < 0.15))
-                                entries.Add(new RefEntry { Ref = ec.Ref, Pos = ePos, Kind = "endcap", Pt = ePt, Wall = wall });
-                        }
-                        catch { }
-                    }
-                    // Part B: interior room divisions from transverse wall faces (±dir).
-                    // ONE interior-facing face per wall = clear room height, no thickness.
+                    // Only transWall faces are used as references. The exterior horizontal
+                    // walls are themselves transWalls whose INTERIOR faces provide the
+                    // correct start/end anchors. sideWall end caps are intentionally
+                    // excluded — they sit at the OUTER corners and create wall-thickness
+                    // stub segments at each end of the string.
+                    // ONE interior-facing face per transWall = clear room heights, no wall thickness.
                     double centroidInDir = buildingCentroid.DotProduct(dir);
                     foreach (Wall wall in transWalls)
                     {
@@ -663,28 +652,34 @@ namespace A49AIRevitAssistant.Executor.Commands
                     continue;
                 }
 
-                // Calculate offset position using the explicit offset
+                // Dimension line offset from building edge.
+                // Positive = exterior (pushes outward in normal direction).
+                // Negative = interior (pushes inward, for Detail layer).
                 double offset = extremeLimit + (normal.X + normal.Y > 0 ? explicitOffsetFt : -explicitOffsetFt);
 
-                // Use envelope bounds
-                double minU = (Math.Abs(normal.Y) > 0.9) ? envelope.Min.X : envelope.Min.Y;
-                double maxU = (Math.Abs(normal.Y) > 0.9) ? envelope.Max.X : envelope.Max.Y;
+                // Span the dim line exactly between the outermost references along dir,
+                // with a small pad so Revit's witness lines have room to render.
+                const double linePad = 0.3; // ~90mm
+                double lineStart = sorted.First().Pos - linePad;
+                double lineEnd = sorted.Last().Pos + linePad;
 
                 double viewZ = view.Origin.Z;
                 XYZ p1, p2;
 
                 if (Math.Abs(normal.X) > 0.9)
                 {
-                    p1 = new XYZ(offset, minU, viewZ);
-                    p2 = new XYZ(offset, maxU, viewZ);
+                    // Vertical dim line (horizontal wall sides — left/right)
+                    p1 = new XYZ(offset, lineStart, viewZ);
+                    p2 = new XYZ(offset, lineEnd, viewZ);
                 }
                 else
                 {
-                    p1 = new XYZ(minU, offset, viewZ);
-                    p2 = new XYZ(maxU, offset, viewZ);
+                    // Horizontal dim line (vertical wall sides — top/bottom)
+                    p1 = new XYZ(lineStart, offset, viewZ);
+                    p2 = new XYZ(lineEnd, offset, viewZ);
                 }
 
-                // Ensure correct order
+                // Ensure p1 < p2 so CreateBound doesn't throw
                 if (p1.X > p2.X || p1.Y > p2.Y)
                 {
                     var temp = p1;

@@ -18,7 +18,7 @@ from ..ai_engines.conversation_engine import get_fallback_response
 from ..ai_commands.preflight import handle_preflight_check
 from ..ai_commands.automate_tag import handle_automate_tag
 from ..ai_commands.automate_tag_nlp import handle_automate_tag_nlp, handle_nlp_tag_conversation, resume_pending_nlp_tag
-from ..ai_commands.automate_dim import handle_automate_dim, handle_automate_dim_nlp
+from ..ai_commands.automate_dim import handle_automate_dim
 
 
 # =====================================================================
@@ -250,8 +250,7 @@ ALLOWED_IMMEDIATE_COMMANDS = [
     "preflight_check",
     "automate_tag",
     "automate_tag_nlp",
-    "automate_dim",         
-    "automate_dim_nlp",
+    "automate_dim",
     "cache_dim_inventory",     
     "cache_tag_inventory",
     "ui:help",
@@ -295,12 +294,10 @@ def dispatch_immediate_command(request, intent, gpt_json):
     if intent == "automate_dim":
         return handle_automate_dim(request)
 
-    # 💥 AUTOMATE DIM NLP (conversational — "dimension all walls in CD")
-    if intent == "automate_dim_nlp":
-        return handle_automate_dim_nlp(request, gpt_json)
-
-    # 💥 AUTOMATE DIM WIZARD (explicit wizard open)
+    # 💥 AUTOMATE DIM WIZARD — clear any stale NLP dim state before opening
     if intent == "wizard:automate_dim":
+        request.session.pop("ai_nlp_dim_state", None)
+        request.session.modified = True
         return Response({
             "message": "📐 Opening the dimensioning wizard...",
             "intent": "wizard:automate_dim"

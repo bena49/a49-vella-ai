@@ -142,17 +142,18 @@ export function useWizards(
       text: `📐 Dimensioning walls in ${payload.view_ids.length} view(s)...`,
     });
     sendToBackend({
-      message:          "automate_dim",
-      view_ids:         payload.view_ids,
-      include_openings: payload.include_openings,
-      include_grids:    payload.include_grids,
-      include_total: payload.include_total,           // Add this
-      include_grids_only: payload.include_grids_only, // Add this
-      offset_mm:        payload.offset_mm,
-      inset_mm:         payload.inset_mm ?? 1000,
-      smart_exterior:   payload.smart_exterior,
-      dim_type_name:    payload.dim_type_name,
-      session_key:      sessionKey.value,
+      message:            "automate_dim",
+      view_ids:           payload.view_ids,
+      include_openings:   payload.include_openings,
+      include_grids:      payload.include_grids,
+      include_total:      payload.include_total,
+      include_grids_only: payload.include_grids_only,
+      include_detail:     payload.include_detail ?? true,
+      offset_mm:          payload.offset_mm,
+      inset_mm:           payload.inset_mm ?? 1000,
+      smart_exterior:     payload.smart_exterior,
+      dim_type_name:      payload.dim_type_name,
+      session_key:        sessionKey.value,
     });
   }
 

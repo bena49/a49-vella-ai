@@ -124,10 +124,18 @@ namespace A49AIRevitAssistant.Executor.Commands
                         double baseOffsetFt = settings.OffsetDistance;
                         double baseInsetFt = settings.InsetDistance;
 
+                        // ── Absolute stacking offsets (ft from wall face outward) ──────────
+                        // Layer 3 (Detail/innermost):  baseOffsetFt
+                        // Layer 2 (Grid-to-Grid):      baseOffsetFt + spacingFt
+                        // Layer 1 (Total/outermost):   baseOffsetFt + spacingFt * 2
+                        // Using a fixed spacing equal to baseOffsetFt keeps strings
+                        // proportional to the user-chosen offset and prevents overlap.
+                        double spacingFt = baseOffsetFt;
+
                         // Layer 1: Overall/Total Dimension (Outermost)
                         if (settings.IncludeTotalString)
                         {
-                            double totalOffset = baseOffsetFt * 3.5;
+                            double totalOffset = baseOffsetFt + spacingFt * 2.0;
                             var pTotal = Pass2(allWalls, allGrids, view, dimType, settings, true, false, totalOffset);
                             succeeded += pTotal.s;
                             skipped += pTotal.sk;
@@ -142,7 +150,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                             int gridCount = allGrids.Count;
                             if (gridCount > 2)
                             {
-                                double gridOffset = baseOffsetFt * 2.0;
+                                double gridOffset = baseOffsetFt + spacingFt;
                                 var pGrids = Pass2(allWalls, allGrids, view, dimType, settings, false, true, gridOffset);
                                 succeeded += pGrids.s;
                                 skipped += pGrids.sk;
@@ -156,23 +164,25 @@ namespace A49AIRevitAssistant.Executor.Commands
                             }
                         }
 
-                        // Layer 3: Detail Perimeter (Innermost)
-                        double detailOffset = baseInsetFt;
-                        var p2 = Pass2(allWalls, allGrids, view, dimType, settings, false, false, detailOffset);
-                        succeeded += p2.s; skipped += p2.sk; failed += p2.f;
-                        allErrors.AddRange(p2.errors);
-                        allSkipReasons.AddRange(p2.skips);
+                        // Layer 3: Detail Perimeter (Innermost) — controlled by IncludeDetailString
+                        if (settings.IncludeDetailString)
+                        {
+                            double detailOffset = baseInsetFt;
+                            var p2 = Pass2(allWalls, allGrids, view, dimType, settings, false, false, detailOffset);
+                            succeeded += p2.s; skipped += p2.sk; failed += p2.f;
+                            allErrors.AddRange(p2.errors);
+                            allSkipReasons.AddRange(p2.skips);
+                        }
 
                         if (failed > 0 && succeeded == 0) tx.RollBack();
                         else tx.Commit();
 
+                        // Count this view once: succeeded if any dimension was created
                         if (succeeded > 0) totalSucceeded++;
                         else if (failed > 0) totalFailed++;
+                        totalSkipped += skipped;
+                        totalFailed += failed;
                     }
-
-                    totalSucceeded += (succeeded > 0) ? 1 : 0;
-                    totalSkipped += skipped;
-                    totalFailed += failed;
                 }
 
                 return JsonConvert.SerializeObject(new
@@ -377,7 +387,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                     if (Math.Abs(wallDir.DotProduct(oDir)) < 0.99) continue;
                     XYZ delta = oCl.GetEndPoint(0) - origin;
                     XYZ perp = delta - wallDir * delta.DotProduct(wallDir);
-                    if (perp.GetLength() > 0.5) continue;
+                    if (perp.GetLength() > 0.1) continue;  // ~30mm — walls must be truly collinear
                     group.Add(other);
                     assigned.Add(other.Id);
                 }
@@ -427,10 +437,12 @@ namespace A49AIRevitAssistant.Executor.Commands
 
             foreach (XYZ normal in sides)
             {
-                // Grid bubble check for Total and Grid layers
-                if (isGridOnly || isTotalOnly)
+                // Bubble visibility check applies to ALL layers that include grids.
+                // A dimension string on a side with no grid bubbles will have
+                // orphaned references — skip the side unless walls alone justify it.
+                bool sideHasBubbles = false;
+                if (allGrids.Count > 0)
                 {
-                    bool sideHasBubbles = false;
                     foreach (Grid grid in allGrids)
                     {
                         try
@@ -451,10 +463,12 @@ namespace A49AIRevitAssistant.Executor.Commands
                         }
                         catch { }
                     }
-
-                    bool isTopOrLeft = normal.Y > 0.9 || normal.X < -0.9;
-                    if (!isTopOrLeft && !sideHasBubbles) continue;
                 }
+
+                // For grid-containing layers: skip sides without visible bubbles.
+                // For wall-only Detail layers (no grids in view): always process all sides.
+                bool layerHasGrids = !isTotalOnly && allGrids.Count > 0;
+                if (layerHasGrids && !sideHasBubbles) continue;
 
                 // Direction ALONG the dimension string
                 XYZ dir = new XYZ(normal.Y, -normal.X, 0).Normalize();
@@ -732,6 +746,7 @@ namespace A49AIRevitAssistant.Executor.Commands
             public bool SmartExteriorPlacement { get; set; }
             public bool IncludeTotalString { get; set; }
             public bool IncludeGridsOnlyString { get; set; }
+            public bool IncludeDetailString { get; set; }
         }
 
         private static DimSettings ParseSettings(JObject p) => new DimSettings
@@ -743,6 +758,7 @@ namespace A49AIRevitAssistant.Executor.Commands
             SmartExteriorPlacement = p.Value<bool?>("smart_exterior") ?? true,
             IncludeTotalString = p.Value<bool?>("include_total") ?? true,
             IncludeGridsOnlyString = p.Value<bool?>("include_grids_only") ?? true,
+            IncludeDetailString = p.Value<bool?>("include_detail") ?? true,
         };
 
         private List<Wall> CollectWallsInView(View view) =>

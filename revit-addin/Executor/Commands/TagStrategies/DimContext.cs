@@ -22,9 +22,6 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
         public bool IncludeGrids { get; set; } = true;
         public double OffsetDistance { get; set; } = 2.625;
         public bool SmartExteriorPlacement { get; set; } = true;
-
-        public bool IsTotalOnly { get; set; } = false;
-        public bool IsGridOnly { get; set; } = false;
     }
 
     // =========================================================================
@@ -144,7 +141,19 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
         public static XYZ GetDimLineOffsetDirection(Wall wall, Document doc,
             View view, bool smartPlacement)
         {
-            return GetWallNormal(wall);
+            XYZ normal = GetWallNormal(wall);
+            if (!smartPlacement) return normal;
+
+            // When smart placement is on: exterior walls push outward (away from rooms),
+            // interior walls use the standard normal direction.
+            // IsExteriorWall probes in the normal direction — if no room is found there
+            // the normal IS outward, so we keep it. Otherwise we flip to push inward.
+            if (IsExteriorWall(wall, doc, view))
+                return normal;           // normal already points to exterior
+
+            // For interior walls return normal as-is; Pass 2 handles exterior placement
+            // separately via the building envelope bounds.
+            return normal;
         }
 
         // ── Wall end-cap references ──────────────────────────────────────────
@@ -176,23 +185,63 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
                     if (!(face is PlanarFace pf)) continue;
                     if (Math.Abs(pf.FaceNormal.DotProduct(wallDir)) < 0.95) continue;
 
-                    XYZ cen = FaceCentroid(pf);
-                    double u = (cen - origin).DotProduct(wallDir);
-
-                    if (u < len / 2.0)
+                    // Use the most extreme vertex along wallDir rather than the face
+                    // centroid — this finds the true outside corner for mitre-joined
+                    // or multi-layer walls where the centroid can be inset.
+                    double extremeU = double.NaN;
+                    foreach (EdgeArray loop in pf.EdgeLoops)
                     {
-                        if (u < bestStartU)
+                        foreach (Edge edge in loop)
                         {
-                            bestStartU = u;
-                            startTR = new TaggedRef { Ref = pf.Reference, U = u, Kind = "endcap", SourceId = wall.Id };
+                            foreach (XYZ pt in new[] { edge.AsCurve().GetEndPoint(0), edge.AsCurve().GetEndPoint(1) })
+                            {
+                                double u = (pt - origin).DotProduct(wallDir);
+                                if (double.IsNaN(extremeU))
+                                    extremeU = u;
+                                // For start caps take the minimum U; for end caps take maximum.
+                                // We decide which side this face belongs to by its centroid.
+                            }
+                        }
+                    }
+
+                    // Determine which end this face belongs to via centroid
+                    XYZ cen = FaceCentroid(pf);
+                    double cenU = (cen - origin).DotProduct(wallDir);
+
+                    if (cenU < len / 2.0)
+                    {
+                        // Start cap: find minimum U vertex
+                        double faceMinU = double.MaxValue;
+                        foreach (EdgeArray loop in pf.EdgeLoops)
+                            foreach (Edge edge in loop)
+                                foreach (XYZ pt in new[] { edge.AsCurve().GetEndPoint(0), edge.AsCurve().GetEndPoint(1) })
+                                {
+                                    double u = (pt - origin).DotProduct(wallDir);
+                                    if (u < faceMinU) faceMinU = u;
+                                }
+
+                        if (faceMinU < bestStartU)
+                        {
+                            bestStartU = faceMinU;
+                            startTR = new TaggedRef { Ref = pf.Reference, U = faceMinU, Kind = "endcap", SourceId = wall.Id };
                         }
                     }
                     else
                     {
-                        if (u > bestEndU)
+                        // End cap: find maximum U vertex
+                        double faceMaxU = double.MinValue;
+                        foreach (EdgeArray loop in pf.EdgeLoops)
+                            foreach (Edge edge in loop)
+                                foreach (XYZ pt in new[] { edge.AsCurve().GetEndPoint(0), edge.AsCurve().GetEndPoint(1) })
+                                {
+                                    double u = (pt - origin).DotProduct(wallDir);
+                                    if (u > faceMaxU) faceMaxU = u;
+                                }
+
+                        if (faceMaxU > bestEndU)
                         {
-                            bestEndU = u;
-                            endTR = new TaggedRef { Ref = pf.Reference, U = u, Kind = "endcap", SourceId = wall.Id };
+                            bestEndU = faceMaxU;
+                            endTR = new TaggedRef { Ref = pf.Reference, U = faceMaxU, Kind = "endcap", SourceId = wall.Id };
                         }
                     }
                 }
@@ -398,7 +447,7 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
         TaggedRef startCap, TaggedRef endCap,
         List<TaggedRef> gridRefs,
         double searchDistance = 10.0)
-            {
+        {
             var result = new List<TaggedRef>();
 
             // 1. Safety check: if no grids, just return the wall endcaps
@@ -505,16 +554,18 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             XYZ origin = cl.GetEndPoint(0);
             XYZ wallDir = (cl.GetEndPoint(1) - origin).Normalize();
 
-            // REVISION: Use a standard offset from the centerline to keep strings parallel
+            // Offset dimension line perpendicular to wall from its face outward.
             double totalOffset = (wall.Width / 2.0) + offsetDistance;
             XYZ offXYZ = offsetDir * totalOffset;
 
-            const double pad = 0.33;
+            // Minimal pad (≈30mm) keeps the line from starting exactly at the ref
+            // without pushing it visibly past the exterior corner.
+            const double pad = 0.1;
 
             XYZ dimStart = origin + wallDir * (minU - pad) + offXYZ;
             XYZ dimEnd = origin + wallDir * (maxU + pad) + offXYZ;
 
-            // CRITICAL: Force Z to the view origin to kill "Non-Parallel" errors
+            // Force Z to the view's cut plane to avoid "Non-Parallel" errors.
             double z = wall.Document.ActiveView.Origin.Z;
             dimStart = new XYZ(dimStart.X, dimStart.Y, z);
             dimEnd = new XYZ(dimEnd.X, dimEnd.Y, z);

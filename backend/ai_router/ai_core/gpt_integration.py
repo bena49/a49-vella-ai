@@ -140,40 +140,19 @@ def fast_route_intent(user_text):
         # Always enter NLP flow — conversation will ask for missing slots
         return result
     
-    # 💥 NLP DIMENSIONING — Conversational trigger
-    # Matches: "dimension all walls", "auto dim CD floor plans",
-    #          "add dimensions", "annotate walls in DD"
+    # --- AUTO-DIM: all natural language dimension requests open the Wizard ---
+    # The wizard handles all settings (layers, offsets, view selection, dim type).
     dim_patterns = [
         "dimension", "dimensioning", "auto dim", "auto-dim",
-        "add dim", "annotate walls", "wall dim"
+        "add dim", "annotate walls", "wall dim",
+        "dim wizard", "dimension wizard", "dimensioning wizard",
     ]
     if any(pat in txt for pat in dim_patterns):
-        result = {"intent": "automate_dim_nlp"}
-
-        # Extract stage (WV/PD/DD/CD)
-        stage_match = re.search(r"(?:in|for|on)\s+(?P<stage>wv|pd|dd|cd)\b", txt)
-        if stage_match:
-            result["stage"] = stage_match.group("stage").upper()
-
-        # Extract specific view name (e.g. "dimension CD_A1_FL_01")
-        view_match = re.search(
-            r"(?:in|for|on)\s+(?P<viewname>\S*_\S+(?:\s*\([^)]*\))?)",
-            txt, re.IGNORECASE
-        )
-        if view_match:
-            viewname = view_match.group("viewname").strip()
-            if "_" in viewname and len(viewname) > 4:
-                result["view_name"] = viewname
-
-        return result
+        return {"intent": "wizard:automate_dim"}
 
     # Fallback wizard triggers (non-tag-specific phrases)
     if any(phrase in txt for phrase in ["automate tag", "automate tagging", "tag wizard", "smart tag"]):
         return {"intent": "wizard:automate_tag"}
-
-    # Fallback wizard triggers for dimensioning
-    if any(phrase in txt for phrase in ["dim wizard", "dimension wizard", "dimensioning wizard"]):
-        return {"intent": "wizard:automate_dim"}
 
     # --- BASIC LISTS ---
     if txt.startswith("list ") or txt.startswith("show "):

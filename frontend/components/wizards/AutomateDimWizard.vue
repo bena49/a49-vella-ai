@@ -115,6 +115,16 @@
               <div :class="includeGridsOnly ? 'translate-x-3' : 'translate-x-0'" class="w-4 h-4 rounded-full bg-white shadow-sm transition-transform"></div>
             </div>
           </label>
+
+          <label class="flex items-center justify-between cursor-pointer py-1" @click="includeDetail = !includeDetail">
+            <div class="flex items-center gap-2">
+              <Icon name="lucide:ruler" class="text-sm text-[#00BCD4]" />
+              <span class="text-xs">Layer 3: Interior Detail</span>
+            </div>
+            <div :class="includeDetail ? 'bg-[#00BCD4]' : 'bg-white/20'" class="w-8 h-5 rounded-full transition-all flex items-center px-0.5">
+              <div :class="includeDetail ? 'translate-x-3' : 'translate-x-0'" class="w-4 h-4 rounded-full bg-white shadow-sm transition-transform"></div>
+            </div>
+          </label>
         </div>
 
         <!-- OFFSET FROM WALL FACE -->
@@ -259,8 +269,8 @@ const emit = defineEmits(['close', 'submit']);
 const selectedDimType  = ref('');
 const includeOpenings  = ref(true);
 const includeGrids     = ref(true);
-const offsetMm         = ref(1500);
-const insetMm          = ref(1500);
+const offsetMm         = ref(800);
+const insetMm          = ref(1000);
 const smartExterior    = ref(true);
 const activeStages     = ref([]);
 const activeLevels     = ref([]);
@@ -268,6 +278,7 @@ const selectedViewIds  = ref([]);
 const isDimTypeOpen    = ref(false);
 const includeTotal     = ref(true); // Layer 1
 const includeGridsOnly = ref(true); // Layer 2
+const includeDetail    = ref(true); // Layer 3
 
 // ── Computed ─────────────────────────────────────────────────────────────────
 const availableLevels = computed(() => {
@@ -341,8 +352,9 @@ function submit() {
     view_ids:           selectedViewIds.value,
     include_openings:   includeOpenings.value,
     include_grids:      includeGrids.value,
-    include_total:      includeTotal.value,      // New
-    include_grids_only: includeGridsOnly.value, // New
+    include_total:      includeTotal.value,
+    include_grids_only: includeGridsOnly.value,
+    include_detail:     includeDetail.value,
     offset_mm:          offsetMm.value,
     inset_mm:           insetMm.value,
     smart_exterior:     smartExterior.value,

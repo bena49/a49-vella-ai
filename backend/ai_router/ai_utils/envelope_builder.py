@@ -163,8 +163,9 @@ def envelope_automate_dim(
     view_ids,
     include_openings=True,
     include_grids=True,
-    include_total=True,       # Add default
-    include_grids_only=True,  # Add default
+    include_total=True,
+    include_grids_only=True,
+    include_detail=True,
     offset_mm=800,
     inset_mm=1000,
     smart_exterior=True,
@@ -173,28 +174,40 @@ def envelope_automate_dim(
     """
     Builds the envelope for the auto_dim C# command.
 
+    Layer stacking (exterior, outermost first):
+        Layer 1 — include_total:      Overall/total building dimension
+        Layer 2 — include_grids_only: Grid-to-grid spacing
+        Layer 3 — include_detail:     Detail perimeter (interior strings)
+
     Args:
-        view_ids:         list of int Revit ElementId values
-        include_openings: include door/window edge references
-        include_grids:    include structural grid references
-        include_total:    include overall dimension (Layer 1)
-        include_grids_only: include grid-only dimension layer (Layer 2)
-        offset_mm:        dimension line offset from wall face (mm)
-        smart_exterior:   exterior walls dim outward, interior on normal side
-        dim_type_name:    name of DimensionType in Revit project (empty = auto)
+        view_ids:           list of int Revit ElementId values
+        include_openings:   include door/window edge references in wall strings
+        include_grids:      include structural grid references
+        include_total:      Layer 1 — overall dimension string (outermost)
+        include_grids_only: Layer 2 — grid-to-grid string (middle)
+        include_detail:     Layer 3 — detail/interior string (innermost)
+        offset_mm:          base spacing between exterior layer strings (mm)
+        inset_mm:           offset from wall edge for Layer 3 interior string (mm)
+        smart_exterior:     exterior walls dimension outward from building perimeter
+        dim_type_name:      name of DimensionType in Revit (empty = auto-select first linear)
     """
+    if not isinstance(view_ids, list) or not all(isinstance(v, int) for v in view_ids):
+        # Coerce to int list — handles JSON strings from session cache
+        view_ids = [int(v) for v in view_ids if str(v).lstrip("-").isdigit()]
+
     return {
         "command": "auto_dim",
         "raw": {
-            "view_ids":         view_ids,
-            "include_openings": include_openings,
-            "include_grids":    include_grids,
-            "include_total":    include_total,           # Send to C#
-            "include_grids_only": include_grids_only, # Send to C#
-            "offset_mm":        offset_mm,
-            "inset_mm":         inset_mm,
-            "smart_exterior":   smart_exterior,
-            "dim_type_name":    dim_type_name,
+            "view_ids":           view_ids,
+            "include_openings":   include_openings,
+            "include_grids":      include_grids,
+            "include_total":      include_total,
+            "include_grids_only": include_grids_only,
+            "include_detail":     include_detail,
+            "offset_mm":          offset_mm,
+            "inset_mm":           inset_mm,
+            "smart_exterior":     smart_exterior,
+            "dim_type_name":      dim_type_name,
         }
     }
 

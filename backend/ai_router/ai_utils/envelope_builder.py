@@ -166,8 +166,9 @@ def envelope_automate_dim(
     include_total=True,
     include_grids_only=True,
     include_detail=True,
-    offset_mm=1200,
-    inset_mm=1500,
+    offset_mm=1800,
+    inset_mm=1200,
+    depth_mm=5000,
     smart_exterior=True,
     dim_type_name="",
 ):
@@ -187,12 +188,14 @@ def envelope_automate_dim(
         include_grids_only: Layer 2 — grid-to-grid string (middle)
         include_detail:     Layer 3 — detail/interior string (innermost)
         offset_mm:          base spacing between exterior layer strings (mm)
-        inset_mm:           offset from wall edge for Layer 3 interior string (mm)
+        inset_mm:           inset from exterior wall face for Layer 3 interior string (mm)
+        depth_mm:           max depth from exterior face to search for interior refs (mm).
+                            0 = no limit (spans full building). 5000 = 5m depth. Increase
+                            for large buildings where you want more room coverage.
         smart_exterior:     exterior walls dimension outward from building perimeter
         dim_type_name:      name of DimensionType in Revit (empty = auto-select first linear)
     """
     if not isinstance(view_ids, list) or not all(isinstance(v, int) for v in view_ids):
-        # Coerce to int list — handles JSON strings from session cache
         view_ids = [int(v) for v in view_ids if str(v).lstrip("-").isdigit()]
 
     return {
@@ -206,6 +209,7 @@ def envelope_automate_dim(
             "include_detail":     include_detail,
             "offset_mm":          offset_mm,
             "inset_mm":           inset_mm,
+            "depth_mm":           depth_mm,
             "smart_exterior":     smart_exterior,
             "dim_type_name":      dim_type_name,
         }

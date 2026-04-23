@@ -158,6 +158,22 @@
           <div class="flex justify-between text-[9px] text-white/30 mt-1">
             <span>200</span><span>1500</span><span>3000</span>
           </div>
+          <!-- Interior Search Depth -->
+          <div class="mt-3">
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-[10px] uppercase tracking-wider text-white/50 font-bold">
+                Interior Depth
+              </label>
+              <span class="text-xs font-bold text-[#00BCD4]">{{ depthMm === 0 ? 'Full' : depthMm + ' mm' }}</span>
+            </div>
+            <div class="text-[10px] text-white/40 mb-2">How far from each exterior wall to pick up interior strings. Increase for large buildings. 0 = full building.</div>
+            <input type="range" min="0" max="20000" step="500"
+                   v-model.number="depthMm"
+                   class="w-full h-1.5 rounded-full appearance-none cursor-pointer dim-slider" />
+            <div class="flex justify-between text-[9px] text-white/30 mt-1">
+              <span>Full</span><span>10m</span><span>20m</span>
+            </div>
+          </div>
         </div>
 
         <!-- SMART EXTERIOR PLACEMENT -->
@@ -271,6 +287,7 @@ const includeOpenings  = ref(true);
 const includeGrids     = ref(true);
 const offsetMm         = ref(1800);
 const insetMm          = ref(1200);
+const depthMm          = ref(5000); // Interior string search depth. 0 = full building. Increase for large plans.
 const smartExterior    = ref(true);
 const activeStages     = ref([]);
 const activeLevels     = ref([]);
@@ -357,6 +374,7 @@ function submit() {
     include_detail:     includeDetail.value,
     offset_mm:          offsetMm.value,
     inset_mm:           insetMm.value,
+    depth_mm:           depthMm.value,
     smart_exterior:     smartExterior.value,
     dim_type_name:      selectedDimType.value,
   });

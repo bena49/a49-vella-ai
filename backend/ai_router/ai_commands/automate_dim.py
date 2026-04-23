@@ -34,8 +34,9 @@ def handle_automate_dim(request):
     include_total      = request.data.get("include_total", True)
     include_grids_only = request.data.get("include_grids_only", True)
     include_detail     = request.data.get("include_detail", True)
-    offset_mm          = request.data.get("offset_mm", 1200)
-    inset_mm           = request.data.get("inset_mm", 1500)
+    offset_mm          = request.data.get("offset_mm", 1800)
+    inset_mm           = request.data.get("inset_mm", 1200)
+    depth_mm           = request.data.get("depth_mm", 5000)
     smart_exterior     = request.data.get("smart_exterior", True)
     dim_type_name      = request.data.get("dim_type_name", "")
 
@@ -55,6 +56,7 @@ def handle_automate_dim(request):
         include_detail=include_detail,
         offset_mm=offset_mm,
         inset_mm=inset_mm,
+        depth_mm=depth_mm,
         smart_exterior=smart_exterior,
         dim_type_name=dim_type_name,
     )

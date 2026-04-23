@@ -578,6 +578,24 @@ namespace A49AIRevitAssistant.Executor.Commands
                     {
                         try
                         {
+                            // Depth filter: only collect transWalls within settings.DepthDistance
+                            // of this side's exterior face (measured perpendicularly inward).
+                            // Left side (normal=-X): distance = |wallMidX - envelope.Min.X|
+                            // Top  side (normal=+Y): distance = |wallMidY - envelope.Max.Y|
+                            // Set depth_mm=0 in wizard to disable (full-building depth).
+                            if (settings.DepthDistance > 0.0)
+                            {
+                                var wloc = wall.Location as LocationCurve;
+                                if (wloc != null)
+                                {
+                                    XYZ wMid = wloc.Curve.Evaluate(0.5, true);
+                                    double distFromEdge = Math.Abs(normal.X) > 0.9
+                                        ? Math.Abs(wMid.X - extremeLimit)
+                                        : Math.Abs(wMid.Y - extremeLimit);
+                                    if (distFromEdge > settings.DepthDistance) continue;
+                                }
+                            }
+
                             GeometryElement geo = wall.get_Geometry(geomOpts);
                             if (geo == null) continue;
                             var txFaces = new List<RefEntry>();
@@ -619,8 +637,12 @@ namespace A49AIRevitAssistant.Executor.Commands
                 if (isTotalOnly)
                     sorted = new List<RefEntry> { sorted.First(), sorted.Last() };
 
-                // Minimum segment filter: 0.5ft (~150mm) removes butt-wall corner stubs.
-                const double minSegmentFt = 0.5;
+                // Minimum segment filter: scale with view scale so tiny dims are suppressed
+                // automatically on small-scale views (1:200, 1:500 etc).
+                // Formula: 2mm on paper = minimum real dimension shown.
+                // At 1:100 → 200mm min; at 1:200 → 400mm min; at 1:50 → 100mm min.
+                // Floor at 0.5ft (~150mm) prevents over-filtering on very large scale views.
+                double minSegmentFt = Math.Max(0.5, view.Scale * 2.0 / 304.8);
                 if (sorted.Count > 2)
                 {
                     var filtered = new List<RefEntry> { sorted[0] };
@@ -722,6 +744,13 @@ namespace A49AIRevitAssistant.Executor.Commands
             public bool IncludeTotalString { get; set; }
             public bool IncludeGridsOnlyString { get; set; }
             public bool IncludeDetailString { get; set; }
+            /// <summary>
+            /// How far (ft) from the exterior wall face to search for interior
+            /// transWall references in the Detail layer. Walls beyond this depth
+            /// are ignored, preventing the interior string from spanning the full
+            /// building on large plans. Set via depth_mm in the wizard.
+            /// </summary>
+            public double DepthDistance { get; set; }
         }
 
         private static DimSettings ParseSettings(JObject p) => new DimSettings
@@ -734,6 +763,9 @@ namespace A49AIRevitAssistant.Executor.Commands
             IncludeTotalString = p.Value<bool?>("include_total") ?? true,
             IncludeGridsOnlyString = p.Value<bool?>("include_grids_only") ?? true,
             IncludeDetailString = p.Value<bool?>("include_detail") ?? true,
+            // depth_mm default 5000mm (5m) — interior string reaches 5m into building.
+            // Set to 0 to disable depth filter (full building depth, small plans).
+            DepthDistance = (p.Value<double?>("depth_mm") ?? 5000.0) / 304.8,
         };
 
         private List<Wall> CollectWallsInView(View view) =>

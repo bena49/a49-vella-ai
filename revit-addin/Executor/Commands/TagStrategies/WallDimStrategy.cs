@@ -59,8 +59,10 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
 
                 if (request.IncludeOpenings)
                 {
+                    // REVISION: Added 'view' to the arguments to match the new DimHelpers signature
                     var openingRefs = DimHelpers.GetOpeningEdgeRefs(
-                        wall, doc, startCap.U, endCap.U);
+                        wall, doc, view, startCap.U, endCap.U);
+
                     baseRefs.AddRange(openingRefs);
                 }
 

@@ -149,6 +149,7 @@ export function useWizards(
       include_total:      payload.include_total,
       include_grids_only: payload.include_grids_only,
       include_detail:     payload.include_detail ?? true,
+      include_interior:   payload.include_interior ?? false,
       offset_mm:          payload.offset_mm,
       inset_mm:           payload.inset_mm ?? 1200,
       depth_mm:           payload.depth_mm ?? 5000,

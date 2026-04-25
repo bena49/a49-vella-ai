@@ -360,11 +360,10 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
         // ── Opening edge references ──────────────────────────────────────────
 
         public static List<TaggedRef> GetOpeningEdgeRefs(
-            Wall wall, Document doc, View view, double startU, double endU)
+            Wall wall, Document doc, double startU, double endU)
         {
             var result = new List<TaggedRef>();
 
-            // 1. Get all inserts (doors/windows) hosted by this wall
             IList<ElementId> insertIds = wall.FindInserts(true, false, false, false);
             if (insertIds == null || insertIds.Count == 0) return result;
 
@@ -374,18 +373,6 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             XYZ origin = cl.GetEndPoint(0);
             XYZ wallDir = (cl.GetEndPoint(1) - origin).Normalize();
             double wallLen = cl.Length;
-
-            // 2. CONTEXT FIX: Use the level of the VIEW currently being processed
-            // This prevents the code from staying "stuck" on the 1st Floor level elevation.
-            Level currentViewLevel = view.GenLevel;
-            if (currentViewLevel == null) return result;
-
-            double levelBaseZ = currentViewLevel.Elevation;
-
-            // 3. Define the "Safety Zone" relative to the specific Floor Level
-            // minHeight: avoids basement windows; maxHeight: avoids clerestories from above.
-            double minHeightAboveFloor = 0.5;
-            double maxHeightAboveFloor = 8.5;
 
             const double coincideTol = 0.25;
 
@@ -402,20 +389,8 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             foreach (ElementId insertId in insertIds)
             {
                 var insert = doc.GetElement(insertId) as FamilyInstance;
-                if (insert == null) continue;
-
-                // 4. VERTICAL FILTER: Match Level ID AND Height relative to the View's Floor
-                var insertLoc = insert.Location as LocationPoint;
+                var insertLoc = insert?.Location as LocationPoint;
                 if (insertLoc == null) continue;
-
-                double windowZ = insertLoc.Point.Z;
-                double relativeHeight = windowZ - levelBaseZ;
-
-                // Skip if window is hosted on a different level OR physically outside the floor height
-                if (insert.LevelId != currentViewLevel.Id ||
-                    relativeHeight < minHeightAboveFloor ||
-                    relativeHeight > maxHeightAboveFloor)
-                    continue;
 
                 double insertU = (insertLoc.Point - origin).DotProduct(wallDir);
 
@@ -426,7 +401,6 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
                 double sideA = insertU - halfW;
                 double sideB = insertU + halfW;
 
-                // Skip if edges coincide with wall ends
                 if (Math.Abs(sideA - startU) < coincideTol ||
                     Math.Abs(sideA - endU) < coincideTol ||
                     Math.Abs(sideB - startU) < coincideTol ||
@@ -437,7 +411,6 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
                 bool gotA = false, gotB = false;
                 const double faceTol = 0.15;
 
-                // 5. Geometry Reference Collection
                 foreach (Solid solid in wallSolids)
                 {
                     foreach (Face face in solid.Faces)

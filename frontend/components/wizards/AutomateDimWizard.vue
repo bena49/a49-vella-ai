@@ -125,6 +125,16 @@
               <div :class="includeDetail ? 'translate-x-3' : 'translate-x-0'" class="w-4 h-4 rounded-full bg-white shadow-sm transition-transform"></div>
             </div>
           </label>
+
+          <label class="flex items-center justify-between cursor-pointer py-1" @click="includeInterior = !includeInterior">
+            <div class="flex items-center gap-2">
+              <Icon name="lucide:layout-panel-left" class="text-sm text-[#00BCD4]" />
+              <span class="text-xs">Interior Room Strings</span>
+            </div>
+            <div :class="includeInterior ? 'bg-[#00BCD4]' : 'bg-white/20'" class="w-8 h-5 rounded-full transition-all flex items-center px-0.5">
+              <div :class="includeInterior ? 'translate-x-3' : 'translate-x-0'" class="w-4 h-4 rounded-full bg-white shadow-sm transition-transform"></div>
+            </div>
+          </label>
         </div>
 
         <!-- OFFSET FROM WALL FACE -->
@@ -295,7 +305,8 @@ const selectedViewIds  = ref([]);
 const isDimTypeOpen    = ref(false);
 const includeTotal     = ref(true); // Layer 1
 const includeGridsOnly = ref(true); // Layer 2
-const includeDetail    = ref(true); // Layer 3
+const includeDetail    = ref(true); // Layer 3 (controls Pass1 opening refs)
+const includeInterior  = ref(false); // Pass 3: interior room strings (H + V through building)
 
 // ── Computed ─────────────────────────────────────────────────────────────────
 const availableLevels = computed(() => {
@@ -372,6 +383,7 @@ function submit() {
     include_total:      includeTotal.value,
     include_grids_only: includeGridsOnly.value,
     include_detail:     includeDetail.value,
+    include_interior:   includeInterior.value,
     offset_mm:          offsetMm.value,
     inset_mm:           insetMm.value,
     depth_mm:           depthMm.value,

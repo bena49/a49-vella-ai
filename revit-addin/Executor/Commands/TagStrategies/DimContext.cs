@@ -144,16 +144,29 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             XYZ normal = GetWallNormal(wall);
             if (!smartPlacement) return normal;
 
-            // When smart placement is on: exterior walls push outward (away from rooms),
-            // interior walls use the standard normal direction.
-            // IsExteriorWall probes in the normal direction — if no room is found there
-            // the normal IS outward, so we keep it. Otherwise we flip to push inward.
-            if (IsExteriorWall(wall, doc, view))
-                return normal;           // normal already points to exterior
+            try
+            {
+                var cl = GetWallCenterLine(wall);
+                if (cl == null) return normal;
+                XYZ mid = cl.Evaluate(0.5, true);
 
-            // For interior walls return normal as-is; Pass 2 handles exterior placement
-            // separately via the building envelope bounds.
-            return normal;
+                Phase phase = null;
+                try
+                {
+                    var phaseParam = view.get_Parameter(BuiltInParameter.VIEW_PHASE);
+                    if (phaseParam != null)
+                        phase = doc.GetElement(phaseParam.AsElementId()) as Phase;
+                }
+                catch { }
+
+                // Probe BOTH sides to guarantee we return the exterior direction.
+                // GetWallNormal depends on draw order, so it can point either way.
+                // Exterior = the side with no room. If room is on normal side, flip.
+                bool roomOnNormalSide =
+                    doc.GetRoomAtPoint(mid + normal * 1.0, phase) != null;
+                return roomOnNormalSide ? -normal : normal;
+            }
+            catch { return normal; }
         }
 
         // ── Wall end-cap references ──────────────────────────────────────────

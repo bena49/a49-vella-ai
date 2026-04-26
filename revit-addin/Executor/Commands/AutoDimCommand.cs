@@ -79,7 +79,11 @@ namespace A49AIRevitAssistant.Executor.Commands
                     {
                         tx.Start();
 
-                        // PASS 1: Along-wall strings
+                        // PASS 1: Along-wall strings for ALL walls (exterior + interior).
+                        // Exterior walls get end-cap + opening + grid strings.
+                        // Interior walls get their own detail strings (room widths, door positions).
+                        // Pass2 handles the exterior stacked Layer 1/2 strings.
+                        // Pass3 handles the cross-building interior room strings (when enabled).
                         foreach (List<Wall> group in GroupCollinearWalls(allWalls))
                         {
                             Wall primary = group
@@ -826,17 +830,18 @@ namespace A49AIRevitAssistant.Executor.Commands
         }
 
         // ======================================================================
-        //  PASS 3 — Interior room dimension strings
+        //  PASS 3 — Interior room dimension strings (clustered per zone)
         // ======================================================================
 
         /// <summary>
-        /// Creates ONE horizontal + ONE vertical interior room dimension string.
-        /// Each string runs through the building at a scan line chosen for best coverage:
-        /// - Horizontal string: scans in X (room widths) at Y ≈ building centroid
-        /// - Vertical string:   scans in Y (room heights) at X ≈ building centroid
-        /// References are the interior-facing faces of walls crossed by the scan line,
-        /// giving clear face-to-face room dimensions without wall thickness.
-        /// Falls back to ±25% centroid positions if the centroid scan finds <2 refs.
+        /// Creates interior room dimension strings — one H + one V per coherent room zone.
+        /// Zones are identified by clustering wall positions along the perpendicular axis
+        /// with a gap threshold (clusterGapFt). A C/L-shaped building will typically
+        /// produce 2 horizontal and 2 vertical strings (one per arm).
+        ///
+        /// Dim line perpendicular position: controlled by settings.InsetDistance (inset_mm)
+        /// measured from the building envelope edge — the user's "Interior Inset" slider.
+        /// DepthDistance (depth_mm) limits how wide each cluster can be in the perp axis.
         /// </summary>
         private (int s, int sk, int f, List<string> errors, List<string> skips)
             Pass3Interior(List<Wall> allWalls, View view, DimensionType dimType, DimSettings settings)
@@ -855,118 +860,169 @@ namespace A49AIRevitAssistant.Executor.Commands
             var envelope = DimHelpers.GetProjectEnvelope(allWalls);
             if (envelope == null) return (0, 0, 0, errors, skips);
 
-            XYZ centroid = new XYZ(
-                (envelope.Min.X + envelope.Max.X) / 2.0,
-                (envelope.Min.Y + envelope.Max.Y) / 2.0, 0);
-
             double viewZ = view.Origin.Z;
             double minSegFt = Math.Max(0.5, view.Scale * 2.0 / 304.8);
 
-            // One horizontal (X) pass and one vertical (Y) pass
+            // Gap threshold for clustering: if two walls are more than clusterGapFt apart
+            // along the perpendicular axis they are in different zones.
+            const double clusterGapFt = 16.4; // ~5m — tune higher for large buildings
+
             foreach (bool isHorizontal in new[] { true, false })
             {
-                // For horizontal: measure X positions of N-S walls (face normal ≈ ±X)
-                // For vertical:   measure Y positions of E-W walls (face normal ≈ ±Y)
+                // measureDir: direction the string spans (X for horizontal, Y for vertical)
+                // perpDir:    axis perpendicular to string (Y for horizontal, X for vertical)
                 XYZ measureDir = isHorizontal ? XYZ.BasisX : XYZ.BasisY;
 
-                // Scan-line position: start at centroid, try ±25% if needed
-                double buildingSpan = isHorizontal
-                    ? (envelope.Max.Y - envelope.Min.Y)
-                    : (envelope.Max.X - envelope.Min.X);
-                double baseScan = isHorizontal ? centroid.Y : centroid.X;
-                double[] scanPositions = { baseScan, baseScan + buildingSpan * 0.25, baseScan - buildingSpan * 0.25 };
-
-                // Candidate walls: face normal ≈ measureDir (these walls divide space along measureDir)
+                // Candidates: walls whose face normal ≈ measureDir
                 var candidates = allWalls.Where(w => {
                     try { return Math.Abs(DimHelpers.GetWallNormal(w).DotProduct(measureDir)) > 0.7; }
                     catch { return false; }
                 }).ToList();
 
-                List<RefEntry> bestEntries = null;
-                double bestScanPos = baseScan;
-
-                foreach (double tryPos in scanPositions)
+                if (candidates.Count == 0)
                 {
+                    sk++;
+                    skips.Add($"Pass3 {(isHorizontal ? "H" : "V")}: no candidate walls.");
+                    continue;
+                }
+
+                // Get each candidate's perpendicular midpoint position
+                var wallPerpPos = candidates
+                    .Select(w => {
+                        try
+                        {
+                            var wlc = w.Location as LocationCurve;
+                            if (wlc == null) return (Wall: w, Perp: (double?)null);
+                            XYZ mid = wlc.Curve.Evaluate(0.5, true);
+                            return (Wall: w, Perp: (double?)(isHorizontal ? mid.Y : mid.X));
+                        }
+                        catch { return (Wall: w, Perp: (double?)null); }
+                    })
+                    .Where(x => x.Perp.HasValue)
+                    .OrderBy(x => x.Perp.Value)
+                    .ToList();
+
+                if (wallPerpPos.Count == 0) continue;
+
+                // Cluster walls by perpendicular position
+                var clusters = new List<List<Wall>>();
+                var current = new List<Wall> { wallPerpPos[0].Wall };
+                double lastPerp = wallPerpPos[0].Perp.Value;
+
+                for (int i = 1; i < wallPerpPos.Count; i++)
+                {
+                    double gap = wallPerpPos[i].Perp.Value - lastPerp;
+                    if (gap > clusterGapFt)
+                    { clusters.Add(current); current = new List<Wall>(); }
+                    current.Add(wallPerpPos[i].Wall);
+                    lastPerp = wallPerpPos[i].Perp.Value;
+                }
+                clusters.Add(current);
+
+                foreach (var cluster in clusters)
+                {
+                    // Perpendicular extent of this cluster
+                    var perpPositions = cluster
+                        .Select(w => { var wlc = w.Location as LocationCurve; if (wlc == null) return (double?)null; XYZ m = wlc.Curve.Evaluate(0.5, true); return (double?)(isHorizontal ? m.Y : m.X); })
+                        .Where(v => v.HasValue).Select(v => v.Value).ToList();
+                    if (perpPositions.Count == 0) continue;
+
+                    double clusterMin = perpPositions.Min();
+                    double clusterMax = perpPositions.Max();
+
+                    // DepthDistance: if set, skip clusters wider than the limit
+                    if (settings.DepthDistance > 0.0 && (clusterMax - clusterMin) > settings.DepthDistance)
+                        continue;
+
+                    // Collect interior face refs for this cluster
                     var entries = CollectInteriorFaceRefs(
-                        candidates, tryPos, measureDir, isHorizontal,
-                        centroid, settings, geomOpts);
-                    if (bestEntries == null || entries.Count > bestEntries.Count)
+                        cluster, measureDir, isHorizontal,
+                        clusterMin, clusterMax, settings, geomOpts);
+
+                    if (entries.Count < 2)
                     {
-                        bestEntries = entries;
-                        bestScanPos = tryPos;
+                        sk++;
+                        skips.Add($"Pass3 {(isHorizontal ? "H" : "V")} cluster@{clusterMin:F1}: <2 refs.");
+                        continue;
                     }
-                    if (bestEntries != null && bestEntries.Count >= 3) break;
-                }
 
-                if (bestEntries == null || bestEntries.Count < 2)
-                {
-                    sk++;
-                    skips.Add($"Pass3 {(isHorizontal ? "H" : "V")}: fewer than 2 interior refs found.");
-                    continue;
-                }
+                    var sorted = entries.OrderBy(e => e.Pos).ToList();
 
-                var sorted = bestEntries.OrderBy(e => e.Pos).ToList();
-
-                // Minimum segment filter
-                if (sorted.Count > 2)
-                {
-                    var filtered = new List<RefEntry> { sorted[0] };
-                    for (int i = 1; i < sorted.Count - 1; i++)
+                    // Minimum segment filter
+                    if (sorted.Count > 2)
                     {
-                        double dP = sorted[i].Pos - filtered.Last().Pos;
-                        double dN = sorted[i + 1].Pos - sorted[i].Pos;
-                        if (dP >= minSegFt && dN >= minSegFt) filtered.Add(sorted[i]);
+                        var filtered = new List<RefEntry> { sorted[0] };
+                        for (int i = 1; i < sorted.Count - 1; i++)
+                        {
+                            double dP = sorted[i].Pos - filtered.Last().Pos;
+                            double dN = sorted[i + 1].Pos - sorted[i].Pos;
+                            if (dP >= minSegFt && dN >= minSegFt) filtered.Add(sorted[i]);
+                        }
+                        filtered.Add(sorted.Last());
+                        sorted = filtered;
                     }
-                    filtered.Add(sorted.Last());
-                    sorted = filtered;
-                }
 
-                if (sorted.Count < 2)
-                {
-                    sk++;
-                    skips.Add($"Pass3 {(isHorizontal ? "H" : "V")}: <2 refs after segment filter.");
-                    continue;
-                }
+                    if (sorted.Count < 2) { sk++; continue; }
 
-                var ra = new ReferenceArray();
-                foreach (var e in sorted) if (e.Ref != null) ra.Append(e.Ref);
-                if (ra.Size < 2)
-                {
-                    sk++;
-                    skips.Add($"Pass3 {(isHorizontal ? "H" : "V")}: <2 valid refs.");
-                    continue;
-                }
+                    var ra = new ReferenceArray();
+                    foreach (var e in sorted) if (e.Ref != null) ra.Append(e.Ref);
+                    if (ra.Size < 2) { sk++; continue; }
 
-                // Dimension line placed at the scan position inside the building.
-                // The string runs along measureDir, spanning from first to last ref.
-                const double linePad = 0.3;
-                double lineStart = sorted.First().Pos - linePad;
-                double lineEnd = sorted.Last().Pos + linePad;
+                    // Dim line perpendicular position:
+                    // InsetDistance (inset_mm) measured from the NEAR building edge.
+                    // isHorizontal string: near edge is bottom (Min.Y) or top (Max.Y).
+                    // Use building envelope edges, offset inward by InsetDistance.
+                    // Pick the edge nearest to this cluster's centroid.
+                    double clusterCenterPerp = (clusterMin + clusterMax) / 2.0;
+                    double nearEdge, farEdge;
+                    if (isHorizontal)
+                    {
+                        // Choose bottom or top based on which the cluster is closer to
+                        double distToBottom = Math.Abs(clusterCenterPerp - envelope.Min.Y);
+                        double distToTop = Math.Abs(clusterCenterPerp - envelope.Max.Y);
+                        if (distToBottom <= distToTop)
+                        { nearEdge = envelope.Min.Y; farEdge = envelope.Max.Y; }
+                        else
+                        { nearEdge = envelope.Max.Y; farEdge = envelope.Min.Y; }
+                    }
+                    else
+                    {
+                        double distToLeft = Math.Abs(clusterCenterPerp - envelope.Min.X);
+                        double distToRight = Math.Abs(clusterCenterPerp - envelope.Max.X);
+                        if (distToLeft <= distToRight)
+                        { nearEdge = envelope.Min.X; farEdge = envelope.Max.X; }
+                        else
+                        { nearEdge = envelope.Max.X; farEdge = envelope.Min.X; }
+                    }
 
-                XYZ p1, p2;
-                if (isHorizontal) // horizontal string at Y = bestScanPos
-                {
-                    p1 = new XYZ(lineStart, bestScanPos, viewZ);
-                    p2 = new XYZ(lineEnd, bestScanPos, viewZ);
-                }
-                else              // vertical string at X = bestScanPos
-                {
-                    p1 = new XYZ(bestScanPos, lineStart, viewZ);
-                    p2 = new XYZ(bestScanPos, lineEnd, viewZ);
-                }
-                if (p1.X > p2.X || p1.Y > p2.Y) { var tmp = p1; p1 = p2; p2 = tmp; }
+                    // Inset from near edge toward far edge
+                    double sign = (farEdge > nearEdge) ? 1.0 : -1.0;
+                    double perpPos = nearEdge + sign * settings.InsetDistance;
 
-                try
-                {
-                    Line dimLine = Line.CreateBound(p1, p2);
-                    Dimension dim = _doc.Create.NewDimension(view, dimLine, ra, dimType);
-                    if (dim != null) s++;
-                    else { sk++; skips.Add($"Pass3 {(isHorizontal ? "H" : "V")}: NewDimension returned null."); }
-                }
-                catch (Exception ex)
-                {
-                    f++;
-                    errors.Add($"Pass3 {(isHorizontal ? "H" : "V")}: {ex.Message}");
+                    const double linePad = 0.3;
+                    double lineStart = sorted.First().Pos - linePad;
+                    double lineEnd = sorted.Last().Pos + linePad;
+
+                    XYZ p1 = isHorizontal
+                        ? new XYZ(lineStart, perpPos, viewZ)
+                        : new XYZ(perpPos, lineStart, viewZ);
+                    XYZ p2 = isHorizontal
+                        ? new XYZ(lineEnd, perpPos, viewZ)
+                        : new XYZ(perpPos, lineEnd, viewZ);
+                    if (p1.X > p2.X || p1.Y > p2.Y) { var tmp = p1; p1 = p2; p2 = tmp; }
+
+                    try
+                    {
+                        Line dimLine = Line.CreateBound(p1, p2);
+                        Dimension dim = _doc.Create.NewDimension(view, dimLine, ra, dimType);
+                        if (dim != null) s++;
+                        else { sk++; skips.Add($"Pass3 {(isHorizontal ? "H" : "V")}: NewDimension null."); }
+                    }
+                    catch (Exception ex)
+                    {
+                        f++;
+                        errors.Add($"Pass3 {(isHorizontal ? "H" : "V")}: {ex.Message}");
+                    }
                 }
             }
 
@@ -974,17 +1030,17 @@ namespace A49AIRevitAssistant.Executor.Commands
         }
 
         /// <summary>
-        /// Collects one interior-facing face reference per wall that crosses the scan line.
-        /// measureDir: X for horizontal scan (room widths), Y for vertical (room heights).
-        /// scanPos:    the fixed Y (horizontal) or X (vertical) coordinate of the scan line.
-        /// Interior face = face whose centroid is closest to the building centroid along measureDir.
+        /// Collects one interior-facing face reference per wall in the cluster.
+        /// clusterMin/Max define the perpendicular extent of the zone being processed.
+        /// Interior face = face position closest to the cluster's centre along measureDir.
         /// </summary>
         private List<RefEntry> CollectInteriorFaceRefs(
-            List<Wall> candidates, double scanPos, XYZ measureDir,
-            bool isHorizontal, XYZ centroid, DimSettings settings, Options geomOpts)
+            List<Wall> candidates, XYZ measureDir,
+            bool isHorizontal, double clusterMin, double clusterMax,
+            DimSettings settings, Options geomOpts)
         {
             var entries = new List<RefEntry>();
-            double centroidPos = isHorizontal ? centroid.X : centroid.Y;
+            double centerPerp = (clusterMin + clusterMax) / 2.0; // cluster centre along measureDir
 
             foreach (Wall wall in candidates)
             {
@@ -992,25 +1048,8 @@ namespace A49AIRevitAssistant.Executor.Commands
                 {
                     var wlc = wall.Location as LocationCurve;
                     if (wlc == null) continue;
-                    XYZ wStart = wlc.Curve.GetEndPoint(0);
-                    XYZ wEnd = wlc.Curve.GetEndPoint(1);
 
-                    // Check if this wall extends past the scan line
-                    double wMin = isHorizontal ? Math.Min(wStart.Y, wEnd.Y) : Math.Min(wStart.X, wEnd.X);
-                    double wMax = isHorizontal ? Math.Max(wStart.Y, wEnd.Y) : Math.Max(wStart.X, wEnd.X);
-                    if (scanPos < wMin - 0.5 || scanPos > wMax + 0.5) continue;
-
-                    // Depth filter: limit how far from centroid we look (for complex plans)
-                    if (settings.DepthDistance > 0.0)
-                    {
-                        XYZ wMid = wlc.Curve.Evaluate(0.5, true);
-                        double dist = isHorizontal
-                            ? Math.Abs(wMid.X - centroid.X)
-                            : Math.Abs(wMid.Y - centroid.Y);
-                        if (dist > settings.DepthDistance) continue;
-                    }
-
-                    // Gather faces with normal ≈ ±measureDir
+                    // Collect all faces with normal ≈ ±measureDir
                     GeometryElement geo = wall.get_Geometry(geomOpts);
                     if (geo == null) continue;
 
@@ -1035,8 +1074,8 @@ namespace A49AIRevitAssistant.Executor.Commands
 
                     if (wallFaces.Count == 0) continue;
 
-                    // Interior face = face closest to building centroid along measureDir
-                    var chosen = wallFaces.OrderBy(f => Math.Abs(f.pos - centroidPos)).First();
+                    // Interior face = closest to cluster centre along measureDir
+                    var chosen = wallFaces.OrderBy(f => Math.Abs(f.pos - centerPerp)).First();
                     if (!entries.Any(e => Math.Abs(e.Pos - chosen.pos) < 0.2))
                     {
                         entries.Add(new RefEntry
@@ -1045,8 +1084,8 @@ namespace A49AIRevitAssistant.Executor.Commands
                             Pos = chosen.pos,
                             Kind = "interior",
                             Pt = new XYZ(
-                                isHorizontal ? chosen.pos : scanPos,
-                                isHorizontal ? scanPos : chosen.pos, 0),
+                                isHorizontal ? chosen.pos : centerPerp,
+                                isHorizontal ? centerPerp : chosen.pos, 0),
                             Wall = wall
                         });
                     }
@@ -1056,7 +1095,6 @@ namespace A49AIRevitAssistant.Executor.Commands
 
             return entries;
         }
-
         private List<Wall> CollectWallsInView(View view) =>
             new FilteredElementCollector(_doc, view.Id)
                 .OfClass(typeof(Wall))

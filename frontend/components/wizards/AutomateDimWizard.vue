@@ -157,11 +157,11 @@
         <div class="bg-black/10 border border-white/10 rounded-xl p-3">
           <div class="flex justify-between items-center mb-2">
             <label class="text-[10px] uppercase tracking-wider text-white/50 font-bold">
-              Interior String Inset
+              Interior String Position
             </label>
             <span class="text-xs font-bold text-[#00BCD4]">{{ insetMm }} mm</span>
           </div>
-          <div class="text-[10px] text-white/40 mb-2">Distance from wall edge for interior location strings</div>
+          <div class="text-[10px] text-white/40 mb-2">Distance from building edge where interior strings are drawn</div>
           <input type="range" min="200" max="3000" step="100"
                  v-model.number="insetMm"
                  class="w-full h-1.5 rounded-full appearance-none cursor-pointer dim-slider" />

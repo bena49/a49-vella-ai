@@ -206,24 +206,56 @@ namespace A49AIRevitAssistant.Executor.Commands
             var request = context.Request;
             var view = request.TargetView;
 
-            var gridRefs = new List<TaggedRef>();
-            if (request.IncludeGrids && context.AllGridsInView.Count > 0)
-                gridRefs = DimHelpers.GetGridRefs(wall, context.AllGridsInView);
+            // 1. Define geometry variables first so they can be used by all logic below
+            var cl = DimHelpers.GetWallCenterLine(wall);
+            if (cl == null) return DimResult.Skipped("Wall: no center line.");
 
-            var (startCap, endCap) = DimHelpers.GetWallEndCapRefs(wall);
-            if (startCap == null || endCap == null)
-                return DimResult.Skipped("Wall: end caps null.");
+            XYZ wallOrigin = cl.GetEndPoint(0);
+            XYZ wallDir = (cl.GetEndPoint(1) - wallOrigin).Normalize();
+            List<TaggedRef> baseRefs = new List<TaggedRef>();
 
-            List<TaggedRef> baseRefs = gridRefs.Count > 0
-                ? DimHelpers.MergeEndCapsWithGrids(startCap, endCap, gridRefs, 10.0)
-                : new List<TaggedRef> { startCap, endCap };
-
-            if (request.IncludeOpenings)
+            // 2. Handle Curtain Walls specifically
+            if (wall.WallType?.Kind == WallKind.Curtain)
             {
-                var openingRefs = DimHelpers.GetOpeningEdgeRefs(wall, doc, startCap.U, endCap.U);
-                baseRefs.AddRange(openingRefs);
+                var (cwStart, cwEnd) = GetCurtainWallEndRefsForPass1(wall, doc, wallOrigin, wallDir);
+                if (cwStart != null && cwEnd != null)
+                {
+                    baseRefs.Add(cwStart);
+                    baseRefs.Add(cwEnd);
+                }
+                else
+                {
+                    return DimResult.Skipped("Curtain wall: could not resolve boundary refs.");
+                }
+            }
+            else
+            {
+                // 3. Standard Wall Logic (End Caps)
+                var (startCap, endCap) = DimHelpers.GetWallEndCapRefs(wall);
+                if (startCap == null || endCap == null)
+                    return DimResult.Skipped("Wall: end caps null.");
+
+                var gridRefs = DimHelpers.GetGridRefs(wall, context.AllGridsInView);
+
+                if (request.IncludeGrids && gridRefs.Count > 0)
+                {
+                    baseRefs = DimHelpers.MergeEndCapsWithGrids(startCap, endCap, gridRefs, 10.0);
+                }
+                else
+                {
+                    baseRefs.Add(startCap);
+                    baseRefs.Add(endCap);
+                }
+
+                // Only basic walls search for hosted openings (doors/windows)
+                if (request.IncludeOpenings)
+                {
+                    var openingRefs = DimHelpers.GetOpeningEdgeRefs(wall, doc, startCap.U, endCap.U, view);
+                    baseRefs.AddRange(openingRefs);
+                }
             }
 
+            // 4. Shared Finalization (Dimension Creation)
             if (baseRefs.Count < 2)
                 return DimResult.Skipped("Wall: <2 refs.");
 
@@ -264,8 +296,34 @@ namespace A49AIRevitAssistant.Executor.Commands
                 gridRefs = DimHelpers.GetGridRefs(primary, context.AllGridsInView);
 
             var allRefs = new List<TaggedRef>();
+
+            // Primary wall coordinate system — all U values projected onto this axis
+            var primaryCl = DimHelpers.GetWallCenterLine(primary);
+            XYZ primaryOrigin = primaryCl?.GetEndPoint(0) ?? XYZ.Zero;
+            XYZ primaryDir = primaryCl != null
+                ? (primaryCl.GetEndPoint(1) - primaryOrigin).Normalize()
+                : XYZ.BasisX;
+            XYZ primaryNormal = DimHelpers.GetWallNormal(primary);
+
             foreach (Wall wall in group)
             {
+                // Curtain walls have no valid end-cap face refs for NewDimension.
+                // Skip them — the adjacent bridging below handles their extent by
+                // using the far-side basic wall end caps instead.
+                if (wall.WallType?.Kind == WallKind.Curtain)
+                {
+                    // 💥 REVISION: Use the geometry-based helper instead of a direct Element reference
+                    var (cwStart, cwEnd) = GetCurtainWallEndRefsForPass1(wall, doc, primaryOrigin, primaryDir);
+
+                    // Ensure we only add if the reference is GEOMETRIC (Face or Grid)
+                    if (cwStart?.Ref != null && cwStart.Ref.ElementReferenceType == ElementReferenceType.REFERENCE_TYPE_SURFACE)
+                        allRefs.Add(cwStart);
+                    if (cwEnd?.Ref != null && cwEnd.Ref.ElementReferenceType == ElementReferenceType.REFERENCE_TYPE_SURFACE)
+                        allRefs.Add(cwEnd);
+
+                    continue;
+                }
+
                 var (startCap, endCap) = DimHelpers.GetWallEndCapRefs(wall);
                 if (startCap == null || endCap == null) continue;
 
@@ -277,9 +335,138 @@ namespace A49AIRevitAssistant.Executor.Commands
 
                 if (request.IncludeOpenings)
                     allRefs.AddRange(DimHelpers.GetOpeningEdgeRefs(
-                        wall, doc, startCap.U, endCap.U));
+                        wall, doc, startCap.U, endCap.U, view));
             }
 
+            // ── Curtain wall bridging ─────────────────────────────────────────────
+            // Phase 1: Compute this group's spatial extent.
+            //   - For basic wall groups: use allRefs U positions.
+            //   - For all-curtain-wall groups: allRefs is empty, so compute
+            //     extent from the curtain walls' location curves instead.
+            //   This correctly initialises bridging even when allRefs is empty.
+            double bridgeMin = double.MaxValue;
+            double bridgeMax = double.MinValue;
+            foreach (var r in allRefs)
+            {
+                if (r.U < bridgeMin) bridgeMin = r.U;
+                if (r.U > bridgeMax) bridgeMax = r.U;
+            }
+            foreach (Wall w in group)
+            {
+                var wLcB = w.Location as LocationCurve;
+                if (wLcB == null) continue;
+                double u0b = (wLcB.Curve.GetEndPoint(0) - primaryOrigin).DotProduct(primaryDir);
+                double u1b = (wLcB.Curve.GetEndPoint(1) - primaryOrigin).DotProduct(primaryDir);
+                if (u0b < bridgeMin) bridgeMin = u0b;
+                if (u1b < bridgeMin) bridgeMin = u1b;
+                if (u0b > bridgeMax) bridgeMax = u0b;
+                if (u1b > bridgeMax) bridgeMax = u1b;
+            }
+
+            if (bridgeMin == double.MaxValue)
+            {
+                // No walls in group produced any position data — nothing to bridge.
+            }
+            else if (context.AllWallsInView.Count > 0)
+            {
+                XYZ primaryFacePt = primaryOrigin + primaryNormal * (primary.Width / 2.0);
+
+                // Phase 2: Expand the extent transitively through adjacent curtain walls.
+                // Converges in at most N iterations where N = adjacent curtain sections.
+                double expandedMin = bridgeMin;
+                double expandedMax = bridgeMax;
+
+                for (int cwIter = 0; cwIter < 20; cwIter++)
+                {
+                    bool grew = false;
+                    foreach (Wall cw in context.AllWallsInView)
+                    {
+                        // Include curtain walls IN the group — they may border adjacent
+                        // basic walls we haven't yet found via other curtain walls.
+                        if (cw.WallType?.Kind != WallKind.Curtain) continue;
+
+                        try
+                        {
+                            var cwLcX = cw.Location as LocationCurve;
+                            if (cwLcX == null) continue;
+
+                            // Geometry checks: 
+                            // 1. Is the curtain wall parallel to the group direction?
+                            XYZ cwDX = (cwLcX.Curve.GetEndPoint(1) - cwLcX.Curve.GetEndPoint(0)).Normalize();
+                            if (Math.Abs(cwDX.DotProduct(primaryDir)) < 0.97) continue;
+
+                            // 2. Is the wall normal aligned?
+                            if (Math.Abs(DimHelpers.GetWallNormal(cw).DotProduct(primaryNormal)) < 0.97) continue;
+
+                            // 3. Is the wall on the same plane (offset check)?
+                            if (Math.Abs((cwLcX.Curve.Evaluate(0.5, true) - primaryFacePt).DotProduct(primaryNormal)) > 1.5) continue;
+
+                            // Project endpoints onto primary axis
+                            double cxU0 = (cwLcX.Curve.GetEndPoint(0) - primaryOrigin).DotProduct(primaryDir);
+                            double cxU1 = (cwLcX.Curve.GetEndPoint(1) - primaryOrigin).DotProduct(primaryDir);
+                            if (cxU0 > cxU1) { var t = cxU0; cxU0 = cxU1; cxU1 = t; }
+
+                            // Does this CW overlap or touch the current expanded extent?
+                            // (1.0ft tolerance for slight gaps in modeling)
+                            if (cxU0 > expandedMax + 1.0 || cxU1 < expandedMin - 1.0) continue;
+
+                            // Expand boundaries and flag for another iteration to catch transitive connections
+                            if (cxU0 < expandedMin) { expandedMin = cxU0; grew = true; }
+                            if (cxU1 > expandedMax) { expandedMax = cxU1; grew = true; }
+                        }
+                        catch { }
+                    }
+                    if (!grew) break;
+                }
+
+                // Phase 3: Find basic walls adjacent to the expanded extent and add
+                // their end-cap face refs as bridge references.
+                // "Adjacent" = the wall's extent touches either boundary of the expanded span.
+                foreach (Wall other in context.AllWallsInView)
+                {
+                    if (group.Any(w => w.Id == other.Id)) continue;
+                    if (other.WallType?.Kind == WallKind.Curtain) continue;
+
+                    try
+                    {
+                        var oCl = DimHelpers.GetWallCenterLine(other);
+                        if (oCl == null) continue;
+
+                        XYZ oDirVec = (oCl.GetEndPoint(1) - oCl.GetEndPoint(0)).Normalize();
+                        if (Math.Abs(oDirVec.DotProduct(primaryDir)) < 0.97) continue;
+                        if (Math.Abs((oCl.Evaluate(0.5, true) - primaryFacePt).DotProduct(primaryNormal)) > 1.5) continue;
+
+                        XYZ oOrigin = oCl.GetEndPoint(0);
+                        XYZ oDirN = (oCl.GetEndPoint(1) - oOrigin).Normalize();
+                        double oU0 = (oOrigin - primaryOrigin).DotProduct(primaryDir);
+                        double oU1 = oU0 + oCl.Length * (oDirN.DotProduct(primaryDir) > 0 ? 1 : -1);
+                        if (oU0 > oU1) { var t = oU0; oU0 = oU1; oU1 = t; }
+
+                        // Wall must touch exactly one boundary of the expanded span
+                        // (walls that overlap the interior are already in their own group)
+                        bool touchesLeft = Math.Abs(oU1 - expandedMin) < 1.0;
+                        bool touchesRight = Math.Abs(oU0 - expandedMax) < 1.0;
+                        if (!touchesLeft && !touchesRight) continue;
+
+                        var (oStart, oEnd) = DimHelpers.GetWallEndCapRefs(other);
+                        if (oStart != null)
+                        {
+                            XYZ pt = oOrigin + oDirN * oStart.U;
+                            double pU = (pt - primaryOrigin).DotProduct(primaryDir);
+                            if (!allRefs.Any(r => Math.Abs(r.U - pU) < 0.2))
+                                allRefs.Add(new TaggedRef { Ref = oStart.Ref, U = pU, Kind = "bridge", SourceId = other.Id });
+                        }
+                        if (oEnd != null)
+                        {
+                            XYZ pt = oOrigin + oDirN * oEnd.U;
+                            double pU = (pt - primaryOrigin).DotProduct(primaryDir);
+                            if (!allRefs.Any(r => Math.Abs(r.U - pU) < 0.2))
+                                allRefs.Add(new TaggedRef { Ref = oEnd.Ref, U = pU, Kind = "bridge", SourceId = other.Id });
+                        }
+                    }
+                    catch { }
+                }
+            }
             if (allRefs.Count < 2)
                 return DimResult.Skipped("Collinear group: <2 refs.");
 
@@ -776,8 +963,144 @@ namespace A49AIRevitAssistant.Executor.Commands
         /// <summary>
         /// Adds boundary mullion (or grid line) references for a curtain wall to the entries list.
         /// Curtain walls have no solid face geometry, so we locate their corner/boundary mullions
-        /// and use those as dimension anchors. Falls back to wall extent with a direct wall ref
-        /// if no mullions are found at the boundaries.
+        /// <summary>
+        /// Returns start and end TaggedRef for a curtain wall, with U values
+        /// projected onto the primary wall's coordinate system (origin + direction).
+        /// This ensures curtain wall endpoints sort and span correctly when merged
+        /// with basic wall refs in DimensionCollinearGroup.
+        ///
+        /// Tries in order:
+        ///   1. CurtainGridLine U-boundary references (most reliable for NewDimension)
+        ///   2. HostObjectUtils.GetSideFaces — picks leftmost + rightmost face refs
+        ///   3. Same face ref for both ends (single-panel curtain walls)
+        /// </summary>
+        private static (TaggedRef start, TaggedRef end) GetCurtainWallEndRefsForPass1(
+            Wall curtainWall, Document doc, XYZ primaryOrigin, XYZ primaryDir)
+        {
+            var cwLc = curtainWall.Location as LocationCurve;
+            if (cwLc == null) return (null, null);
+
+            XYZ ep0 = cwLc.Curve.GetEndPoint(0);
+            XYZ ep1 = cwLc.Curve.GetEndPoint(1);
+
+            // Project curtain wall endpoints onto the primary wall's U axis
+            double u0 = (ep0 - primaryOrigin).DotProduct(primaryDir);
+            double u1 = (ep1 - primaryOrigin).DotProduct(primaryDir);
+            if (u0 > u1) { var t = u0; u0 = u1; u1 = t; var te = ep0; ep0 = ep1; ep1 = te; }
+
+            // ── Try 1: CurtainGridLine U-boundary references ─────────────────
+            try
+            {
+                var curtainGrid = curtainWall.CurtainGrid;
+                if (curtainGrid != null)
+                {
+                    var uLineIds = curtainGrid.GetUGridLineIds();
+                    var uLines = new List<(double u, Reference fref)>();
+                    foreach (var id in uLineIds)
+                    {
+                        var gl = doc.GetElement(id) as CurtainGridLine;
+                        if (gl?.FullCurve == null) continue;
+                        XYZ glMid = gl.FullCurve.Evaluate(0.5, true);
+                        double u = (glMid - primaryOrigin).DotProduct(primaryDir);
+                        uLines.Add((u, new Reference(gl)));
+                    }
+                    if (uLines.Count >= 2)
+                    {
+                        uLines.Sort((a, b) => a.u.CompareTo(b.u));
+                        return (
+                            new TaggedRef { Ref = uLines[0].fref, U = uLines[0].u, Kind = "endcap", SourceId = curtainWall.Id },
+                            new TaggedRef { Ref = uLines[uLines.Count - 1].fref, U = uLines[uLines.Count - 1].u, Kind = "endcap", SourceId = curtainWall.Id }
+                        );
+                    }
+                }
+            }
+            catch { }
+
+            // ── Try 2: HostObjectUtils side faces + Deep Panel Search ───────────
+            var facePosList = new List<(double u, Reference fref)>();
+
+            // A. Check standard side faces first
+            foreach (var shellType in new[] { ShellLayerType.Exterior, ShellLayerType.Interior })
+            {
+                try
+                {
+                    IList<Reference> sideRefs = HostObjectUtils.GetSideFaces(curtainWall, shellType);
+                    if (sideRefs == null) continue;
+                    foreach (var fRef in sideRefs)
+                    {
+                        var gObj = curtainWall.GetGeometryObjectFromReference(fRef) as PlanarFace;
+                        if (gObj == null) continue;
+                        // Only accept surface references for NewDimension()
+                        if (fRef.ElementReferenceType != ElementReferenceType.REFERENCE_TYPE_SURFACE) continue;
+
+                        XYZ cen = DimHelpers.FaceCentroid(gObj);
+                        double u = (cen - primaryOrigin).DotProduct(primaryDir);
+                        facePosList.Add((u, fRef));
+                    }
+                }
+                catch { }
+            }
+
+            // B. Deep Search: If we don't have 2 distinct faces, look at individual Panels
+            if (facePosList.GroupBy(x => Math.Round(x.u, 3)).Count() < 2)
+            {
+                var curtainGrid = curtainWall.CurtainGrid;
+                if (curtainGrid != null)
+                {
+                    var panelIds = curtainGrid.GetPanelIds();
+                    var opts = new Options { ComputeReferences = true, DetailLevel = ViewDetailLevel.Fine };
+
+                    foreach (ElementId pId in panelIds)
+                    {
+                        var panel = doc.GetElement(pId) as Panel;
+                        if (panel == null) continue;
+
+                        foreach (Solid solid in DimHelpers.CollectSolids(panel.get_Geometry(opts)))
+                        {
+                            foreach (Face face in solid.Faces)
+                            {
+                                if (face.Reference == null) continue;
+                                if (face.Reference.ElementReferenceType != ElementReferenceType.REFERENCE_TYPE_SURFACE) continue;
+
+                                XYZ cen = DimHelpers.FaceCentroid(face);
+                                double u = (cen - primaryOrigin).DotProduct(primaryDir);
+
+                                // We only care about faces near the wall's start (u0) or end (u1)
+                                if (Math.Abs(u - u0) < 0.5 || Math.Abs(u - u1) < 0.5)
+                                {
+                                    facePosList.Add((u, face.Reference));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Final Assembly
+            if (facePosList.Count >= 1)
+            {
+                var sortedFaces = facePosList.OrderBy(x => x.u).ToList();
+                var first = sortedFaces.First();
+                var last = sortedFaces.Last();
+
+                // Ensure we are returning two different references if possible
+                return (
+                    new TaggedRef { Ref = first.fref, U = u0, Kind = "endcap", SourceId = curtainWall.Id },
+                    new TaggedRef { Ref = last.fref, U = u1, Kind = "endcap", SourceId = curtainWall.Id }
+                );
+            }
+
+            return (null, null);
+        }
+
+        /// <summary>
+        /// Adds exactly two position references for a curtain wall — its start and end
+        /// endpoints along `dir`. Uses HostObjectUtils.GetSideFaces to obtain stable
+        /// PlanarFace References that NewDimension() accepts. For each endpoint, it picks
+        /// the face whose centroid is closest to that endpoint along `dir`.
+        ///
+        /// No mullion lookup, no grid line iteration — just the two wall extent positions.
+        /// This is reliable regardless of curtain panel configuration or mullion presence.
         /// </summary>
         private static void AddCurtainWallBoundaryRefs(
             Wall curtainWall, XYZ dir, List<RefEntry> entries, Document doc)
@@ -790,43 +1113,51 @@ namespace A49AIRevitAssistant.Executor.Commands
             double pos0 = ep0.DotProduct(dir);
             double pos1 = ep1.DotProduct(dir);
 
-            Reference ref0 = null, ref1 = null;
-
-            // Try boundary mullion references first (most reliable Revit reference for dims).
-            // CurtainGrid.GetMullionIds() is the correct API for curtain wall mullion access.
-            try
+            // Collect face references from both exterior and interior shell layers.
+            // We only need references — the position is what matters for dimensioning.
+            var allFaceRefs = new List<(double pos, Reference fref)>();
+            foreach (var shellType in new[] { ShellLayerType.Exterior, ShellLayerType.Interior })
             {
-                var curtainGrid = curtainWall.CurtainGrid;
-                if (curtainGrid != null)
+                try
                 {
-                    foreach (ElementId mullionId in curtainGrid.GetMullionIds())
+                    IList<Reference> sideRefs = HostObjectUtils.GetSideFaces(curtainWall, shellType);
+                    if (sideRefs == null) continue;
+                    foreach (var fRef in sideRefs)
                     {
-                        if (!(doc.GetElement(mullionId) is Mullion mullion)) continue;
-                        var mullionLocPt = mullion.Location as LocationPoint;
-                        if (mullionLocPt == null) continue;
-                        XYZ mullionPt = mullionLocPt.Point;
-                        double mp = mullionPt.DotProduct(dir);
-                        if (ref0 == null && Math.Abs(mp - pos0) < 1.0) ref0 = new Reference(mullion);
-                        if (ref1 == null && Math.Abs(mp - pos1) < 1.0) ref1 = new Reference(mullion);
-                        if (ref0 != null && ref1 != null) break;
+                        var gObj = curtainWall.GetGeometryObjectFromReference(fRef) as PlanarFace;
+                        if (gObj == null) continue;
+                        XYZ cen = DimHelpers.FaceCentroid(gObj);
+                        allFaceRefs.Add((cen.DotProduct(dir), fRef));
                     }
                 }
+                catch { }
             }
-            catch { }
 
-            // Fallback: direct wall reference for position tracking.
-            // Note: a single wall reference cannot anchor two separate dimension points —
-            // only one endpoint will be registered per reference.
-            if (ref0 == null && ref1 == null)
+            // Fallback: direct wall reference if no faces found
+            if (allFaceRefs.Count == 0)
             {
-                try { ref0 = new Reference(curtainWall); } catch { }
+                Reference wallRef = null;
+                try { wallRef = new Reference(curtainWall); } catch { }
+                if (wallRef != null)
+                {
+                    if (!entries.Any(e => Math.Abs(e.Pos - pos0) < 0.15))
+                        entries.Add(new RefEntry { Ref = wallRef, Pos = pos0, Kind = "curtain", Pt = ep0, Wall = curtainWall });
+                    if (!entries.Any(e => Math.Abs(e.Pos - pos1) < 0.15))
+                        entries.Add(new RefEntry { Ref = wallRef, Pos = pos1, Kind = "curtain", Pt = ep1, Wall = curtainWall });
+                }
+                return;
             }
 
-            if (ref0 != null && !entries.Any(e => Math.Abs(e.Pos - pos0) < 0.15))
-                entries.Add(new RefEntry { Ref = ref0, Pos = pos0, Kind = "curtain", Pt = ep0, Wall = curtainWall });
+            // For each endpoint pick the face reference whose position is closest to it.
+            // This gives one stable reference per endpoint — exactly two total.
+            var refForEp0 = allFaceRefs.OrderBy(f => Math.Abs(f.pos - pos0)).First();
+            var refForEp1 = allFaceRefs.OrderBy(f => Math.Abs(f.pos - pos1)).First();
 
-            if (ref1 != null && ref1 != ref0 && !entries.Any(e => Math.Abs(e.Pos - pos1) < 0.15))
-                entries.Add(new RefEntry { Ref = ref1, Pos = pos1, Kind = "curtain", Pt = ep1, Wall = curtainWall });
+            if (!entries.Any(e => Math.Abs(e.Pos - pos0) < 0.15))
+                entries.Add(new RefEntry { Ref = refForEp0.fref, Pos = pos0, Kind = "curtain", Pt = ep0, Wall = curtainWall });
+
+            if (!entries.Any(e => Math.Abs(e.Pos - pos1) < 0.15))
+                entries.Add(new RefEntry { Ref = refForEp1.fref, Pos = pos1, Kind = "curtain", Pt = ep1, Wall = curtainWall });
         }
 
         // ======================================================================
@@ -844,7 +1175,7 @@ namespace A49AIRevitAssistant.Executor.Commands
         /// DepthDistance (depth_mm) limits how wide each cluster can be in the perp axis.
         /// </summary>
         private (int s, int sk, int f, List<string> errors, List<string> skips)
-            Pass3Interior(List<Wall> allWalls, View view, DimensionType dimType, DimSettings settings)
+    Pass3Interior(List<Wall> allWalls, View view, DimensionType dimType, DimSettings settings)
         {
             int s = 0, sk = 0, f = 0;
             var errors = new List<string>();
@@ -860,33 +1191,37 @@ namespace A49AIRevitAssistant.Executor.Commands
             var envelope = DimHelpers.GetProjectEnvelope(allWalls);
             if (envelope == null) return (0, 0, 0, errors, skips);
 
-            double viewZ = view.Origin.Z;
-            double minSegFt = Math.Max(0.5, view.Scale * 2.0 / 304.8);
+            // FIX: Calculate the View Cut Plane elevation. 
+            // This ensures the dimension line is co-planar with the geometry being dimensioned.
+            double cutPlaneZ = view.Origin.Z;
+            if (view is ViewPlan vp)
+            {
+                try
+                {
+                    var range = vp.GetViewRange();
+                    Level level = vp.GenLevel;
+                    if (level != null)
+                    {
+                        cutPlaneZ = level.Elevation + range.GetOffset(PlanViewPlane.CutPlane);
+                    }
+                }
+                catch { }
+            }
 
-            // Gap threshold for clustering: if two walls are more than clusterGapFt apart
-            // along the perpendicular axis they are in different zones.
-            const double clusterGapFt = 16.4; // ~5m — tune higher for large buildings
+            double minSegFt = Math.Max(0.5, view.Scale * 2.0 / 304.8);
+            const double clusterGapFt = 16.4; // ~5m
 
             foreach (bool isHorizontal in new[] { true, false })
             {
-                // measureDir: direction the string spans (X for horizontal, Y for vertical)
-                // perpDir:    axis perpendicular to string (Y for horizontal, X for vertical)
                 XYZ measureDir = isHorizontal ? XYZ.BasisX : XYZ.BasisY;
 
-                // Candidates: walls whose face normal ≈ measureDir
                 var candidates = allWalls.Where(w => {
                     try { return Math.Abs(DimHelpers.GetWallNormal(w).DotProduct(measureDir)) > 0.7; }
                     catch { return false; }
                 }).ToList();
 
-                if (candidates.Count == 0)
-                {
-                    sk++;
-                    skips.Add($"Pass3 {(isHorizontal ? "H" : "V")}: no candidate walls.");
-                    continue;
-                }
+                if (candidates.Count == 0) continue;
 
-                // Get each candidate's perpendicular midpoint position
                 var wallPerpPos = candidates
                     .Select(w => {
                         try
@@ -904,15 +1239,13 @@ namespace A49AIRevitAssistant.Executor.Commands
 
                 if (wallPerpPos.Count == 0) continue;
 
-                // Cluster walls by perpendicular position
                 var clusters = new List<List<Wall>>();
                 var current = new List<Wall> { wallPerpPos[0].Wall };
                 double lastPerp = wallPerpPos[0].Perp.Value;
 
                 for (int i = 1; i < wallPerpPos.Count; i++)
                 {
-                    double gap = wallPerpPos[i].Perp.Value - lastPerp;
-                    if (gap > clusterGapFt)
+                    if (wallPerpPos[i].Perp.Value - lastPerp > clusterGapFt)
                     { clusters.Add(current); current = new List<Wall>(); }
                     current.Add(wallPerpPos[i].Wall);
                     lastPerp = wallPerpPos[i].Perp.Value;
@@ -921,7 +1254,6 @@ namespace A49AIRevitAssistant.Executor.Commands
 
                 foreach (var cluster in clusters)
                 {
-                    // Perpendicular extent of this cluster
                     var perpPositions = cluster
                         .Select(w => { var wlc = w.Location as LocationCurve; if (wlc == null) return (double?)null; XYZ m = wlc.Curve.Evaluate(0.5, true); return (double?)(isHorizontal ? m.Y : m.X); })
                         .Where(v => v.HasValue).Select(v => v.Value).ToList();
@@ -930,25 +1262,19 @@ namespace A49AIRevitAssistant.Executor.Commands
                     double clusterMin = perpPositions.Min();
                     double clusterMax = perpPositions.Max();
 
-                    // DepthDistance: if set, skip clusters wider than the limit
                     if (settings.DepthDistance > 0.0 && (clusterMax - clusterMin) > settings.DepthDistance)
                         continue;
 
-                    // Collect interior face refs for this cluster
+                    // Updated Collector call (Make sure CollectInteriorFaceRefs signature is updated as well)
                     var entries = CollectInteriorFaceRefs(
                         cluster, measureDir, isHorizontal,
                         clusterMin, clusterMax, settings, geomOpts);
 
-                    if (entries.Count < 2)
-                    {
-                        sk++;
-                        skips.Add($"Pass3 {(isHorizontal ? "H" : "V")} cluster@{clusterMin:F1}: <2 refs.");
-                        continue;
-                    }
+                    if (entries.Count < 2) continue;
 
                     var sorted = entries.OrderBy(e => e.Pos).ToList();
 
-                    // Minimum segment filter
+                    // Segment Filter
                     if (sorted.Count > 2)
                     {
                         var filtered = new List<RefEntry> { sorted[0] };
@@ -962,70 +1288,46 @@ namespace A49AIRevitAssistant.Executor.Commands
                         sorted = filtered;
                     }
 
-                    if (sorted.Count < 2) { sk++; continue; }
+                    if (sorted.Count < 2) continue;
 
                     var ra = new ReferenceArray();
                     foreach (var e in sorted) if (e.Ref != null) ra.Append(e.Ref);
-                    if (ra.Size < 2) { sk++; continue; }
+                    if (ra.Size < 2) continue;
 
-                    // Dim line perpendicular position:
-                    // InsetDistance (inset_mm) measured from the NEAR building edge.
-                    // isHorizontal string: near edge is bottom (Min.Y) or top (Max.Y).
-                    // Use building envelope edges, offset inward by InsetDistance.
-                    // Pick the edge nearest to this cluster's centroid.
+                    // Placement logic
                     double clusterCenterPerp = (clusterMin + clusterMax) / 2.0;
                     double nearEdge, farEdge;
                     if (isHorizontal)
                     {
-                        // Choose bottom or top based on which the cluster is closer to
-                        double distToBottom = Math.Abs(clusterCenterPerp - envelope.Min.Y);
-                        double distToTop = Math.Abs(clusterCenterPerp - envelope.Max.Y);
-                        if (distToBottom <= distToTop)
+                        if (Math.Abs(clusterCenterPerp - envelope.Min.Y) <= Math.Abs(clusterCenterPerp - envelope.Max.Y))
                         { nearEdge = envelope.Min.Y; farEdge = envelope.Max.Y; }
-                        else
-                        { nearEdge = envelope.Max.Y; farEdge = envelope.Min.Y; }
+                        else { nearEdge = envelope.Max.Y; farEdge = envelope.Min.Y; }
                     }
                     else
                     {
-                        double distToLeft = Math.Abs(clusterCenterPerp - envelope.Min.X);
-                        double distToRight = Math.Abs(clusterCenterPerp - envelope.Max.X);
-                        if (distToLeft <= distToRight)
+                        if (Math.Abs(clusterCenterPerp - envelope.Min.X) <= Math.Abs(clusterCenterPerp - envelope.Max.X))
                         { nearEdge = envelope.Min.X; farEdge = envelope.Max.X; }
-                        else
-                        { nearEdge = envelope.Max.X; farEdge = envelope.Min.X; }
+                        else { nearEdge = envelope.Max.X; farEdge = envelope.Min.X; }
                     }
 
-                    // Inset from near edge toward far edge
                     double sign = (farEdge > nearEdge) ? 1.0 : -1.0;
                     double perpPos = nearEdge + sign * settings.InsetDistance;
 
-                    const double linePad = 0.3;
-                    double lineStart = sorted.First().Pos - linePad;
-                    double lineEnd = sorted.Last().Pos + linePad;
+                    XYZ p1 = isHorizontal ? new XYZ(sorted.First().Pos, perpPos, cutPlaneZ) : new XYZ(perpPos, sorted.First().Pos, cutPlaneZ);
+                    XYZ p2 = isHorizontal ? new XYZ(sorted.Last().Pos, perpPos, cutPlaneZ) : new XYZ(perpPos, sorted.Last().Pos, cutPlaneZ);
 
-                    XYZ p1 = isHorizontal
-                        ? new XYZ(lineStart, perpPos, viewZ)
-                        : new XYZ(perpPos, lineStart, viewZ);
-                    XYZ p2 = isHorizontal
-                        ? new XYZ(lineEnd, perpPos, viewZ)
-                        : new XYZ(perpPos, lineEnd, viewZ);
-                    if (p1.X > p2.X || p1.Y > p2.Y) { var tmp = p1; p1 = p2; p2 = tmp; }
+                    // Critical: Ensure valid bound creation
+                    if (p1.DistanceTo(p2) < 0.01) continue;
 
                     try
                     {
                         Line dimLine = Line.CreateBound(p1, p2);
                         Dimension dim = _doc.Create.NewDimension(view, dimLine, ra, dimType);
                         if (dim != null) s++;
-                        else { sk++; skips.Add($"Pass3 {(isHorizontal ? "H" : "V")}: NewDimension null."); }
                     }
-                    catch (Exception ex)
-                    {
-                        f++;
-                        errors.Add($"Pass3 {(isHorizontal ? "H" : "V")}: {ex.Message}");
-                    }
+                    catch (Exception ex) { f++; errors.Add($"P3 Error: {ex.Message}"); }
                 }
             }
-
             return (s, sk, f, errors, skips);
         }
 

@@ -138,8 +138,7 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             catch { return false; }
         }
 
-        public static XYZ GetDimLineOffsetDirection(Wall wall, Document doc,
-            View view, bool smartPlacement)
+        public static XYZ GetDimLineOffsetDirection(Wall wall, Document doc, View view, bool smartPlacement)
         {
             XYZ normal = GetWallNormal(wall);
             if (!smartPlacement) return normal;
@@ -150,23 +149,47 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
                 if (cl == null) return normal;
                 XYZ mid = cl.Evaluate(0.5, true);
 
+                // 1. Detect Phase for Room Lookup
                 Phase phase = null;
                 try
                 {
                     var phaseParam = view.get_Parameter(BuiltInParameter.VIEW_PHASE);
-                    if (phaseParam != null)
-                        phase = doc.GetElement(phaseParam.AsElementId()) as Phase;
+                    if (phaseParam != null) phase = doc.GetElement(phaseParam.AsElementId()) as Phase;
                 }
                 catch { }
 
-                // Probe BOTH sides to guarantee we return the exterior direction.
-                // GetWallNormal depends on draw order, so it can point either way.
-                // Exterior = the side with no room. If room is on normal side, flip.
-                bool roomOnNormalSide =
-                    doc.GetRoomAtPoint(mid + normal * 1.0, phase) != null;
-                return roomOnNormalSide ? -normal : normal;
+                // 2. ROOM DETECTION (Your suggested logic)
+                // Probe 1.0ft out along the normal and 1.0ft out along the opposite
+                bool roomOnNormal = doc.GetRoomAtPoint(mid + normal * 1.0, phase) != null;
+                bool roomOnOpposite = doc.GetRoomAtPoint(mid + (-normal) * 1.0, phase) != null;
+
+                // If we find a room on only ONE side, the OTHER side is the exterior
+                if (roomOnNormal && !roomOnOpposite) return -normal;
+                if (!roomOnNormal && roomOnOpposite) return normal;
+
+                // 3. FALLBACK: Building Boundary (If no rooms are placed, e.g., Level 2)
+                // We use the extreme boundaries to ensure vertical strings don't flip
+                BoundingBoxXYZ projectBb = GetProjectEnvelope(new List<Wall> { wall });
+                if (projectBb != null)
+                {
+                    double buildingMidX = (projectBb.Min.X + projectBb.Max.X) * 0.5;
+                    double buildingMidY = (projectBb.Min.Y + projectBb.Max.Y) * 0.5;
+
+                    // Handle Vertical Sides (X-axis strings)
+                    if (Math.Abs(normal.X) > 0.8)
+                    {
+                        // If wall is on the right half, exterior is +X. If on left half, exterior is -X.
+                        return (mid.X > buildingMidX) ? XYZ.BasisX : -XYZ.BasisX;
+                    }
+                    // Handle Horizontal Sides (Y-axis strings)
+                    else
+                    {
+                        return (mid.Y > buildingMidY) ? XYZ.BasisY : -XYZ.BasisY;
+                    }
+                }
             }
-            catch { return normal; }
+            catch { }
+            return normal;
         }
 
         // ── Wall end-cap references ──────────────────────────────────────────
@@ -372,8 +395,21 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
 
         // ── Opening edge references ──────────────────────────────────────────
 
+        /// <summary>
+        /// Returns dimension references for the two jamb faces of every door/window
+        /// hosted in this wall that falls within the view's cut-plane level.
+        ///
+        /// Level filter: each insert's bounding-box Z midpoint must be within
+        /// one storey height of the view cut plane. This prevents windows and doors
+        /// on floors above/below from appearing in this floor plan's string.
+        ///
+        /// Door fix: halfW is computed from the insert's symbol width parameter
+        /// first, falling back to the bounding-box component aligned with wallDir.
+        /// This handles rotated/nested families whose bounding box is not axis-aligned.
+        /// </summary>
         public static List<TaggedRef> GetOpeningEdgeRefs(
-            Wall wall, Document doc, double startU, double endU)
+            Wall wall, Document doc, double startU, double endU,
+            View view = null)
         {
             var result = new List<TaggedRef>();
 
@@ -387,6 +423,32 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             XYZ wallDir = (cl.GetEndPoint(1) - origin).Normalize();
             double wallLen = cl.Length;
 
+            // ── Level filter setup ───────────────────────────────────────────
+            // Primary:  compare insert.LevelId with the view's GenLevel.Id.
+            //           Works correctly for multi-storey host walls (the insert's
+            //           LevelId reflects which floor it was placed on, regardless
+            //           of the host wall's vertical extent).
+            // Fallback: Z-bounding-box check for families without a valid LevelId.
+            ElementId viewLevelId = ElementId.InvalidElementId;
+            double cutZ = double.NaN;
+            double storyHalf = 20.0; // ft — used only by fallback
+            if (view is ViewPlan vp)
+            {
+                try
+                {
+                    Level level = vp.GenLevel;
+                    if (level != null)
+                    {
+                        viewLevelId = level.Id;
+                        var range = vp.GetViewRange();
+                        double cutOffset = range.GetOffset(PlanViewPlane.CutPlane);
+                        cutZ = level.Elevation + cutOffset;
+                        storyHalf = 7.0; // ~2.1m — tight fallback threshold
+                    }
+                }
+                catch { }
+            }
+
             const double coincideTol = 0.25;
 
             var opts = new Options
@@ -397,51 +459,127 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
             };
 
             var wallSolids = CollectSolids(wall.get_Geometry(opts));
-            if (wallSolids.Count == 0) return result;
+
+            // REVISION: Allow curtain walls to proceed even if they have no "Solids"
+            if (wallSolids.Count == 0)
+            {
+                if (wall.WallType?.Kind == WallKind.Curtain)
+                {
+                    // Curtain walls don't have standard "insert" faces for doors/windows
+                    // because the panels themselves are the openings.
+                    // We return here because the collinear bridging logic in Pass 1 
+                    // will handle the curtain wall boundaries.
+                    return result;
+                }
+                // For basic walls, keep the safety exit if no solids are found.
+                return result;
+            }
 
             foreach (ElementId insertId in insertIds)
             {
                 var insert = doc.GetElement(insertId) as FamilyInstance;
-                var insertLoc = insert?.Location as LocationPoint;
+                if (insert == null) continue;
+
+                var insertLoc = insert.Location as LocationPoint;
                 if (insertLoc == null) continue;
+
+                // ── Level filter ─────────────────────────────────────────────
+                // Primary check: insert.LevelId vs view's GenLevel.Id.
+                // Fallback: Z bounding-box check when LevelId is unavailable.
+                if (viewLevelId != ElementId.InvalidElementId)
+                {
+                    ElementId insertLevelId = insert.LevelId;
+                    if (insertLevelId != null && insertLevelId != ElementId.InvalidElementId)
+                    {
+                        // Reliable: level IDs are set per-placement, not per host-wall
+                        if (insertLevelId != viewLevelId) continue;
+                    }
+                    else if (!double.IsNaN(cutZ))
+                    {
+                        // Fallback: Z midpoint within one half-storey of cut plane
+                        BoundingBoxXYZ bb0 = insert.get_BoundingBox(null);
+                        if (bb0 != null)
+                        {
+                            double bbMidZ = (bb0.Min.Z + bb0.Max.Z) / 2.0;
+                            if (Math.Abs(bbMidZ - cutZ) > storyHalf) continue;
+                        }
+                    }
+                }
 
                 double insertU = (insertLoc.Point - origin).DotProduct(wallDir);
 
                 BoundingBoxXYZ bb = insert.get_BoundingBox(null);
                 if (bb == null) continue;
 
-                double halfW = Math.Abs((bb.Max - bb.Min).DotProduct(wallDir)) / 2.0;
+                // ── Robust halfW calculation ─────────────────────────────────
+                // Priority 1: use the family symbol's width parameter if available.
+                // Priority 2: project the bounding-box diagonal onto wallDir (handles
+                //             rotated/nested families whose bbox is not axis-aligned).
+                double halfW = 0;
+                try
+                {
+                    var widthParam = insert.Symbol?.LookupParameter("Width")
+                                  ?? insert.Symbol?.LookupParameter("Rough Width");
+                    if (widthParam != null && widthParam.HasValue)
+                        halfW = widthParam.AsDouble() / 2.0;
+                }
+                catch { }
+
+                if (halfW < 0.01)
+                {
+                    // BBox projection onto wallDir — more reliable than full diagonal
+                    XYZ bbSize = bb.Max - bb.Min;
+                    halfW = Math.Abs(bbSize.X * wallDir.X + bbSize.Y * wallDir.Y) / 2.0;
+                }
+
+                // Minimum guard: some symbols report zero width until placed
+                if (halfW < 0.05) halfW = 0.25; // 75mm minimum
+
                 double sideA = insertU - halfW;
                 double sideB = insertU + halfW;
 
+                // Skip if either edge coincides with wall endpoint (it's flush)
                 if (Math.Abs(sideA - startU) < coincideTol ||
                     Math.Abs(sideA - endU) < coincideTol ||
                     Math.Abs(sideB - startU) < coincideTol ||
                     Math.Abs(sideB - endU) < coincideTol) continue;
 
+                // Skip if opening overruns the wall extent
                 if (sideA < 0.05 || sideB > wallLen - 0.05) continue;
 
                 bool gotA = false, gotB = false;
-                const double faceTol = 0.15;
+                const double faceTol = 0.20; // slightly wider than before for large doors
 
                 foreach (Solid solid in wallSolids)
                 {
                     foreach (Face face in solid.Faces)
                     {
                         if (!(face is PlanarFace pf) || pf.Reference == null) continue;
-                        if (Math.Abs(pf.FaceNormal.DotProduct(wallDir)) < 0.95) continue;
+                        if (Math.Abs(pf.FaceNormal.DotProduct(wallDir)) < 0.90) continue;
 
                         XYZ cen = FaceCentroid(pf);
                         double faceU = (cen - origin).DotProduct(wallDir);
 
                         if (!gotA && Math.Abs(faceU - sideA) < faceTol)
                         {
-                            result.Add(new TaggedRef { Ref = pf.Reference, U = faceU, Kind = "opening", SourceId = insert.Id });
+                            result.Add(new TaggedRef
+                            {
+                                Ref = pf.Reference,
+                                U = faceU,
+                                Kind = "opening",
+                                SourceId = insert.Id
+                            });
                             gotA = true;
                         }
                         else if (!gotB && Math.Abs(faceU - sideB) < faceTol)
                         {
-                            result.Add(new TaggedRef { Ref = pf.Reference, U = faceU, Kind = "opening", SourceId = insert.Id });
+                            result.Add(new TaggedRef
+                            {
+                                Ref = pf.Reference,
+                                U = faceU,
+                                Kind = "opening",
+                                SourceId = insert.Id
+                            });
                             gotB = true;
                         }
 
@@ -517,7 +655,7 @@ namespace A49AIRevitAssistant.Executor.Commands.DimStrategies
 
         // ── Build ordered ReferenceArray with small segment filtering ───────────────────
 
-        public static ReferenceArray BuildOrderedRefArray(List<TaggedRef> taggedRefs, double posTol = 0.25) // Increased tolerance
+        public static ReferenceArray BuildOrderedRefArray(List<TaggedRef> taggedRefs, double posTol = 0.01)
         {
             var sorted = taggedRefs.OrderBy(t => t.U).ToList();
             var deduped = new List<TaggedRef>();

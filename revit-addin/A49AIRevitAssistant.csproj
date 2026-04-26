@@ -1,190 +1,67 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="packages\LatestLangVersion.1.0.0\build\LatestLangVersion.props" Condition="Exists('packages\LatestLangVersion.1.0.0\build\LatestLangVersion.props')" />
-  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
-  <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{BD8E0A24-6350-4867-95FA-3446C459EF6E}</ProjectGuid>
-    <OutputType>Library</OutputType>
-    <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>A49AIRevitAssistant</RootNamespace>
-    <AssemblyName>A49AIRevitAssistant</AssemblyName>
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>
-    <Deterministic>true</Deterministic>
-    <NuGetPackageImportStamp>
-    </NuGetPackageImportStamp>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <PlatformTarget>x64</PlatformTarget>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'RR2024|AnyCPU'">
-    <OutputPath>bin\RR2024\</OutputPath>
-    <PlatformTarget>x64</PlatformTarget>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
-    <DebugSymbols>true</DebugSymbols>
-    <OutputPath>bin\x64\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <DebugType>full</DebugType>
-    <PlatformTarget>x64</PlatformTarget>
-    <LangVersion>7.3</LangVersion>
-    <ErrorReport>prompt</ErrorReport>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
-    <OutputPath>bin\x64\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
-    <Optimize>true</Optimize>
-    <DebugType>pdbonly</DebugType>
-    <PlatformTarget>x64</PlatformTarget>
-    <LangVersion>7.3</LangVersion>
-    <ErrorReport>prompt</ErrorReport>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'RR2024|x64'">
-    <OutputPath>bin\x64\RR2024\</OutputPath>
-    <PlatformTarget>x64</PlatformTarget>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'RR2025|AnyCPU'">
-    <OutputPath>bin\RR2025\</OutputPath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'RR2025|x64'">
-    <OutputPath>bin\x64\RR2025\</OutputPath>
-  </PropertyGroup>
-  <ItemGroup>
-    <Reference Include="A49LicenseManager, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\Users\Ben Pongprot\OneDrive\00_REVIT API\00_A49 License Manager\A49LicenseManager.dll</HintPath>
-    </Reference>
-    <Reference Include="Microsoft.Web.WebView2.Core, Version=1.0.2792.45, Culture=neutral, PublicKeyToken=2a8ab48044d2601e, processorArchitecture=MSIL">
-      <HintPath>packages\Microsoft.Web.WebView2.1.0.2792.45\lib\net462\Microsoft.Web.WebView2.Core.dll</HintPath>
-    </Reference>
-    <Reference Include="Microsoft.Web.WebView2.WinForms, Version=1.0.2792.45, Culture=neutral, PublicKeyToken=2a8ab48044d2601e, processorArchitecture=MSIL">
-      <HintPath>packages\Microsoft.Web.WebView2.1.0.2792.45\lib\net462\Microsoft.Web.WebView2.WinForms.dll</HintPath>
-    </Reference>
-    <Reference Include="Microsoft.Web.WebView2.Wpf, Version=1.0.2792.45, Culture=neutral, PublicKeyToken=2a8ab48044d2601e, processorArchitecture=MSIL">
-      <HintPath>packages\Microsoft.Web.WebView2.1.0.2792.45\lib\net462\Microsoft.Web.WebView2.Wpf.dll</HintPath>
-    </Reference>
-    <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <HintPath>packages\Newtonsoft.Json.13.0.4\lib\net45\Newtonsoft.Json.dll</HintPath>
-    </Reference>
-    <Reference Include="PresentationCore" />
-    <Reference Include="PresentationFramework" />
-    <Reference Include="RevitAPI">
-      <HintPath>..\..\..\Users\Ben Pongprot\OneDrive\00_REVIT API\00_RevitAPIs_DLLs\Revit2025\RevitAPI.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="RevitAPIUI">
-      <HintPath>..\..\..\Users\Ben Pongprot\OneDrive\00_REVIT API\00_RevitAPIs_DLLs\Revit2025\RevitAPIUI.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Xaml" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Net.Http" />
-    <Reference Include="System.Xml" />
-    <Reference Include="WindowsBase" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="Executor\A49Logger.cs" />
-    <Compile Include="Executor\CommandEventHandler.cs" />
-    <Compile Include="Executor\Commands\ApplyTemplateCommand.cs" />
-    <Compile Include="Executor\Commands\AutoDimCommand.cs" />
-    <Compile Include="Executor\Commands\AutoTagCommand.cs" />
-    <Compile Include="Executor\Commands\BatchRenameViewsCommand.cs" />
-    <Compile Include="Executor\Commands\DuplicateViewCommand.cs" />
-    <Compile Include="Executor\Commands\ExecuteBatchCommand.cs" />
-    <Compile Include="Executor\Commands\ExecuteBatchUpdateCommand.cs" />
-    <Compile Include="Executor\Commands\FetchProjectInventoryCommand.cs" />
-    <Compile Include="Executor\Commands\GetLevelsCommand.cs" />
-    <Compile Include="Executor\Commands\GetProjectInfoCommand.cs" />
-    <Compile Include="Executor\Commands\GetProjectStats.cs" />
-    <Compile Include="Executor\Commands\InteractiveRoomPackageCommand.cs" />
-    <Compile Include="Executor\Commands\ListScopeBoxesCommand.cs" />
-    <Compile Include="Executor\Commands\ListSheetsCommand.cs" />
-    <Compile Include="Executor\Commands\ListViewsCommand.cs" />
-    <Compile Include="Executor\Commands\ListViewsOnSheetCommand.cs" />
-    <Compile Include="Executor\Commands\PlaceViewOnSheetCommand.cs" />
-    <Compile Include="Executor\Commands\PreflightCheckCommand.cs" />
-    <Compile Include="Executor\Commands\PreflightRepairCommand.cs" />
-    <Compile Include="Executor\Commands\RemoveViewFromSheetCommand.cs" />
-    <Compile Include="Executor\Commands\RenameSheetCommand.cs" />
-    <Compile Include="Executor\Commands\RenameViewCommand.cs" />
-    <Compile Include="Executor\Commands\Sheets\CreateSheetsCommand.cs" />
-    <Compile Include="Executor\Commands\Sheets\RenumberSheetsCommand.cs" />
-    <Compile Include="Executor\Commands\TagStrategies\CeilingTagStrategy.cs" />
-    <Compile Include="Executor\Commands\TagStrategies\DimContext.cs" />
-    <Compile Include="Executor\Commands\TagStrategies\DoorTagStrategy.cs" />
-    <Compile Include="Executor\Commands\TagStrategies\IDimStrategy.cs" />
-    <Compile Include="Executor\Commands\TagStrategies\ITagStrategy.cs" />
-    <Compile Include="Executor\Commands\TagStrategies\RoomTagStrategy.cs" />
-    <Compile Include="Executor\Commands\TagStrategies\TagContext.cs" />
-    <Compile Include="Executor\Commands\TagStrategies\WallDimStrategy.cs" />
-    <Compile Include="Executor\Commands\TagStrategies\WallTagStrategy.cs" />
-    <Compile Include="Executor\Commands\TagStrategies\WindowTagStrategy.cs" />
-    <Compile Include="Executor\Contracts\ApplyTemplateRequest.cs" />
-    <Compile Include="Executor\Contracts\CreateSheetRequest.cs" />
-    <Compile Include="Executor\Contracts\CreateViewRequest.cs" />
-    <Compile Include="Executor\Contracts\DuplicateViewRequest.cs" />
-    <Compile Include="Executor\Contracts\ListRequest.cs" />
-    <Compile Include="Executor\Contracts\PlaceViewRequest.cs" />
-    <Compile Include="Executor\Contracts\RemoveViewRequest.cs" />
-    <Compile Include="Executor\Contracts\RenameSheetRequest.cs" />
-    <Compile Include="Executor\Contracts\RenameViewRequest.cs" />
-    <Compile Include="Executor\DjangoBridge.cs" />
-    <Compile Include="Executor\WebViewResultSender.cs" />
-    <Compile Include="Models\RevitCommandEnvelope.cs" />
-    <Compile Include="Executor\Commands\CreateViewCommand.cs" />
-    <Compile Include="MainClass.cs" />
-    <Compile Include="UI\A49PaneProvider.cs" />
-    <Compile Include="UI\DockablePaneViewer.xaml.cs">
-      <DependentUpon>DockablePaneViewer.xaml</DependentUpon>
-    </Compile>
-    <Compile Include="Executor\DraftingCommandExecutor.cs" />
-    <Compile Include="GA_Tracking.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="UIApplicationHolder.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="addin\STD_A49StandardTools_Vella_R24.addin" />
-    <None Include="addin\STD_A49StandardTools_Vella_R25.addin" />
-    <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <Page Include="UI\DockablePaneViewer.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Resources\icon_STD_Vella_COLOR_48x48.png" />
-  </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
-    <PropertyGroup>
-      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
-    </PropertyGroup>
-    <Error Condition="!Exists('packages\LatestLangVersion.1.0.0\build\LatestLangVersion.props')" Text="$([System.String]::Format('$(ErrorText)', 'packages\LatestLangVersion.1.0.0\build\LatestLangVersion.props'))" />
-    <Error Condition="!Exists('packages\Microsoft.Web.WebView2.1.0.2792.45\build\Microsoft.Web.WebView2.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.Web.WebView2.1.0.2792.45\build\Microsoft.Web.WebView2.targets'))" />
-  </Target>
-  <Import Project="packages\Microsoft.Web.WebView2.1.0.2792.45\build\Microsoft.Web.WebView2.targets" Condition="Exists('packages\Microsoft.Web.WebView2.1.0.2792.45\build\Microsoft.Web.WebView2.targets')" />
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+		<Configurations>RR2024;RR2025</Configurations>
+		<Platforms>x64</Platforms>
+		<PlatformTarget>x64</PlatformTarget>
+
+		<LangVersion>latest</LangVersion>
+		<UseWPF>true</UseWPF>
+		<UseWindowsForms>true</UseWindowsForms>
+		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+		<AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+		<RootNamespace>A49AIRevitAssistant</RootNamespace>
+		<AssemblyName>A49AIRevitAssistant</AssemblyName>
+
+		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Platform)' == 'x64'">
+		<PlatformTarget>x64</PlatformTarget>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="!$(TargetFramework.StartsWith('net4'))">
+		<EnableDynamicLoading>true</EnableDynamicLoading>
+		<GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+		<GenerateDependencyFile>false</GenerateDependencyFile>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)' == 'RR2024'">
+		<OutputPath>bin\RR2024\</OutputPath>
+		<DefineConstants>REVIT2024</DefineConstants>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)' == 'RR2025'">
+		<OutputPath>bin\RR2025\</OutputPath>
+		<DefineConstants>REVIT2025</DefineConstants>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<ExcludeAssets>runtime</ExcludeAssets>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+		<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2792.45" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+		<PackageReference Include="Revit_All_Main_Versions_API_x64" Version="2024.*" />
+		<Reference Include="System.Net.Http" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+		<PackageReference Include="Revit_All_Main_Versions_API_x64" Version="2025.*" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Reference Include="A49LicenseManager">
+			<HintPath>..\..\..\Users\Ben Pongprot\OneDrive\00_REVIT API\00_A49 License Manager\A49LicenseManager.dll</HintPath>
+			<Private>True</Private>
+		</Reference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Include="Resources\icon_STD_Vella_COLOR_48x48.png" />
+	</ItemGroup>
 </Project>

@@ -4,10 +4,10 @@ using Autodesk.Revit.Attributes;
 using System;
 using System.Reflection;
 using System.Windows.Media.Imaging;
-using System.Threading.Tasks; // ✅ Required for Async GA Tracking
+using System.Threading.Tasks;
 using A49AIRevitAssistant.UI;
 using A49AIRevitAssistant.Executor;
-using A49LicenseManager;      // ✅ Required for License Validator
+using A49LicenseManager;
 
 namespace A49AIRevitAssistant
 {
@@ -18,12 +18,11 @@ namespace A49AIRevitAssistant
             new Guid("a7c1c513-8b3b-4a00-90d6-5d6cd2b9c1bb");
 
         public static UIControlledApplication UIControlledApp;
-
         private WebViewResultSender _resultSender;
 
         public Result OnStartup(UIControlledApplication app)
         {
-            // ✅ Step 1: License validation before anything else loads
+            // ✅ Step 1: License validation
             if (!LicenseValidator.IsLicenseValid())
             {
                 TaskDialog.Show("License Error",
@@ -38,10 +37,7 @@ namespace A49AIRevitAssistant
             {
                 app.CreateRibbonTab("A49 Standards");
             }
-            catch (Exception)
-            {
-                // Ignore if the tab already exists
-            }
+            catch (Exception) { /* Tab exists */ }
 
             // 2. Create or find the "Assistant" Panel
             RibbonPanel ribbonPanel = null;
@@ -59,38 +55,40 @@ namespace A49AIRevitAssistant
                 ribbonPanel = app.CreateRibbonPanel("A49 Standards", "Assistant");
             }
 
-            // 3. Get the assembly path
+            // 3. Get assembly path and define Button
             Assembly assembly = Assembly.GetExecutingAssembly();
             string dllPath = assembly.Location;
 
-            // 4. Create the Button Data
             PushButtonData buttonData = new PushButtonData(
                 "ShowAIPanel",
                 "Vella",
                 dllPath,
                 "A49AIRevitAssistant.ShowPanel");
 
-            // 5. Add button to panel and configure Icon & Tooltip
+            // 4. Add button and configure Icon & Tooltip
             PushButton vellaButton = ribbonPanel.AddItem(buttonData) as PushButton;
-            vellaButton.ToolTip = "AI Revit Assistant";
+            vellaButton.ToolTip = "AI Revit Assistant (Vella)";
 
-            // Map the embedded resource image (Format: Namespace.Folder.FileName)
-            vellaButton.LargeImage = GetEmbeddedImage("A49AIRevitAssistant.Resources.icon_STD_Vella_COLOR_48x48.png");
-            vellaButton.Image = GetEmbeddedImage("A49AIRevitAssistant.Resources.icon_STD_Vella_COLOR_48x48.png");
+            // Load images with .NET 8 compatibility
+            string iconPath = "A49AIRevitAssistant.Resources.icon_STD_Vella_COLOR_48x48.png";
+            vellaButton.LargeImage = GetEmbeddedImage(iconPath);
+            vellaButton.Image = GetEmbeddedImage(iconPath);
 
-            // Register Dockable Panel (correct provider pattern)
+            // 5. Register Dockable Panel
             RegisterDockablePane(app);
 
-            // Capture UIApplication from Revit activation events
+            // 6. Capture UIApplication and result sender
             app.ViewActivated += OnViewActivated;
-
-            // 🔥 CRITICAL FIX: Register the final result sender
             _resultSender = new WebViewResultSender();
             _resultSender.Register(app);
 
-            // ✅ Step 2: Send Google Analytics event for API Startup (Async)
+            // ✅ Step 2: Version-Specific Analytics (Async)
+#if REVIT2025
+            string eventLabel = "A49 AI Revit Assistant R25";
+#else
+            string eventLabel = "A49 AI RevitAssistant R24";
+#endif
             var gaTracking = new GA_Tracking();
-            string eventLabel = "A49 AI Revit Assistant R24";
             var analyticsTask = gaTracking.SendAnalyticsEventWithLocationAsync("api_startup", eventLabel);
 
             analyticsTask.ContinueWith(task =>
@@ -104,28 +102,18 @@ namespace A49AIRevitAssistant
             return Result.Succeeded;
         }
 
-        // ───────────────────────────────────────────────
-        // CAPTURE UIApplication (modern Revit pattern)
-        // ───────────────────────────────────────────────
         private void OnViewActivated(object sender, Autodesk.Revit.UI.Events.ViewActivatedEventArgs e)
         {
             if (sender is UIApplication uiApp)
             {
                 UIApplicationHolder.UIApp = uiApp;
-
-                // Initialize dispatcher when UIApp becomes available
                 CommandEventDispatcher.Initialize();
             }
         }
 
-        // ───────────────────────────────────────────────
-        // REGISTER DOCKABLE PANE  (FINAL WORKING VERSION)
-        // ───────────────────────────────────────────────
         public Result RegisterDockablePane(UIControlledApplication app)
         {
             DockablePaneId id = new DockablePaneId(MainClass.PaneGuid);
-
-            // Register USING PROVIDER CLASS — NOT DockablePaneViewer itself
             var provider = new A49PaneProvider();
 
             app.RegisterDockablePane(
@@ -137,9 +125,6 @@ namespace A49AIRevitAssistant
             return Result.Succeeded;
         }
 
-        // ───────────────────────────────────────────────
-        // SHUTDOWN
-        // ───────────────────────────────────────────────
         public Result OnShutdown(UIControlledApplication app)
         {
             try
@@ -148,14 +133,11 @@ namespace A49AIRevitAssistant
                 UIApplicationHolder.UIApp = null;
                 return Result.Succeeded;
             }
-            catch
-            {
-                return Result.Succeeded;
-            }
+            catch { return Result.Succeeded; }
         }
 
         // ───────────────────────────────────────────────
-        // EMBEDDED IMAGE LOADER
+        // EMBEDDED IMAGE LOADER (.NET 8 & DPI-Aware)
         // ───────────────────────────────────────────────
         private BitmapImage GetEmbeddedImage(string resourceName)
         {
@@ -168,8 +150,12 @@ namespace A49AIRevitAssistant
 
                     BitmapImage img = new BitmapImage();
                     img.BeginInit();
+                    // CRITICAL for R25 (.NET 8): Load immediately so stream can be disposed
+                    img.CacheOption = BitmapCacheOption.OnLoad;
                     img.StreamSource = stream;
                     img.EndInit();
+                    // Ensure the image is thread-safe
+                    img.Freeze();
                     return img;
                 }
             }
@@ -184,68 +170,35 @@ namespace A49AIRevitAssistant
     [Regeneration(RegenerationOption.Manual)]
     public class ShowPanel : IExternalCommand
     {
-        public Result Execute(ExternalCommandData commandData,
-                              ref string message,
-                              ElementSet elements)
+        public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             try
             {
-                // ✅ Step 3: Secondary License validation before opening the panel
                 if (!LicenseValidator.IsLicenseValid())
                 {
-                    TaskDialog.Show("License Error",
-                        "This machine is not authorized to use the A49 AI Revit Assistant plugin.\n\nPlease contact the IRIs team.");
+                    TaskDialog.Show("License Error", "Machine not authorized.");
                     return Result.Failed;
                 }
 
-                // ✅ Step 4: Initialize Google Analytics tracking for opening the panel (Async)
-                var gaTracking = new GA_Tracking();
-                string eventLabel = "A49 AI Revit Assistant R24";
-                var analyticsTask = gaTracking.SendAnalyticsEventWithLocationAsync("plugin_opened", eventLabel);
-
-                analyticsTask.ContinueWith(task =>
-                {
-                    if (task.Exception != null)
-                    {
-                        A49Logger.Log("❌ Plugin Opened Analytics Error: " + task.Exception.Message);
-                    }
-                }, TaskContinuationOptions.OnlyOnFaulted);
-
-                // 1️⃣ Capture UIApplication (must ALWAYS happen first)
                 UIApplicationHolder.UIApp = commandData.Application;
-                A49Logger.Log("📌 ShowPanel: UIApplication captured.");
-
-                // 2️⃣ Initialize the dispatcher — but ONLY here!
                 CommandEventDispatcher.Initialize();
-                A49Logger.Log("🚀 Dispatcher initialized from ShowPanel (correct place)");
 
-                // 3️⃣ Open the dockable pane
                 DockablePaneId id = new DockablePaneId(MainClass.PaneGuid);
                 DockablePane pane = commandData.Application.GetDockablePane(id);
                 pane.Show();
-                A49Logger.Log("📌 ShowPanel: Dockable pane shown.");
 
-                // 4️⃣ Initialize the WebView after pane is visible
                 if (DockablePaneViewer.Instance != null)
                 {
-                    A49Logger.Log("📌 ShowPanel: Calling WebView Initialization…");
                     DockablePaneViewer.Instance.InitializeWebView();
                 }
-                else
-                {
-                    A49Logger.Log("⚠️ ShowPanel: DockablePaneViewer.Instance is NULL.");
-                    TaskDialog.Show("AI Assistant",
-                        "⚠️ Error: Panel instance is not ready.\nTry closing & reopening the AI panel.");
-                }
+
+                return Result.Succeeded;
             }
             catch (Exception ex)
             {
                 A49Logger.Log("❌ ShowPanel FAILED: " + ex.Message);
-                TaskDialog.Show("AI Assistant Error", ex.Message);
                 return Result.Failed;
             }
-
-            return Result.Succeeded;
         }
     }
 }

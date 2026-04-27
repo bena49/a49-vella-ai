@@ -150,7 +150,7 @@ export function useWizards(
       include_grids_only: payload.include_grids_only,
       include_detail:     payload.include_detail ?? true,
       include_interior:   payload.include_interior ?? true,
-      offset_mm:          payload.offset_mm ?? 1400,
+      offset_mm:          payload.offset_mm ?? 1600,
       inset_mm:           payload.inset_mm ?? 1200,
       depth_mm:           payload.depth_mm ?? 5000,
       smart_exterior:     payload.smart_exterior,

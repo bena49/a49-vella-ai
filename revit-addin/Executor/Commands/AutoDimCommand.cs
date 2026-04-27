@@ -91,13 +91,18 @@ namespace A49AIRevitAssistant.Executor.Commands
                                     DimHelpers.GetWallCenterLine(w)?.Length ?? 0)
                                 .First();
 
+                            // --- NEW: DETERMINE INTERIOR VS EXTERIOR OFFSET ---
+                            // Use the helper to check if the primary wall in this group is exterior.
+                            bool isExt = DimHelpers.IsExteriorWall(primary, _doc, view);
+                            double dynamicOffset = isExt ? settings.OffsetDistance : settings.InsetDistance;
+
                             var request = new DimRequest
                             {
                                 TargetView = view,
                                 WallIds = group.Select(w => w.Id).ToList(),
                                 IncludeOpenings = settings.IncludeOpenings,
                                 IncludeGrids = settings.IncludeGrids,
-                                OffsetDistance = settings.OffsetDistance,
+                                OffsetDistance = dynamicOffset,
                                 SmartExteriorPlacement = settings.SmartExteriorPlacement,
                             };
 
@@ -132,12 +137,13 @@ namespace A49AIRevitAssistant.Executor.Commands
                         // offset_mm (baseOffsetFt) = distance from building edge to Layer 3.
                         // Each outer layer adds one fixed gap width beyond the previous.
                         // This keeps strings close together regardless of the base offset.
-                        const double fixedGapFt = 750.0 / 304.8; // 750mm between layers — increase this value to space strings further apart
+                        const double fixedGapFt = 900.0 / 304.8; // 900mm between layers — increase this value to space strings further apart
 
                         // Layer 1: Overall/Total Dimension (Outermost)
                         if (settings.IncludeTotalString)
                         {
-                            double totalOffset = baseOffsetFt + fixedGapFt * 2.0;
+                            // Distance from building = Base + 2 Gaps
+                            double totalOffset = baseOffsetFt + (fixedGapFt * 2.0 + 100.0 / 304.8);
                             var pTotal = Pass2(allWalls, allGrids, view, dimType, settings, true, false, totalOffset);
                             succeeded += pTotal.s;
                             skipped += pTotal.sk;
@@ -149,7 +155,8 @@ namespace A49AIRevitAssistant.Executor.Commands
                         // Layer 2: Grid-to-Grid Only (Middle)
                         if (settings.IncludeGridsOnlyString)
                         {
-                            double gridOffset = baseOffsetFt + fixedGapFt;
+                            // Distance from building = Base + 1 Gap
+                            double gridOffset = baseOffsetFt + (fixedGapFt + 100.0 / 304.8);
                             var pGrids = Pass2(allWalls, allGrids, view, dimType, settings, false, true, gridOffset);
                             succeeded += pGrids.s;
                             skipped += pGrids.sk;
@@ -736,6 +743,17 @@ namespace A49AIRevitAssistant.Executor.Commands
 
                 if (isTotalOnly)
                 {
+                    // --- NEW LOGIC: HIDE LAYER 1 IF REDUNDANT WITH LAYER 2 ---
+                    // If we have exactly 2 grids and the user also wants Layer 2, 
+                    // we suppress Layer 1 to let Layer 2 handle it at the closer offset.
+                    if (sideGrids.Count == 2 && settings.IncludeGridsOnlyString)
+                    {
+                        sk++;
+                        skips.Add($"Side {normal}: Layer 1 suppressed; redundant with Layer 2 (2 grids).");
+                        continue;
+                    }
+
+                    // --- OLD LOGIC: HIDE LAYER 2 IF REDUNDANT WITH LAYER 1 ---
                     // Layer 1: first and last grid = "Grid A to Grid C"
                     // Grid refs sit at design positions independent of wall join geometry.
                     if (sideGrids.Count >= 2)
@@ -779,11 +797,13 @@ namespace A49AIRevitAssistant.Executor.Commands
                 }
                 else if (isGridOnly)
                 {
-                    // Layer 2: all grids. Skip when fewer than 3 — would duplicate Layer 1.
-                    if (sideGrids.Count < 3)
+                    // --- UPDATE: ALLOW LAYER 2 EVEN WITH 2 GRIDS ---
+                    // Remove the current check that skips Layer 2 if count < 3.
+                    // We now want it to show whenever there are at least 2 grids.
+                    if (sideGrids.Count < 2)
                     {
                         sk++;
-                        skips.Add($"Side {normal}: {sideGrids.Count} grids — Layer 2 redundant with Layer 1, skipped.");
+                        skips.Add($"Side {normal}: {sideGrids.Count} grids — Layer 2 skipped (need at least 2).");
                         continue;
                     }
                     foreach (Grid g in sideGrids)
@@ -1318,7 +1338,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                     }
 
                     double sign = (farEdge > nearEdge) ? 1.0 : -1.0;
-                    double perpPos = nearEdge + sign * settings.InsetDistance;
+                    double perpPos = nearEdge + (sign * settings.InsetDistance);
 
                     XYZ p1 = isHorizontal ? new XYZ(sorted.First().Pos, perpPos, cutPlaneZ) : new XYZ(perpPos, sorted.First().Pos, cutPlaneZ);
                     XYZ p2 = isHorizontal ? new XYZ(sorted.Last().Pos, perpPos, cutPlaneZ) : new XYZ(perpPos, sorted.Last().Pos, cutPlaneZ);
@@ -1358,66 +1378,71 @@ namespace A49AIRevitAssistant.Executor.Commands
                     var wlc = wall.Location as LocationCurve;
                     if (wlc == null) continue;
 
-                    bool isCurtain = wall.WallType.Kind == WallKind.Curtain;
                     var wallFaces = new List<(double pos, Reference fref)>();
 
-                    // 1. STRATEGY A: Standard Geometry (For Basic Walls)
-                    GeometryElement geo = wall.get_Geometry(geomOpts);
+                    // 1. Get ALL Geometry (including nested instances for Mullions/Panels)
+                    Options opt = new Options { ComputeReferences = true, DetailLevel = ViewDetailLevel.Fine, IncludeNonVisibleObjects = true };
+                    GeometryElement geo = wall.get_Geometry(opt);
+
                     if (geo != null)
                     {
-                        foreach (GeometryObject obj in geo)
+                        // Helper function to process geometry recursively
+                        void ProcessGeometry(GeometryElement geom)
                         {
-                            if (obj is Solid ss && ss.Volume > 0)
+                            foreach (GeometryObject obj in geom)
                             {
-                                foreach (Face face in ss.Faces)
+                                if (obj is Solid s && s.Volume >= 0) // Panels can have 0 volume but valid faces
                                 {
-                                    if (face is PlanarFace pf && pf.Reference != null &&
-                                        Math.Abs(pf.FaceNormal.DotProduct(measureDir)) > 0.8)
+                                    foreach (Face f in s.Faces)
                                     {
-                                        XYZ cen = DimHelpers.FaceCentroid(pf);
-                                        wallFaces.Add((isHorizontal ? cen.X : cen.Y, pf.Reference));
+                                        if (f is PlanarFace pf && pf.Reference != null &&
+                                            Math.Abs(pf.FaceNormal.DotProduct(measureDir)) > 0.9) // Tighter parallel check
+                                        {
+                                            XYZ cen = pf.Origin; // Use Origin for more stable positioning
+                                            wallFaces.Add((isHorizontal ? cen.X : cen.Y, pf.Reference));
+                                        }
                                     }
+                                }
+                                else if (obj is GeometryInstance gi)
+                                {
+                                    // This is the CRITICAL part for Embedded/Corners:
+                                    // Dig into the Mullion/Panel instances
+                                    ProcessGeometry(gi.GetInstanceGeometry());
                                 }
                             }
                         }
+                        ProcessGeometry(geo);
                     }
 
-                    // 2. STRATEGY B: Curtain Grid (For Embedded, Butted, and Ends)
-                    // This addresses the "Curtainwall end" and "Embedded" failure.
-                    if (isCurtain && wall.CurtainGrid != null)
+                    // 2. FALLBACK for Corners: If no faces found, use Grid Line References
+                    if (wallFaces.Count == 0 && wall.CurtainGrid != null)
                     {
-                        // Use the Documentation logic: Get the Grid Line IDs
-                        // For Pass 3 (measuring room depth), we need the lines perpendicular to measureDir
                         var gridIds = isHorizontal ? wall.CurtainGrid.GetVGridLineIds() : wall.CurtainGrid.GetUGridLineIds();
-
                         foreach (ElementId gId in gridIds)
                         {
                             if (_doc.GetElement(gId) is CurtainGridLine gLine)
                             {
-                                GeometryElement gGeo = gLine.get_Geometry(geomOpts);
+                                GeometryElement gGeo = gLine.get_Geometry(opt);
                                 foreach (GeometryObject gObj in gGeo)
                                 {
                                     if (gObj is Line l && l.Reference != null)
-                                    {
-                                        double lPos = isHorizontal ? l.Origin.X : l.Origin.Y;
-                                        wallFaces.Add((lPos, l.Reference));
-                                    }
+                                        wallFaces.Add((isHorizontal ? l.Origin.X : l.Origin.Y, l.Reference));
                                 }
                             }
                         }
-
-                        // Also catch the extreme ends (the "boundary" mullions)
-                        XYZ p0 = wlc.Curve.GetEndPoint(0);
-                        XYZ p1 = wlc.Curve.GetEndPoint(1);
-                        wallFaces.Add((isHorizontal ? p0.X : p0.Y, wlc.Curve.Reference));
-                        wallFaces.Add((isHorizontal ? p1.X : p1.Y, wlc.Curve.Reference));
                     }
 
-                    // 3. SELECTION: Pick the reference closest to the room center
+                    // 3. ADD ENDPOINTS (For the absolute corner/end of the Curtain Wall)
+                    // This ensures the corner is caught even if the mullion doesn't expose a face.
+                    wallFaces.Add((isHorizontal ? wlc.Curve.GetEndPoint(0).X : wlc.Curve.GetEndPoint(0).Y, wlc.Curve.Reference));
+                    wallFaces.Add((isHorizontal ? wlc.Curve.GetEndPoint(1).X : wlc.Curve.GetEndPoint(1).Y, wlc.Curve.Reference));
+
+                    // 4. PICK AND ADD TO ENTRIES
                     if (wallFaces.Count > 0)
                     {
+                        // Pick the face/reference closest to the cluster center
                         var chosen = wallFaces.OrderBy(f => Math.Abs(f.pos - centerPerp)).First();
-                        if (!entries.Any(e => Math.Abs(e.Pos - chosen.pos) < 0.1)) // Tighter tolerance
+                        if (!entries.Any(e => Math.Abs(e.Pos - chosen.pos) < 0.1))
                         {
                             entries.Add(new RefEntry
                             {
@@ -1430,7 +1455,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                         }
                     }
                 }
-                catch { /* Log error if needed */ }
+                catch { }
             }
 
             return entries;

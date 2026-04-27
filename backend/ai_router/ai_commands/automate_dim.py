@@ -24,7 +24,7 @@ def handle_automate_dim(request):
         - offset_mm:            int  (default 1400) -- spacing between exterior layers
         - inset_mm:             int  (default 1200) -- offset for Layer 3 interior string
         - depth_mm:             int  (default 5000) -- extension length for dimension lines
-        - include_interior:     bool (default False) -- whether to include interior dimensions at all (if False, Layer 3 is only exterior detail)
+        - include_interior:     bool (default True) -- whether to include interior dimensions at all (if False, Layer 3 is only exterior detail)
         - smart_exterior:       bool (default True)
         - dim_type_name:        str  (e.g. "A49_Linear", empty = auto-select)
     """
@@ -39,7 +39,7 @@ def handle_automate_dim(request):
     offset_mm          = request.data.get("offset_mm", 1400)
     inset_mm           = request.data.get("inset_mm", 1200)
     depth_mm           = request.data.get("depth_mm", 5000)
-    include_interior   = request.data.get("include_interior", False)
+    include_interior   = request.data.get("include_interior", True)
     smart_exterior     = request.data.get("smart_exterior", True)
     dim_type_name      = request.data.get("dim_type_name", "")
 

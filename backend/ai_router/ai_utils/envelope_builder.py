@@ -169,7 +169,7 @@ def envelope_automate_dim(
     offset_mm=1400,
     inset_mm=1200,
     depth_mm=5000,
-    include_interior=False,
+    include_interior=True,
     smart_exterior=True,
     dim_type_name="",
 ):

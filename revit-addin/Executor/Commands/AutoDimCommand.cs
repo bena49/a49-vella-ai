@@ -1358,69 +1358,66 @@ namespace A49AIRevitAssistant.Executor.Commands
                     var wlc = wall.Location as LocationCurve;
                     if (wlc == null) continue;
 
-                    // --- IMPROVED HYBRID LOGIC ---
                     bool isCurtain = wall.WallType.Kind == WallKind.Curtain;
-
-                    // 1. Try standard Geometry Search first (Best for Embedded & Basic Walls)
                     var wallFaces = new List<(double pos, Reference fref)>();
-                    GeometryElement geo = wall.get_Geometry(geomOpts);
 
+                    // 1. STRATEGY A: Standard Geometry (For Basic Walls)
+                    GeometryElement geo = wall.get_Geometry(geomOpts);
                     if (geo != null)
                     {
                         foreach (GeometryObject obj in geo)
                         {
-                            Solid solid = null;
-                            if (obj is Solid ss && ss.Volume > 0) solid = ss;
-                            else if (obj is GeometryInstance gi)
-                                foreach (GeometryObject sub in gi.GetInstanceGeometry())
-                                    if (sub is Solid s2 && s2.Volume > 0) solid = s2;
-
-                            if (solid == null) continue;
-                            foreach (Face face in solid.Faces)
+                            if (obj is Solid ss && ss.Volume > 0)
                             {
-                                if (!(face is PlanarFace pf) || pf.Reference == null) continue;
-                                if (Math.Abs(pf.FaceNormal.DotProduct(measureDir)) < 0.8) continue;
-                                XYZ cen = DimHelpers.FaceCentroid(pf);
-                                double facePos = isHorizontal ? cen.X : cen.Y;
-                                wallFaces.Add((facePos, pf.Reference));
-                            }
-                        }
-                    }
-
-                    // 2. FALLBACK: If Geometry failed (Full-height/Butted/Corner) OR it's a Curtain Wall
-                    // We look for the Location Curve or Grid boundaries.
-                    if (wallFaces.Count == 0 && isCurtain)
-                    {
-                        // Use the Curve endpoints to catch Corners
-                        XYZ pStart = wlc.Curve.GetEndPoint(0);
-                        XYZ pEnd = wlc.Curve.GetEndPoint(1);
-
-                        double posStart = isHorizontal ? pStart.X : pStart.Y;
-                        double posEnd = isHorizontal ? pEnd.X : pEnd.Y;
-
-                        // Add both ends of the curtain wall to ensure corners are caught
-                        foreach (double p in new[] { posStart, posEnd })
-                        {
-                            if (!entries.Any(e => Math.Abs(e.Pos - p) < 0.2))
-                            {
-                                entries.Add(new RefEntry
+                                foreach (Face face in ss.Faces)
                                 {
-                                    Ref = wlc.Curve.Reference,
-                                    Pos = p,
-                                    Kind = "interior",
-                                    Pt = (p == posStart) ? pStart : pEnd,
-                                    Wall = wall
-                                });
+                                    if (face is PlanarFace pf && pf.Reference != null &&
+                                        Math.Abs(pf.FaceNormal.DotProduct(measureDir)) > 0.8)
+                                    {
+                                        XYZ cen = DimHelpers.FaceCentroid(pf);
+                                        wallFaces.Add((isHorizontal ? cen.X : cen.Y, pf.Reference));
+                                    }
+                                }
                             }
                         }
-                        continue;
                     }
 
-                    // 3. Normal processing for Basic/Embedded walls
+                    // 2. STRATEGY B: Curtain Grid (For Embedded, Butted, and Ends)
+                    // This addresses the "Curtainwall end" and "Embedded" failure.
+                    if (isCurtain && wall.CurtainGrid != null)
+                    {
+                        // Use the Documentation logic: Get the Grid Line IDs
+                        // For Pass 3 (measuring room depth), we need the lines perpendicular to measureDir
+                        var gridIds = isHorizontal ? wall.CurtainGrid.GetVGridLineIds() : wall.CurtainGrid.GetUGridLineIds();
+
+                        foreach (ElementId gId in gridIds)
+                        {
+                            if (_doc.GetElement(gId) is CurtainGridLine gLine)
+                            {
+                                GeometryElement gGeo = gLine.get_Geometry(geomOpts);
+                                foreach (GeometryObject gObj in gGeo)
+                                {
+                                    if (gObj is Line l && l.Reference != null)
+                                    {
+                                        double lPos = isHorizontal ? l.Origin.X : l.Origin.Y;
+                                        wallFaces.Add((lPos, l.Reference));
+                                    }
+                                }
+                            }
+                        }
+
+                        // Also catch the extreme ends (the "boundary" mullions)
+                        XYZ p0 = wlc.Curve.GetEndPoint(0);
+                        XYZ p1 = wlc.Curve.GetEndPoint(1);
+                        wallFaces.Add((isHorizontal ? p0.X : p0.Y, wlc.Curve.Reference));
+                        wallFaces.Add((isHorizontal ? p1.X : p1.Y, wlc.Curve.Reference));
+                    }
+
+                    // 3. SELECTION: Pick the reference closest to the room center
                     if (wallFaces.Count > 0)
                     {
                         var chosen = wallFaces.OrderBy(f => Math.Abs(f.pos - centerPerp)).First();
-                        if (!entries.Any(e => Math.Abs(e.Pos - chosen.pos) < 0.2))
+                        if (!entries.Any(e => Math.Abs(e.Pos - chosen.pos) < 0.1)) // Tighter tolerance
                         {
                             entries.Add(new RefEntry
                             {
@@ -1433,7 +1430,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                         }
                     }
                 }
-                catch { }
+                catch { /* Log error if needed */ }
             }
 
             return entries;

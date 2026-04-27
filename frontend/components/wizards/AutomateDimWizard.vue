@@ -306,7 +306,7 @@ const isDimTypeOpen    = ref(false);
 const includeTotal     = ref(true); // Layer 1
 const includeGridsOnly = ref(true); // Layer 2
 const includeDetail    = ref(true); // Layer 3 (controls Pass1 opening refs)
-const includeInterior  = ref(false); // Pass 3: interior room strings (H + V through building)
+const includeInterior  = ref(true); // Pass 3: interior room strings (H + V through building)
 
 // ── Computed ─────────────────────────────────────────────────────────────────
 const availableLevels = computed(() => {

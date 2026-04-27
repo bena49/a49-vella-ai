@@ -295,7 +295,7 @@ const emit = defineEmits(['close', 'submit']);
 const selectedDimType  = ref('');
 const includeOpenings  = ref(true);
 const includeGrids     = ref(true);
-const offsetMm         = ref(1800);
+const offsetMm         = ref(1400);
 const insetMm          = ref(1200);
 const depthMm          = ref(5000); // Interior string search depth. 0 = full building. Increase for large plans.
 const smartExterior    = ref(true);

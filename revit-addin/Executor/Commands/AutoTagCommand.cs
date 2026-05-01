@@ -350,9 +350,10 @@ namespace A49AIRevitAssistant.Executor.Commands
                 catch { }
             }
 
-            // 500 mm offset downward in screen space (opposite to view.UpDirection)
+            // 500 mm offset in world -Y (south). view.UpDirection.Negate() caused a rightward
+            // shift on rotated views; a fixed world direction is more predictable.
             double offsetFt = 500.0 / 304.8;
-            XYZ downDir = view.UpDirection.Negate();
+            XYZ downDir = new XYZ(0, -1, 0);
 
             foreach (Room room in rooms)
             {
@@ -362,13 +363,11 @@ namespace A49AIRevitAssistant.Executor.Commands
                     if (locPt == null) continue;
 
                     var (faceRef, floorTopZ, facePoint) = GetFloorTopFaceInfo(doc, room, locPt.Point);
-                    if (faceRef == null || facePoint == null) continue;
+                    if (faceRef == null) continue;
 
                     if (skipTagged && taggedFloorIds.Contains(faceRef.ElementId.Value)) continue;
 
-                    // origin/refPt must lie ON the face — use pf.Origin (guaranteed on-face).
-                    // end/bend use room-centre XY so the label appears below the room centre.
-                    XYZ origin = facePoint;
+                    XYZ origin = new XYZ(locPt.Point.X, locPt.Point.Y, floorTopZ);
                     XYZ end    = new XYZ(locPt.Point.X + downDir.X * offsetFt,
                                         locPt.Point.Y + downDir.Y * offsetFt,
                                         floorTopZ);
@@ -431,7 +430,7 @@ namespace A49AIRevitAssistant.Executor.Commands
             }
 
             double offsetFt = 300.0 / 304.8;
-            XYZ downDir = view.UpDirection.Negate();
+            XYZ downDir = new XYZ(0, -1, 0); // fixed world -Y; section views vary in orientation
 
             foreach (Floor floor in floors)
             {

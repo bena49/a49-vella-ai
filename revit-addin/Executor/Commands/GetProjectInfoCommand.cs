@@ -150,19 +150,18 @@ namespace A49AIRevitAssistant.Executor.Commands
 
                 // 💥 7f. NEW: Spot Elevation Types
                 // SpotDimensionType is a system family — no .Family property.
-                // Cannot use OfCategory as a quick filter with OfClass for system families;
-                // collect all SpotDimensionType then filter by category in LINQ.
-                var spotElevCatId = new ElementId(BuiltInCategory.OST_SpotElevations);
+                // Category-based filtering is unreliable for system families; collect all
+                // SpotDimensionType elements (same approach as FindSpotDimensionType in AutoTagCommand).
+                // family = category display name so users can see slope/coordinate types if present.
                 var spotElevationTags = new FilteredElementCollector(_doc)
                     .OfClass(typeof(SpotDimensionType))
                     .Cast<SpotDimensionType>()
-                    .Where(sdt => sdt.Category != null && sdt.Category.Id == spotElevCatId)
                     .Select(sdt => new
                     {
-                        family = "Spot Elevations",
+                        family = sdt.Category?.Name ?? "Spot Elevations",
                         type = sdt.Name
                     })
-                    .OrderBy(t => t.type)
+                    .OrderBy(t => t.family).ThenBy(t => t.type)
                     .ToList();
 
                 // 💥 8. NEW: Get Taggable Views (for Automate Tagging wizard)

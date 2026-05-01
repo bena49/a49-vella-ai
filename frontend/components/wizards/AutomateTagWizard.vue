@@ -334,6 +334,8 @@ const isSpotTypeOpen = ref(false);
 // =====================================================================
 const isSpotElevation = computed(() => selectedTagType.value === 'spot_elevation');
 
+const SPOT_EXCLUDE_TYPES = ['Horizontal', 'Slope-Percent'];
+
 const availableTagFamilies = computed(() => {
   if (!selectedTagType.value) return [];
   const map = {
@@ -342,7 +344,9 @@ const availableTagFamilies = computed(() => {
     wall:           props.wallTags,
     room:           props.roomTags,
     ceiling:        props.ceilingTags,
-    spot_elevation: props.spotElevationTags,
+    spot_elevation: props.spotElevationTags.filter(
+      (t) => !SPOT_EXCLUDE_TYPES.includes(t.type)
+    ),
   };
   return map[selectedTagType.value] || [];
 });

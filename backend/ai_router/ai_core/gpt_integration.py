@@ -338,7 +338,23 @@ def route_gpt_fields(request, g):
             request.session["ai_pending_scope_box_id"] = found_sb
             request.session.modified = True
             has_changes = True
-            has_scope_box_match = True          
+            has_scope_box_match = True
+
+    # E. SHEET CATEGORY INTERCEPTOR
+    # Captures bare category replies ("a1", "a2 and a3") when mid-conversation waiting
+    # for a sheet category. GPT has no conversation history so it can't resolve these.
+    if (request.session.get("ai_pending_intent") == "create_sheet"
+            and not request.session.get("ai_pending_sheet_category")
+            and not is_new_command):
+        cat_match = re.match(
+            r'^([a-z]\d{1,2}(?:\s*(?:,|and|&|\+)\s*[a-z]\d{1,2})*)$',
+            raw_msg_lower.strip()
+        )
+        if cat_match:
+            debug_session(request, f"📋 Sheet Category Interceptor: Capturing '{raw_msg_upper.strip()}'")
+            request.session["ai_pending_sheet_category"] = raw_msg_upper.strip()
+            request.session.modified = True
+            return None
 
     # =========================================================================
     # 3. MODIFICATION SAFETY NET (Forcing Intents)

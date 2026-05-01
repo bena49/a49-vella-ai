@@ -334,7 +334,7 @@ const isSpotTypeOpen = ref(false);
 // =====================================================================
 const isSpotElevation = computed(() => selectedTagType.value === 'spot_elevation');
 
-const SPOT_EXCLUDE_TYPES = ['Horizontal', 'Slope-Percent'];
+const SPOT_EXCLUDE_TYPES = ['Horizontal', 'Sloped-Percent'];
 
 const availableTagFamilies = computed(() => {
   if (!selectedTagType.value) return [];

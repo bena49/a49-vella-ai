@@ -295,7 +295,7 @@ const emit = defineEmits(['close', 'submit']);
 const selectedDimType  = ref('');
 const includeOpenings  = ref(true);
 const includeGrids     = ref(true);
-const offsetMm         = ref(1800);
+const offsetMm         = ref(1400);
 const insetMm          = ref(1200);
 const depthMm          = ref(5000); // Interior string search depth. 0 = full building. Increase for large plans.
 const smartExterior    = ref(true);
@@ -306,7 +306,7 @@ const isDimTypeOpen    = ref(false);
 const includeTotal     = ref(true); // Layer 1
 const includeGridsOnly = ref(true); // Layer 2
 const includeDetail    = ref(true); // Layer 3 (controls Pass1 opening refs)
-const includeInterior  = ref(false); // Pass 3: interior room strings (H + V through building)
+const includeInterior  = ref(true); // Pass 3: interior room strings (H + V through building)
 
 // ── Computed ─────────────────────────────────────────────────────────────────
 const availableLevels = computed(() => {

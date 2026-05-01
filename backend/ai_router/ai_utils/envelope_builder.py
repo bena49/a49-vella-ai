@@ -166,10 +166,10 @@ def envelope_automate_dim(
     include_total=True,
     include_grids_only=True,
     include_detail=True,
-    offset_mm=1800,
+    offset_mm=1600,
     inset_mm=1200,
     depth_mm=5000,
-    include_interior=False,
+    include_interior=True,
     smart_exterior=True,
     dim_type_name="",
 ):

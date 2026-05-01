@@ -136,44 +136,26 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
 
                     foreach (var segment in segments)
                     {
-                        double tagT = FindBestTagInSegment(segment.StartT, segment.EndT, wallLength, openings);
-                        XYZ tagAnchor = curve.Evaluate(tagT, true);
+                        // REVISION: Get a list of all valid tag positions in this segment
+                        var tagParameters = FindAllTagsInSegment(segment.StartT, segment.EndT, wallLength, openings);
 
-                        // Skip this segment if the anchor falls outside the crop region
-                        if (!TagHelpers.IsElementInCropRegion(view, tagAnchor))
+                        foreach (double tagT in tagParameters)
                         {
-                            result.Skipped++;
-                            continue;
-                        }
+                            XYZ tagAnchor = curve.Evaluate(tagT, true);
 
-                        XYZ tagHeadPoint = tagAnchor + perpDir.Multiply(TAG_OFFSET_FEET);
+                            if (!TagHelpers.IsElementInCropRegion(view, tagAnchor)) continue;
 
-                        // Clamp tag head inside crop region
-                        tagHeadPoint = TagHelpers.ClampTagPointToCropRegion(view, tagHeadPoint, CROP_MARGIN_FEET);
+                            XYZ tagHeadPoint = tagAnchor + perpDir.Multiply(TAG_OFFSET_FEET);
+                            tagHeadPoint = TagHelpers.ClampTagPointToCropRegion(view, tagHeadPoint, CROP_MARGIN_FEET);
 
-                        var wallRef = new Reference(wall);
-                        var newTag = IndependentTag.Create(
-                            doc,
-                            tagSymbol.Id,
-                            view.Id,
-                            wallRef,
-                            true,                       // WITH leader
-                            TagOrientation.Horizontal,
-                            tagHeadPoint
-                        );
+                            var newTag = IndependentTag.Create(doc, tagSymbol.Id, view.Id, new Reference(wall), true, TagOrientation.Horizontal, tagHeadPoint);
 
-                        if (newTag != null)
-                        {
-                            // Set tag head position explicitly.
-                            // LeaderEndCondition must be Free so Revit doesn't
-                            // snap the head back to the element after placement.
-                            try
+                            if (newTag != null)
                             {
                                 newTag.LeaderEndCondition = LeaderEndCondition.Free;
                                 newTag.TagHeadPosition = tagHeadPoint;
+                                result.Tagged++;
                             }
-                            catch { }
-                            result.Tagged++;
                         }
                     }
                 }
@@ -299,52 +281,56 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
         }
 
         // ============================================================================
-        // FIND BEST TAG IN SEGMENT
+        // FIND ALL TAGS IN SEGMENT
         // ============================================================================
-        private double FindBestTagInSegment(
+        private List<double> FindAllTagsInSegment(
             double startT, double endT, double wallLength,
             List<double> allOpenings)
         {
-            double segMid = (startT + endT) / 2.0;
+            var tagPositions = new List<double>();
 
+            // Convert mm buffers to normalized wall fractions
+            double cornerBuffer = 600.0 / 304.8; // 600mm from wall ends/corners
+            double openingBuffer = 800.0 / 304.8; // 800mm from door/window edges
+
+            double cornerFraction = cornerBuffer / wallLength;
+            double openingFraction = openingBuffer / wallLength;
+
+            // 1. Get openings within this room segment
             var segOpenings = allOpenings
-                .Where(t => t >= startT && t <= endT)
+                .Where(t => t > startT && t < endT)
                 .OrderBy(t => t)
                 .ToList();
 
-            if (segOpenings.Count == 0)
-                return segMid;
-
-            double clearanceFraction = OPENING_CLEARANCE_FEET / wallLength;
-
-            bool midpointClear = segOpenings.All(t => Math.Abs(t - segMid) > clearanceFraction);
-            if (midpointClear)
-                return segMid;
-
+            // 2. Define boundaries
             var boundaries = new List<double> { startT };
             boundaries.AddRange(segOpenings);
             boundaries.Add(endT);
-
-            double bestGapCenter = segMid;
-            double bestGapSize = 0.0;
 
             for (int i = 0; i < boundaries.Count - 1; i++)
             {
                 double gapStart = boundaries[i];
                 double gapEnd = boundaries[i + 1];
-                double safeStart = (i == 0) ? gapStart : gapStart + clearanceFraction;
-                double safeEnd = (i == boundaries.Count - 2) ? gapEnd : gapEnd - clearanceFraction;
-                double safeSize = safeEnd - safeStart;
 
-                if (safeSize > bestGapSize)
+                // --- SMART BUFFERING ---
+                // If at the very start/end of the wall (Corner), use cornerBuffer
+                // If next to a door/window opening, use openingBuffer
+                double bufferStart = (i == 0) ? cornerFraction : openingFraction;
+                double bufferEnd = (i == boundaries.Count - 2) ? cornerFraction : openingFraction;
+
+                double safeStart = gapStart + bufferStart;
+                double safeEnd = gapEnd - bufferEnd;
+
+                // 3. Only tag if the "Safe Zone" exists and is large enough
+                if (safeEnd > safeStart)
                 {
-                    bestGapSize = safeSize;
-                    bestGapCenter = (safeStart + safeEnd) / 2.0;
+                    // Place tag in the middle of the safe zone, away from the door/corner
+                    double tagT = (safeStart + safeEnd) / 2.0;
+                    tagPositions.Add(tagT);
                 }
             }
 
-            double margin = 0.02;
-            return Math.Max(startT + margin, Math.Min(endT - margin, bestGapCenter));
+            return tagPositions;
         }
 
         // ============================================================================

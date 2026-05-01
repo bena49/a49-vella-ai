@@ -55,13 +55,12 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Reference Include="A49LicenseManager">
-			<HintPath>..\..\..\Users\Ben Pongprot\OneDrive\00_REVIT API\00_A49 License Manager\A49LicenseManager.dll</HintPath>
-			<Private>True</Private>
-		</Reference>
+		<EmbeddedResource Include="Resources\icon_STD_Vella_COLOR_48x48.png" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<EmbeddedResource Include="Resources\icon_STD_Vella_COLOR_48x48.png" />
+	  <Reference Include="A49LicenseManager">
+	    <HintPath>C:\Users\Bunda.A49local\OneDrive\00_REVIT API\00_A49 License Manager\A49LicenseManager.dll</HintPath>
+	  </Reference>
 	</ItemGroup>
 </Project>

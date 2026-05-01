@@ -44,8 +44,8 @@ UI STRUCTURE
 │   │   ├── RenameWizard.vue           <-- Rename wizard
 │   │   ├── RoomElevationWizard.vue    <-- Enlarged Plan and Elevations creation wizard
 │   │   ├── SheetWizard.vue            <-- Sheet creation wizard
-│   │   ├── AutoTagWizard.vue          <-- Door tagging wizard ******TO BE REMOVED ******
-│   │   └── AutomateTagWizard.vue      <-- Full-featured tagging wizard:
+│   │   ├── AutomateTagWizard.vue      <-- Full-featured tagging wizard (incl. Spot Elevation)
+│   │   └── AutomateDimWizard.vue      <-- Auto-dimensioning wizard (floor plan walls/openings/grids)
 │   ├── help/
 │   │   ├── HelpCreatePlaceTab.vue  
 │   │   ├── HelpItem.vue    	      

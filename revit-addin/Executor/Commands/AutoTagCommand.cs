@@ -350,10 +350,11 @@ namespace A49AIRevitAssistant.Executor.Commands
                 catch { }
             }
 
-            // 500 mm offset in world -Y (south). view.UpDirection.Negate() caused a rightward
-            // shift on rotated views; a fixed world direction is more predictable.
-            double offsetFt = 500.0 / 304.8;
-            XYZ downDir = new XYZ(0, -1, 0);
+            // Two-phase placement:
+            //   1. Place each spot elevation directly at the room centre (zero-length leader).
+            //   2. After the loop, batch-move all newly placed tags 500 mm "down on screen"
+            //      using ElementTransformUtils — equivalent to a manual select-all + Move.
+            var newSpotIds = new List<ElementId>();
 
             foreach (Room room in rooms)
             {
@@ -362,28 +363,41 @@ namespace A49AIRevitAssistant.Executor.Commands
                     var locPt = room.Location as LocationPoint;
                     if (locPt == null) continue;
 
-                    var (faceRef, floorTopZ, facePoint) = GetFloorTopFaceInfo(doc, room, locPt.Point);
+                    var (faceRef, floorTopZ, _) = GetFloorTopFaceInfo(doc, room, locPt.Point);
                     if (faceRef == null) continue;
 
                     if (skipTagged && taggedFloorIds.Contains(faceRef.ElementId.Value)) continue;
 
+                    // Phase 1: place at room centre. origin = bend = end so the leader
+                    // is zero-length. hasLeader=true is required for `end` to position
+                    // the text — otherwise the SpotDimensionType's default text-offset
+                    // shifts the value 700 mm to the right.
                     XYZ origin = new XYZ(locPt.Point.X, locPt.Point.Y, floorTopZ);
-                    XYZ end    = new XYZ(locPt.Point.X + downDir.X * offsetFt,
-                                        locPt.Point.Y + downDir.Y * offsetFt,
-                                        floorTopZ);
-                    XYZ bend   = new XYZ(locPt.Point.X + downDir.X * offsetFt * 0.5,
-                                        locPt.Point.Y + downDir.Y * offsetFt * 0.5,
-                                        floorTopZ);
-
-                    SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, origin, bend, end, origin, false);
+                    SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, origin, origin, origin, origin, true);
                     if (sd == null) continue;
 
                     try { sd.ChangeTypeId(spotType.Id); } catch { }
+                    newSpotIds.Add(sd.Id);
                     tagged++;
                 }
                 catch (Exception ex)
                 {
                     A49Logger.Log($"⚠️ SpotElev room {room.Id.Value}: {ex.Message}");
+                }
+            }
+
+            // Phase 2: batch-move all newly placed tags 500 mm down on screen.
+            // view.UpDirection.Negate() = "down on screen" regardless of view rotation.
+            if (newSpotIds.Count > 0)
+            {
+                try
+                {
+                    XYZ moveDown = view.UpDirection.Negate() * (1100.0 / 304.8);
+                    ElementTransformUtils.MoveElements(doc, newSpotIds, moveDown);
+                }
+                catch (Exception ex)
+                {
+                    A49Logger.Log($"⚠️ SpotElev batch-move ({newSpotIds.Count} tags): {ex.Message}");
                 }
             }
 
@@ -393,70 +407,75 @@ namespace A49AIRevitAssistant.Executor.Commands
         // ============================================================================
         // SPOT ELEVATION — SECTION
         // ============================================================================
-        // Iterates Floor elements visible in the section view.
-        // Places one SpotElevation per floor on its top face, 300 mm below the face
-        // along the view's screen-down direction.
+        // Iterates rooms cut by / visible in the section view.
+        // For each room, finds the floor under it and places one SpotElevation at the
+        // room's centre XY on the floor's top face. Label offsets 300 mm down (world -Z).
         // ============================================================================
         private int TagFloorsWithSpotElevationInSection(Document doc, View view, SpotDimensionType spotType, bool skipTagged)
         {
             int tagged = 0;
 
-            var floors = new FilteredElementCollector(doc, view.Id)
-                .OfClass(typeof(Floor))
-                .Cast<Floor>()
+            // 1. Collect all placed rooms in the document, then filter to those inside
+            //    the section's crop volume (rooms cut by or visible in this section).
+            var rooms = new FilteredElementCollector(doc)
+                .OfCategory(BuiltInCategory.OST_Rooms)
+                .WhereElementIsNotElementType()
+                .Cast<Room>()
+                .Where(r => r.Area > 0 && r.Location != null)
+                .Where(r => IsRoomInSectionView(r, view))
                 .ToList();
 
-            var taggedFloorIds = new HashSet<long>();
+            A49Logger.Log($"📐 SpotElev section '{view.Name}': {rooms.Count} room(s) in view");
+
+            // 2. Pre-collect rooms that already have a SpotDimension placed near their
+            //    plan area in this view (so re-runs don't double-tag).
+            var taggedRoomIds = new HashSet<long>();
             if (skipTagged)
             {
                 try
                 {
-                    var existingSpots = new FilteredElementCollector(doc, view.Id)
+                    var existingSpotPts = new List<XYZ>();
+                    foreach (SpotDimension sd in new FilteredElementCollector(doc, view.Id)
                         .OfClass(typeof(SpotDimension))
-                        .Cast<SpotDimension>();
-                    foreach (SpotDimension sd in existingSpots)
+                        .Cast<SpotDimension>())
                     {
-                        try
-                        {
-                            var dim = sd as Dimension;
-                            if (dim?.References != null)
-                                foreach (Reference r in dim.References)
-                                    if (r?.ElementId != null) taggedFloorIds.Add(r.ElementId.Value);
-                        }
+                        try { if (sd.Origin != null) existingSpotPts.Add(sd.Origin); }
                         catch { }
+                    }
+
+                    foreach (Room r in rooms)
+                    {
+                        BoundingBoxXYZ rbb = r.get_BoundingBox(null);
+                        if (rbb == null) continue;
+                        bool hasSpot = existingSpotPts.Any(p =>
+                            p.X >= rbb.Min.X && p.X <= rbb.Max.X &&
+                            p.Y >= rbb.Min.Y && p.Y <= rbb.Max.Y);
+                        if (hasSpot) taggedRoomIds.Add(r.Id.Value);
                     }
                 }
                 catch { }
             }
 
+            // 3. In a section, view.UpDirection = (0,0,1), so Negate() = (0,0,-1) → label
+            //    appears just below the floor cut line. Correct for any section orientation.
             double offsetFt = 300.0 / 304.8;
-            XYZ downDir = new XYZ(0, -1, 0); // fixed world -Y; section views vary in orientation
+            XYZ downDir = view.UpDirection.Negate();
 
-            foreach (Floor floor in floors)
+            foreach (Room room in rooms)
             {
                 try
                 {
-                    if (skipTagged && taggedFloorIds.Contains(floor.Id.Value)) continue;
+                    if (skipTagged && taggedRoomIds.Contains(room.Id.Value)) continue;
 
-                    // Use world-space bounding box to get a centre point for reference lookup
-                    BoundingBoxXYZ bb = floor.get_BoundingBox(null);
-                    if (bb == null) continue;
+                    var locPt = room.Location as LocationPoint;
+                    if (locPt == null) continue;
 
-                    XYZ worldMid = new XYZ(
-                        (bb.Min.X + bb.Max.X) / 2.0,
-                        (bb.Min.Y + bb.Max.Y) / 2.0,
-                        bb.Max.Z);
+                    var (faceRef, floorTopZ, _) = GetFloorTopFaceInfo(doc, room, locPt.Point);
+                    if (faceRef == null) continue;
 
-                    var (faceRef, floorTopZ, facePoint) = GetFloorTopFaceAtPoint(doc, floor, worldMid);
-                    if (faceRef == null || facePoint == null) continue;
-
-                    XYZ origin = facePoint;
-                    XYZ end    = new XYZ(worldMid.X + downDir.X * offsetFt,
-                                        worldMid.Y + downDir.Y * offsetFt,
-                                        floorTopZ);
-                    XYZ bend   = new XYZ(worldMid.X + downDir.X * offsetFt * 0.5,
-                                        worldMid.Y + downDir.Y * offsetFt * 0.5,
-                                        floorTopZ);
+                    XYZ origin = new XYZ(locPt.Point.X, locPt.Point.Y, floorTopZ);
+                    XYZ end    = origin + downDir * offsetFt;
+                    XYZ bend   = origin + downDir * (offsetFt * 0.5);
 
                     SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, origin, bend, end, origin, false);
                     if (sd == null) continue;
@@ -466,11 +485,34 @@ namespace A49AIRevitAssistant.Executor.Commands
                 }
                 catch (Exception ex)
                 {
-                    A49Logger.Log($"⚠️ SpotElev floor {floor.Id.Value}: {ex.Message}");
+                    A49Logger.Log($"⚠️ SpotElev section room {room.Id.Value}: {ex.Message}");
                 }
             }
 
             return tagged;
+        }
+
+        // Returns true if the room's location point lies inside the section view's
+        // crop volume, transforming the world point into the crop box's local frame.
+        private bool IsRoomInSectionView(Room room, View view)
+        {
+            var locPt = room.Location as LocationPoint;
+            if (locPt == null) return false;
+
+            BoundingBoxXYZ crop = view.CropBox;
+            if (crop == null) return true;
+
+            try
+            {
+                XYZ localPt = crop.Transform.Inverse.OfPoint(locPt.Point);
+                return localPt.X >= crop.Min.X && localPt.X <= crop.Max.X &&
+                       localPt.Y >= crop.Min.Y && localPt.Y <= crop.Max.Y &&
+                       localPt.Z >= crop.Min.Z && localPt.Z <= crop.Max.Z;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         // ============================================================================

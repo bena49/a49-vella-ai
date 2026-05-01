@@ -15,24 +15,27 @@ ROOT
 │   │   │		│		├── TagContext.cs			<--Shared TagRequest and TagResult models
 │   │   │		│		└── DoorTagStrategy.cs  	<--Door-specific logic: Plan view (same 350/700mm...)
 │   │   │		├── ApplyTemplateCommand.cs
-│   │   │		├── AutoTagCommand.cs			<--Handles payload parsing, tag symbol resolution...
-│   │   │		├── BatchRenameViewsCommand.cs       
-│   │   │		├── CreateViewCommand.cs     
-│   │   │		├── DuplicateViewCommand.cs     
-│   │   │		├── ExecuteBatchCommand.cs     
-│   │   │		├── ExecuteBatchUpdateCommand.cs     
-│   │   │		├── FetchProjectInventoryCommand.cs     
-│   │   │		├── GetLevelsCommand.cs     
-│   │   │		├── GetProjectInfoCommand.cs     
-│   │   │		├── GetProjectStats.cs     
-│   │   │		├── InteractiveRoomPackageCommand.cs   <--Room Elevations     
-│   │   │		├── ListScopeBoxesCommand.cs     
-│   │   │		├── ListSheetsCommand.cs     
-│   │   │		├── ListViewsCommand.cs     
-│   │   │		├── ListViewsOnSheetCommand.cs     
-│   │   │		├── PlaceViewOnSheetCommand.cs     
-│   │   │		├── RemoveViewFromSheetCommand.cs     
-│   │   │		├── RenameSheetCommand.cs       
+│   │   │		├── AutoDimCommand.cs			<--Auto-dimensioning of walls/openings/grids in floor plans
+│   │   │		├── AutoTagCommand.cs			<--Tag symbol resolution + Spot Elevation (rooms/sections)
+│   │   │		├── BatchRenameViewsCommand.cs
+│   │   │		├── CreateViewCommand.cs
+│   │   │		├── DuplicateViewCommand.cs
+│   │   │		├── ExecuteBatchCommand.cs
+│   │   │		├── ExecuteBatchUpdateCommand.cs
+│   │   │		├── FetchProjectInventoryCommand.cs
+│   │   │		├── GetLevelsCommand.cs
+│   │   │		├── GetProjectInfoCommand.cs    <--Levels/templates/sheets/rooms/tags/views/dim_types payload
+│   │   │		├── GetProjectStats.cs
+│   │   │		├── InteractiveRoomPackageCommand.cs   <--Room Elevations
+│   │   │		├── ListScopeBoxesCommand.cs
+│   │   │		├── ListSheetsCommand.cs
+│   │   │		├── ListViewsCommand.cs
+│   │   │		├── ListViewsOnSheetCommand.cs
+│   │   │		├── PlaceViewOnSheetCommand.cs
+│   │   │		├── PreflightCheckCommand.cs    <--Pre-run validation of project state
+│   │   │		├── PreflightRepairCommand.cs   <--Auto-fix issues flagged by PreflightCheck
+│   │   │		├── RemoveViewFromSheetCommand.cs
+│   │   │		├── RenameSheetCommand.cs
 │   │   │		└── RenameViewCommand.cs
 │   │   └── Contracts 
 │   │   		├── ApplyTemplateRequest.cs (place holder)

@@ -48,24 +48,24 @@
           </div>
         </div>
 
-        <!-- TAG FAMILY DROPDOWN (populated per tag type) -->
-        <div v-if="selectedTagType">
+        <!-- TAG FAMILY — standard element tags -->
+        <div v-if="selectedTagType && !isSpotElevation">
           <label class="text-[10px] uppercase tracking-wider text-white/50 font-bold mb-1.5 block">
             {{ TAG_TYPE_LABELS[selectedTagType] }} Family
           </label>
           <div class="relative">
-            <div @click="toggleDropdown('tagFamily')" 
-                 class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs 
+            <div @click="toggleDropdown('tagFamily')"
+                 class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs
                  text-white outline-none transition cursor-pointer flex justify-between items-center hover:bg-white/15"
                  :class="isTagFamilyOpen ? 'border-[#FF9800]' : ''">
               <span>{{ selectedTagFamilyDisplay || 'Select a tag family...' }}</span>
-              <div class="text-white/50 transform transition-transform duration-200" 
+              <div class="text-white/50 transform transition-transform duration-200"
                    :class="isTagFamilyOpen ? 'rotate-180' : ''">▼</div>
             </div>
-            <div v-if="isTagFamilyOpen" 
-                 class="absolute z-[40] w-full mt-1 bg-[#0A1D4A]/80 backdrop-blur-xl border border-white/25 rounded-xl 
+            <div v-if="isTagFamilyOpen"
+                 class="absolute z-[40] w-full mt-1 bg-[#0A1D4A]/80 backdrop-blur-xl border border-white/25 rounded-xl
                  overflow-hidden shadow-2xl animate-fade-in max-h-48 overflow-y-auto custom-scrollbar">
-              <div v-for="tag in availableTagFamilies" 
+              <div v-for="tag in availableTagFamilies"
                    :key="tag.family + ':' + tag.type"
                    @click="selectTagFamily(tag)"
                    class="px-3 py-2 text-xs text-white hover:bg-white/15 transition cursor-pointer border-b border-white/10 last:border-b-0"
@@ -78,6 +78,69 @@
             </div>
           </div>
         </div>
+
+        <!-- TAG FAMILY — Spot Elevation: two separate type pickers -->
+        <template v-if="isSpotElevation">
+          <!-- Floor Plan Type -->
+          <div>
+            <label class="text-[10px] uppercase tracking-wider text-white/50 font-bold mb-1.5 block">Floor Plan Type</label>
+            <div class="relative">
+              <div @click="toggleDropdown('spotPlan')"
+                   class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs
+                   text-white outline-none transition cursor-pointer flex justify-between items-center hover:bg-white/15"
+                   :class="isSpotPlanOpen ? 'border-[#FF9800]' : ''">
+                <span :class="selectedSpotPlanType ? '' : 'text-white/40'">
+                  {{ selectedSpotPlanType || 'Select type for Floor Plans...' }}
+                </span>
+                <div class="text-white/50 transform transition-transform duration-200"
+                     :class="isSpotPlanOpen ? 'rotate-180' : ''">▼</div>
+              </div>
+              <div v-if="isSpotPlanOpen"
+                   class="absolute z-[40] w-full mt-1 bg-[#0A1D4A]/80 backdrop-blur-xl border border-white/25 rounded-xl
+                   overflow-hidden shadow-2xl animate-fade-in max-h-48 overflow-y-auto custom-scrollbar">
+                <div v-for="tag in availableTagFamilies" :key="'plan-' + tag.type"
+                     @click="selectedSpotPlanType = tag.type; isSpotPlanOpen = false"
+                     class="px-3 py-2 text-xs text-white hover:bg-white/15 transition cursor-pointer border-b border-white/10 last:border-b-0"
+                     :class="selectedSpotPlanType === tag.type ? 'bg-white/20 font-medium' : ''">
+                  {{ tag.type }}
+                </div>
+                <div v-if="availableTagFamilies.length === 0" class="px-3 py-2 text-xs text-white/40 italic">
+                  No Spot Elevation types found in project
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section Type -->
+          <div>
+            <label class="text-[10px] uppercase tracking-wider text-white/50 font-bold mb-1.5 block">Section Type</label>
+            <div class="relative">
+              <div @click="toggleDropdown('spotSection')"
+                   class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs
+                   text-white outline-none transition cursor-pointer flex justify-between items-center hover:bg-white/15"
+                   :class="isSpotSectionOpen ? 'border-[#FF9800]' : ''">
+                <span :class="selectedSpotSectionType ? '' : 'text-white/40'">
+                  {{ selectedSpotSectionType || 'Select type for Sections...' }}
+                </span>
+                <div class="text-white/50 transform transition-transform duration-200"
+                     :class="isSpotSectionOpen ? 'rotate-180' : ''">▼</div>
+              </div>
+              <div v-if="isSpotSectionOpen"
+                   class="absolute z-[40] w-full mt-1 bg-[#0A1D4A]/80 backdrop-blur-xl border border-white/25 rounded-xl
+                   overflow-hidden shadow-2xl animate-fade-in max-h-48 overflow-y-auto custom-scrollbar">
+                <div v-for="tag in availableTagFamilies" :key="'sect-' + tag.type"
+                     @click="selectedSpotSectionType = tag.type; isSpotSectionOpen = false"
+                     class="px-3 py-2 text-xs text-white hover:bg-white/15 transition cursor-pointer border-b border-white/10 last:border-b-0"
+                     :class="selectedSpotSectionType === tag.type ? 'bg-white/20 font-medium' : ''">
+                  {{ tag.type }}
+                </div>
+                <div v-if="availableTagFamilies.length === 0" class="px-3 py-2 text-xs text-white/40 italic">
+                  No Spot Elevation types found in project
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
 
         <!-- FILTERS SECTION -->
         <div v-if="selectedTagType" class="space-y-3 bg-black/10 border border-white/10 rounded-xl p-3">
@@ -202,11 +265,12 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 // PROPS
 // =====================================================================
 const props = defineProps({
-  doorTags:    { type: Array, default: () => [] },
-  windowTags:  { type: Array, default: () => [] },
-  wallTags:    { type: Array, default: () => [] },
-  roomTags:    { type: Array, default: () => [] },
-  ceilingTags: { type: Array, default: () => [] },
+  doorTags:          { type: Array, default: () => [] },
+  windowTags:        { type: Array, default: () => [] },
+  wallTags:          { type: Array, default: () => [] },
+  roomTags:          { type: Array, default: () => [] },
+  ceilingTags:       { type: Array, default: () => [] },
+  spotElevationTags: { type: Array, default: () => [] },
   // taggableViews: [{id, name, view_type, stage, level, view_abbrev, scale}]
   taggableViews: { type: Array, default: () => [] },
 });
@@ -217,20 +281,23 @@ const emit = defineEmits(['close', 'submit']);
 // CONSTANTS — Tag Type → UI mapping
 // =====================================================================
 const TAG_TYPE_OPTIONS = [
-  { key: 'door',    label: 'Door Tag' },
-  { key: 'window',  label: 'Window Tag' },
-  { key: 'wall',    label: 'Wall Tag' },
-  { key: 'room',    label: 'Room Tag' },
-  { key: 'ceiling', label: 'Ceiling Tag' },
+  { key: 'door',           label: 'Door Tag' },
+  { key: 'window',         label: 'Window Tag' },
+  { key: 'wall',           label: 'Wall Tag' },
+  { key: 'room',           label: 'Room Tag' },
+  { key: 'ceiling',        label: 'Ceiling Tag' },
+  { key: 'spot_elevation', label: 'Spot Elevation' },
 ];
 
 const TAG_TYPE_LABELS = Object.fromEntries(TAG_TYPE_OPTIONS.map(o => [o.key, o.label]));
 
 const ELEMENT_PLURAL = {
-  door: 'doors', window: 'windows', wall: 'walls', room: 'rooms', ceiling: 'ceilings'
+  door: 'doors', window: 'windows', wall: 'walls', room: 'rooms', ceiling: 'ceilings',
+  spot_elevation: 'spot elevations',
 };
 const ELEMENT_CAP = {
-  door: 'Doors', window: 'Windows', wall: 'Walls', room: 'Rooms', ceiling: 'Ceilings'
+  door: 'Doors', window: 'Windows', wall: 'Walls', room: 'Rooms', ceiling: 'Ceilings',
+  spot_elevation: 'Spot Elevations',
 };
 
 // Per-Tag-Type compatibility:
@@ -247,7 +314,9 @@ const VIEW_TYPE_COMPAT = {
             { key: 'CeilingPlan', label: 'Ceiling Plan' },
             { key: 'Elevation',   label: 'Elevation' },
             { key: 'Section',     label: 'Section' }],
-  ceiling: [{ key: 'CeilingPlan', label: 'Ceiling Plan' }],
+  ceiling:        [{ key: 'CeilingPlan', label: 'Ceiling Plan' }],
+  spot_elevation: [{ key: 'FloorPlan',   label: 'Floor Plan' },
+                   { key: 'Section',     label: 'Section' }],
 };
 
 // =====================================================================
@@ -256,6 +325,9 @@ const VIEW_TYPE_COMPAT = {
 const selectedTagType = ref(null);
 const selectedTagFamily = ref('');
 const selectedTagFamilyType = ref('');
+// Spot Elevation — one type picker per view type
+const selectedSpotPlanType = ref('');
+const selectedSpotSectionType = ref('');
 const activeViewTypes = ref([]);   // view_type keys currently selected as filter
 const activeStages = ref([]);      // stage codes currently selected
 const activeLevels = ref([]);      // level codes currently selected
@@ -264,18 +336,23 @@ const skipTagged = ref(true);
 
 const isTagTypeOpen = ref(false);
 const isTagFamilyOpen = ref(false);
+const isSpotPlanOpen = ref(false);
+const isSpotSectionOpen = ref(false);
 
 // =====================================================================
 // COMPUTED
 // =====================================================================
+const isSpotElevation = computed(() => selectedTagType.value === 'spot_elevation');
+
 const availableTagFamilies = computed(() => {
   if (!selectedTagType.value) return [];
   const map = {
-    door: props.doorTags,
-    window: props.windowTags,
-    wall: props.wallTags,
-    room: props.roomTags,
-    ceiling: props.ceilingTags,
+    door:           props.doorTags,
+    window:         props.windowTags,
+    wall:           props.wallTags,
+    room:           props.roomTags,
+    ceiling:        props.ceilingTags,
+    spot_elevation: props.spotElevationTags,
   };
   return map[selectedTagType.value] || [];
 });
@@ -342,10 +419,28 @@ const isAllSelected = computed(() => {
     filteredViews.value.every(v => selectedViewIds.value.includes(v.id));
 });
 
+// For spot_elevation: at least one type must be set for the view types actually selected
+const hasPlanViewsSelected = computed(() =>
+  selectedViewIds.value.some(id => {
+    const v = props.taggableViews.find(v => v.id === id);
+    return v?.view_type === 'FloorPlan';
+  })
+);
+const hasSectionViewsSelected = computed(() =>
+  selectedViewIds.value.some(id => {
+    const v = props.taggableViews.find(v => v.id === id);
+    return v?.view_type === 'Section';
+  })
+);
+
 const canSubmit = computed(() => {
-  return selectedTagType.value &&
-    selectedTagFamily.value &&
-    selectedViewIds.value.length > 0;
+  if (!selectedTagType.value || selectedViewIds.value.length === 0) return false;
+  if (isSpotElevation.value) {
+    const planOk    = !hasPlanViewsSelected.value    || !!selectedSpotPlanType.value;
+    const sectionOk = !hasSectionViewsSelected.value || !!selectedSpotSectionType.value;
+    return planOk && sectionOk && (!!selectedSpotPlanType.value || !!selectedSpotSectionType.value);
+  }
+  return !!selectedTagFamily.value;
 });
 
 const elementPlural = computed(() => ELEMENT_PLURAL[selectedTagType.value] || 'elements');
@@ -355,21 +450,21 @@ const elementCap = computed(() => ELEMENT_CAP[selectedTagType.value] || 'Element
 // ACTIONS
 // =====================================================================
 function toggleDropdown(name) {
-  if (name === 'tagType') {
-    isTagTypeOpen.value = !isTagTypeOpen.value;
-    isTagFamilyOpen.value = false;
-  } else if (name === 'tagFamily') {
-    isTagFamilyOpen.value = !isTagFamilyOpen.value;
-    isTagTypeOpen.value = false;
-  }
+  const all = [isTagTypeOpen, isTagFamilyOpen, isSpotPlanOpen, isSpotSectionOpen];
+  all.forEach(r => r.value = false);
+  if (name === 'tagType')      isTagTypeOpen.value   = true;
+  if (name === 'tagFamily')    isTagFamilyOpen.value  = true;
+  if (name === 'spotPlan')     isSpotPlanOpen.value   = true;
+  if (name === 'spotSection')  isSpotSectionOpen.value = true;
 }
 
 function selectTagType(key) {
   selectedTagType.value = key;
   isTagTypeOpen.value = false;
-  // Reset downstream selections when tag type changes
   selectedTagFamily.value = '';
   selectedTagFamilyType.value = '';
+  selectedSpotPlanType.value = '';
+  selectedSpotSectionType.value = '';
   activeViewTypes.value = [];
   activeStages.value = [];
   activeLevels.value = [];
@@ -448,20 +543,27 @@ function viewTypeShort(viewType) {
 
 function submit() {
   if (!canSubmit.value) return;
-  emit('submit', {
+  const payload = {
     tag_category: selectedTagType.value,
-    tag_family: selectedTagFamily.value,
-    tag_type: selectedTagFamilyType.value,
-    view_ids: selectedViewIds.value,
-    skip_tagged: skipTagged.value,
-  });
+    tag_family:   selectedTagFamily.value,
+    tag_type:     selectedTagFamilyType.value,
+    view_ids:     selectedViewIds.value,
+    skip_tagged:  skipTagged.value,
+  };
+  if (isSpotElevation.value) {
+    payload.spot_plan_type    = selectedSpotPlanType.value;
+    payload.spot_section_type = selectedSpotSectionType.value;
+  }
+  emit('submit', payload);
 }
 
 // --- KEYBOARD ---
 const handleKeydown = (e) => {
   if (e.key === 'Escape') {
-    isTagTypeOpen.value = false;
-    isTagFamilyOpen.value = false;
+    isTagTypeOpen.value    = false;
+    isTagFamilyOpen.value  = false;
+    isSpotPlanOpen.value   = false;
+    isSpotSectionOpen.value = false;
   }
 };
 onMounted(() => document.addEventListener('keydown', handleKeydown));

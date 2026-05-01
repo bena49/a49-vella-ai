@@ -72,9 +72,9 @@ export function useWizards(
       sendToRevit({ command: "fetch_project_info", args: { types: ["levels", "templates", "titleblocks", "rooms"] } });
     }
     else if (action === "wizard:automate_tag") {
-      automateTagWizardProps.value = { doorTags: [], windowTags: [], wallTags: [], roomTags: [], ceilingTags: [], taggableViews: [] };
+      automateTagWizardProps.value = { doorTags: [], windowTags: [], wallTags: [], roomTags: [], ceilingTags: [], spotElevationTags: [], taggableViews: [] };
       showAutomateTagWizard.value = true;
-      sendToRevit({ command: "fetch_project_info", args: { types: ["door_tags", "window_tags", "wall_tags", "room_tags", "ceiling_tags", "taggable_views"] } });
+      sendToRevit({ command: "fetch_project_info", args: { types: ["door_tags", "window_tags", "wall_tags", "room_tags", "ceiling_tags", "spot_elevation_tags", "taggable_views"] } });
     }
     else if (action === "wizard:automate_dim") {
       automateDimWizardProps.value = { dimTypes: [], floorPlanViews: [] };
@@ -120,17 +120,20 @@ export function useWizards(
     showAutomateTagWizard.value = false;
     const elementNames: Record<string, string> = {
       door: "door", window: "window", wall: "wall", room: "room", ceiling: "ceiling",
+      spot_elevation: "spot elevation",
     };
     const elementLabel = elementNames[payload.tag_category] || "element";
     messages.value.push({ from: "vella", text: `🏷️ Tagging ${elementLabel}s in ${payload.view_ids.length} view(s)...` });
     sendToBackend({
-      message: "automate_tag",
-      tag_category: payload.tag_category,
-      tag_family: payload.tag_family,
-      tag_type: payload.tag_type,
-      view_ids: payload.view_ids,
-      skip_tagged: payload.skip_tagged,
-      session_key: sessionKey.value,
+      message:            "automate_tag",
+      tag_category:       payload.tag_category,
+      tag_family:         payload.tag_family,
+      tag_type:           payload.tag_type,
+      view_ids:           payload.view_ids,
+      skip_tagged:        payload.skip_tagged,
+      spot_plan_type:     payload.spot_plan_type    ?? "",
+      spot_section_type:  payload.spot_section_type ?? "",
+      session_key:        sessionKey.value,
     });
   }
 
@@ -184,12 +187,13 @@ export function useWizards(
 
     // Automate tag wizard
     automateTagWizardProps.value = {
-      doorTags:     projectInfo.door_tags     || [],
-      windowTags:   projectInfo.window_tags   || [],
-      wallTags:     projectInfo.wall_tags     || [],
-      roomTags:     projectInfo.room_tags     || [],
-      ceilingTags:  projectInfo.ceiling_tags  || [],
-      taggableViews: projectInfo.taggable_views || [],
+      doorTags:          projectInfo.door_tags           || [],
+      windowTags:        projectInfo.window_tags         || [],
+      wallTags:          projectInfo.wall_tags           || [],
+      roomTags:          projectInfo.room_tags           || [],
+      ceilingTags:       projectInfo.ceiling_tags        || [],
+      spotElevationTags: projectInfo.spot_elevation_tags || [],
+      taggableViews:     projectInfo.taggable_views      || [],
     };
 
     // Automate dim wizard
@@ -207,8 +211,9 @@ export function useWizards(
         window_tags:   projectInfo.window_tags   || [],
         wall_tags:     projectInfo.wall_tags     || [],
         room_tags:     projectInfo.room_tags     || [],
-        ceiling_tags:  projectInfo.ceiling_tags  || [],
-        session_key:   sessionKey.value,
+        ceiling_tags:          projectInfo.ceiling_tags        || [],
+        spot_elevation_tags:   projectInfo.spot_elevation_tags || [],
+        session_key:           sessionKey.value,
       });
     }
 

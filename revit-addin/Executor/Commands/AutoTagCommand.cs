@@ -19,7 +19,9 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Architecture;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -74,6 +76,12 @@ namespace A49AIRevitAssistant.Executor.Commands
                 var viewIds = new List<ElementId>();
                 foreach (var vid in viewIdArray)
                     viewIds.Add(new ElementId(vid.Value<long>()));
+
+                // ─────────────────────────────────────────────────────
+                // SPOT ELEVATION: SpotDimensionType, not FamilySymbol — handled inline
+                // ─────────────────────────────────────────────────────
+                if (categoryKey == "spot_elevation")
+                    return ExecuteSpotElevation(doc, payload, viewIds, skipTagged);
 
                 // ─────────────────────────────────────────────────────
                 // 2. RESOLVE STRATEGY
@@ -204,6 +212,377 @@ namespace A49AIRevitAssistant.Executor.Commands
             }
 
             return null;
+        }
+
+        // ============================================================================
+        // SPOT ELEVATION — ORCHESTRATOR
+        // ============================================================================
+        // Handles FloorPlan and Section views independently because they need
+        // different SpotDimensionTypes and different element targets.
+        // ============================================================================
+        private string ExecuteSpotElevation(Document doc, JObject payload, List<ElementId> viewIds, bool skipTagged)
+        {
+            string planTypeName    = payload.Value<string>("spot_plan_type")    ?? "";
+            string sectionTypeName = payload.Value<string>("spot_section_type") ?? "";
+
+            int totalTagged = 0;
+            int viewsProcessed = 0;
+            var errors = new List<string>();
+
+            A49Logger.Log($"🏷️ SpotElevation: planType='{planTypeName}', sectionType='{sectionTypeName}', views={viewIds.Count}");
+
+            using (Transaction tx = new Transaction(doc, "Vella: Auto Spot Elevation"))
+            {
+                tx.Start();
+
+                foreach (ElementId viewId in viewIds)
+                {
+                    View view = doc.GetElement(viewId) as View;
+                    if (view == null) { errors.Add($"View {viewId.Value} not found."); continue; }
+
+                    try
+                    {
+                        int tagged = 0;
+
+                        if (view.ViewType == ViewType.FloorPlan)
+                        {
+                            SpotDimensionType spotType = FindSpotDimensionType(doc, planTypeName);
+                            if (spotType == null)
+                            {
+                                errors.Add($"Spot type '{planTypeName}' not found in project.");
+                                continue;
+                            }
+                            tagged = TagRoomsWithSpotElevation(doc, view, spotType, skipTagged);
+                        }
+                        else if (view.ViewType == ViewType.Section)
+                        {
+                            SpotDimensionType spotType = FindSpotDimensionType(doc, sectionTypeName);
+                            if (spotType == null)
+                            {
+                                errors.Add($"Spot type '{sectionTypeName}' not found in project.");
+                                continue;
+                            }
+                            tagged = TagFloorsWithSpotElevationInSection(doc, view, spotType, skipTagged);
+                        }
+                        else
+                        {
+                            errors.Add($"View type '{view.ViewType}' is not supported for spot elevations.");
+                            continue;
+                        }
+
+                        totalTagged += tagged;
+                        viewsProcessed++;
+                        A49Logger.Log($"  ✅ View '{view.Name}': spot elevations placed={tagged}");
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"Error in view '{view.Name}': {ex.Message}");
+                    }
+                }
+
+                tx.Commit();
+            }
+
+            var resultObj = new JObject
+            {
+                ["auto_tag_result"] = new JObject
+                {
+                    ["status"]          = errors.Count == 0 ? "success" : "partial",
+                    ["category"]        = "spot_elevation",
+                    ["tag_family"]      = "Spot Elevations",
+                    ["tag_type"]        = $"{planTypeName} / {sectionTypeName}",
+                    ["tagged_count"]    = totalTagged,
+                    ["skipped_count"]   = 0,
+                    ["views_processed"] = viewsProcessed,
+                    ["message"]         = $"Placed {totalTagged} spot elevation(s) across {viewsProcessed} view(s).",
+                    ["errors"]          = new JArray(errors.ToArray())
+                }
+            };
+
+            string jsonResult = JsonConvert.SerializeObject(resultObj);
+            A49AIRevitAssistant.UI.DockablePaneViewer.Instance.Dispatcher.Invoke(() =>
+            {
+                A49AIRevitAssistant.UI.DockablePaneViewer.Instance.SendRawMessage(jsonResult);
+            });
+
+            return "{\"status\":\"silent\"}";
+        }
+
+        // ============================================================================
+        // SPOT ELEVATION — FLOOR PLAN
+        // ============================================================================
+        // Iterates rooms visible in the floor plan view.
+        // For each room, finds the floor slab beneath it and places a SpotElevation
+        // on the slab's top face, offset 500 mm "below" the room centre in screen space.
+        // ============================================================================
+        private int TagRoomsWithSpotElevation(Document doc, View view, SpotDimensionType spotType, bool skipTagged)
+        {
+            int tagged = 0;
+
+            var rooms = new FilteredElementCollector(doc, view.Id)
+                .OfCategory(BuiltInCategory.OST_Rooms)
+                .WhereElementIsNotElementType()
+                .Cast<Room>()
+                .Where(r => r.Area > 0 && r.Location != null)
+                .ToList();
+
+            // Pre-collect floor IDs that already have a SpotDimension in this view.
+            var taggedFloorIds = new HashSet<long>();
+            if (skipTagged)
+            {
+                try
+                {
+                    var existingSpots = new FilteredElementCollector(doc, view.Id)
+                        .OfClass(typeof(SpotDimension))
+                        .Cast<SpotDimension>();
+                    foreach (SpotDimension sd in existingSpots)
+                    {
+                        try
+                        {
+                            var dim = sd as Dimension;
+                            if (dim?.References != null)
+                                foreach (Reference r in dim.References)
+                                    if (r?.ElementId != null) taggedFloorIds.Add(r.ElementId.Value);
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+            }
+
+            // 500 mm offset downward in screen space (opposite to view.UpDirection)
+            double offsetFt = 500.0 / 304.8;
+            XYZ downDir = view.UpDirection.Negate();
+
+            foreach (Room room in rooms)
+            {
+                try
+                {
+                    var locPt = room.Location as LocationPoint;
+                    if (locPt == null) continue;
+
+                    var (faceRef, floorTopZ) = GetFloorTopFaceInfo(doc, room, locPt.Point);
+                    if (faceRef == null) continue;
+
+                    if (skipTagged && taggedFloorIds.Contains(faceRef.ElementId.Value)) continue;
+
+                    // origin must lie on the floor's top face (same XY as room centre, Z = face Z)
+                    XYZ origin = new XYZ(locPt.Point.X, locPt.Point.Y, floorTopZ);
+                    XYZ end    = origin + downDir * offsetFt;
+                    XYZ bend   = origin + downDir * (offsetFt * 0.5);
+
+                    // refPt = point on face where measurement lands (same as origin)
+                    SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, origin, bend, end, origin, false);
+                    if (sd == null) continue;
+
+                    try { sd.ChangeTypeId(spotType.Id); } catch { }
+                    tagged++;
+                }
+                catch (Exception ex)
+                {
+                    A49Logger.Log($"⚠️ SpotElev room {room.Id.Value}: {ex.Message}");
+                }
+            }
+
+            return tagged;
+        }
+
+        // ============================================================================
+        // SPOT ELEVATION — SECTION
+        // ============================================================================
+        // Iterates Floor elements visible in the section view.
+        // Places one SpotElevation per floor on its top face, 300 mm below the face
+        // along the view's screen-down direction.
+        // ============================================================================
+        private int TagFloorsWithSpotElevationInSection(Document doc, View view, SpotDimensionType spotType, bool skipTagged)
+        {
+            int tagged = 0;
+
+            var floors = new FilteredElementCollector(doc, view.Id)
+                .OfClass(typeof(Floor))
+                .Cast<Floor>()
+                .ToList();
+
+            var taggedFloorIds = new HashSet<long>();
+            if (skipTagged)
+            {
+                try
+                {
+                    var existingSpots = new FilteredElementCollector(doc, view.Id)
+                        .OfClass(typeof(SpotDimension))
+                        .Cast<SpotDimension>();
+                    foreach (SpotDimension sd in existingSpots)
+                    {
+                        try
+                        {
+                            var dim = sd as Dimension;
+                            if (dim?.References != null)
+                                foreach (Reference r in dim.References)
+                                    if (r?.ElementId != null) taggedFloorIds.Add(r.ElementId.Value);
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+            }
+
+            double offsetFt = 300.0 / 304.8;
+            XYZ downDir = view.UpDirection.Negate();
+
+            foreach (Floor floor in floors)
+            {
+                try
+                {
+                    if (skipTagged && taggedFloorIds.Contains(floor.Id.Value)) continue;
+
+                    // Use world-space bounding box to get a centre point for reference lookup
+                    BoundingBoxXYZ bb = floor.get_BoundingBox(null);
+                    if (bb == null) continue;
+
+                    XYZ worldMid = new XYZ(
+                        (bb.Min.X + bb.Max.X) / 2.0,
+                        (bb.Min.Y + bb.Max.Y) / 2.0,
+                        bb.Max.Z);
+
+                    var (faceRef, floorTopZ) = GetFloorTopFaceAtPoint(doc, floor, worldMid);
+                    if (faceRef == null) continue;
+
+                    XYZ origin = new XYZ(worldMid.X, worldMid.Y, floorTopZ);
+                    XYZ end    = origin + downDir * offsetFt;
+                    XYZ bend   = origin + downDir * (offsetFt * 0.5);
+
+                    // refPt = point on face where measurement lands (same as origin)
+                    SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, origin, bend, end, origin, false);
+                    if (sd == null) continue;
+
+                    try { sd.ChangeTypeId(spotType.Id); } catch { }
+                    tagged++;
+                }
+                catch (Exception ex)
+                {
+                    A49Logger.Log($"⚠️ SpotElev floor {floor.Id.Value}: {ex.Message}");
+                }
+            }
+
+            return tagged;
+        }
+
+        // ============================================================================
+        // GEOMETRY HELPERS
+        // ============================================================================
+
+        private (Reference faceRef, double topZ) GetFloorTopFaceInfo(Document doc, Room room, XYZ roomCenter)
+        {
+            Floor floor = FindFloorUnderRoom(doc, room);
+            if (floor == null) return (null, 0.0);
+            return GetFloorTopFaceAtPoint(doc, floor, roomCenter);
+        }
+
+        // Returns the highest near-horizontal upward PlanarFace reference on the floor solid.
+        private (Reference faceRef, double topZ) GetFloorTopFaceAtPoint(Document doc, Floor floor, XYZ nearPoint)
+        {
+            try
+            {
+                var opts = new Options
+                {
+                    ComputeReferences       = true,
+                    IncludeNonVisibleObjects = false
+                };
+
+                GeometryElement geom = floor.get_Geometry(opts);
+
+                Reference bestRef = null;
+                double    bestZ   = double.MinValue;
+
+                foreach (GeometryObject geomObj in geom)
+                {
+                    Solid solid = geomObj as Solid;
+                    if (solid == null || solid.Faces.Size == 0) continue;
+
+                    foreach (Face face in solid.Faces)
+                    {
+                        PlanarFace pf = face as PlanarFace;
+                        if (pf == null) continue;
+                        if (pf.FaceNormal.Z < 0.9) continue;   // only upward-facing horizontal faces
+
+                        double faceZ = pf.Origin.Z;
+                        if (faceZ > bestZ)
+                        {
+                            bestZ   = faceZ;
+                            bestRef = face.Reference;
+                        }
+                    }
+                }
+
+                return (bestRef, bestZ);
+            }
+            catch
+            {
+                return (null, 0.0);
+            }
+        }
+
+        // Finds the floor whose top-Z is closest to the room's base elevation.
+        private Floor FindFloorUnderRoom(Document doc, Room room)
+        {
+            try
+            {
+                BoundingBoxXYZ roomBB = room.get_BoundingBox(null);
+                if (roomBB == null) return null;
+
+                // Search 2 ft below the room's lower face to catch the slab
+                var expandedMin = new XYZ(roomBB.Min.X, roomBB.Min.Y, roomBB.Min.Z - 2.0);
+                var expandedMax = new XYZ(roomBB.Max.X, roomBB.Max.Y, roomBB.Max.Z);
+
+                var outline  = new Outline(expandedMin, expandedMax);
+                var bbFilter = new BoundingBoxIntersectsFilter(outline);
+
+                var floors = new FilteredElementCollector(doc)
+                    .OfClass(typeof(Floor))
+                    .WherePasses(bbFilter)
+                    .Cast<Floor>()
+                    .ToList();
+
+                if (floors.Count == 0) return null;
+
+                double roomBaseZ = roomBB.Min.Z;
+                Floor  best      = null;
+                double bestDelta = double.MaxValue;
+
+                foreach (Floor f in floors)
+                {
+                    BoundingBoxXYZ fbb = f.get_BoundingBox(null);
+                    if (fbb == null) continue;
+                    double delta = Math.Abs(fbb.Max.Z - roomBaseZ);
+                    if (delta < bestDelta) { bestDelta = delta; best = f; }
+                }
+
+                return best;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        // ============================================================================
+        // SPOT DIMENSION TYPE LOOKUP
+        // ============================================================================
+        private SpotDimensionType FindSpotDimensionType(Document doc, string typeName)
+        {
+            if (string.IsNullOrWhiteSpace(typeName)) return null;
+
+            var all = new FilteredElementCollector(doc)
+                .OfClass(typeof(SpotDimensionType))
+                .Cast<SpotDimensionType>()
+                .ToList();
+
+            // Exact match first
+            SpotDimensionType found = all.FirstOrDefault(
+                sdt => sdt.Name.Equals(typeName, StringComparison.OrdinalIgnoreCase));
+
+            // Fallback: first available type if nothing matched
+            return found ?? all.FirstOrDefault();
         }
 
         // ============================================================================

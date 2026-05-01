@@ -318,6 +318,7 @@ def dispatch_immediate_command(request, intent, gpt_json):
         request.session["ai_last_known_wall_tags"] = request.data.get("wall_tags", [])
         request.session["ai_last_known_room_tags"] = request.data.get("room_tags", [])
         request.session["ai_last_known_ceiling_tags"] = request.data.get("ceiling_tags", [])
+        request.session["ai_last_known_spot_elevation_tags"] = request.data.get("spot_elevation_tags", [])
         request.session.modified = True
         debug_session(request, f"📦 Cached tag inventory: {len(request.data.get('taggable_views', []))} views")
         

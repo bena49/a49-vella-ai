@@ -211,7 +211,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'submit', 'refresh-data']); // Added refresh-data
 
 // --- MOCK DATA ---
-const fallbackLevels = Array.from({ length: 10 }, (_, i) => `ผังพื้นชั้นที่ ${i + 1}`); 
+const fallbackLevels = Array.from({ length: 10 }, (_, i) => `LEVEL ${i + 1}`); 
 const fallbackScopeBoxes = ["SB_PLAN_OVERALL", "SB_PLAN_STAIRS", "SB_PLAN_CORE"];
 const fallbackTemplates = ["A49_CD_A1_FLOOR PLAN", "A49_CD_A1_REFLECTED CEILING PLAN", "A49_PD_FLOOR PLAN"];
 

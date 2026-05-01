@@ -21,16 +21,17 @@ from ..ai_core.session_manager import debug_session
 
 # Tag category → compatible Revit view types (for the view-type question)
 CATEGORY_VIEW_TYPE_OPTIONS = {
-    "door":    [("FloorPlan", "Floor Plan"), ("Elevation", "Elevation"), ("Section", "Section")],
-    "window":  [("FloorPlan", "Floor Plan"), ("Elevation", "Elevation"), ("Section", "Section")],
-    "wall":    [("FloorPlan", "Floor Plan")],
-    "room":    [("FloorPlan", "Floor Plan"), ("CeilingPlan", "Ceiling Plan"), ("Elevation", "Elevation"), ("Section", "Section")],
-    "ceiling": [("CeilingPlan", "Ceiling Plan")],
+    "door":           [("FloorPlan", "Floor Plan"), ("Elevation", "Elevation"), ("Section", "Section")],
+    "window":         [("FloorPlan", "Floor Plan"), ("Elevation", "Elevation"), ("Section", "Section")],
+    "wall":           [("FloorPlan", "Floor Plan")],
+    "room":           [("FloorPlan", "Floor Plan"), ("CeilingPlan", "Ceiling Plan"), ("Elevation", "Elevation"), ("Section", "Section")],
+    "ceiling":        [("CeilingPlan", "Ceiling Plan")],
+    "spot_elevation": [("FloorPlan", "Floor Plan"), ("Section", "Section")],
 }
 
 ELEMENT_NAMES = {
     "door": "doors", "window": "windows", "wall": "walls",
-    "room": "rooms", "ceiling": "ceilings",
+    "room": "rooms", "ceiling": "ceilings", "spot_elevation": "spot elevations",
 }
 
 # User input → Revit ViewType string

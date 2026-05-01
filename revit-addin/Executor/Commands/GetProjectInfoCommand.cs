@@ -148,6 +148,20 @@ namespace A49AIRevitAssistant.Executor.Commands
                     .OrderBy(t => t.family).ThenBy(t => t.type)
                     .ToList();
 
+                // 💥 7f. NEW: Spot Elevation Types
+                // SpotDimensionType is a system family — no .Family property.
+                // Reported to the wizard as family="Spot Elevations", type=sdt.Name.
+                var spotElevationTags = new FilteredElementCollector(_doc)
+                    .OfClass(typeof(SpotDimensionType))
+                    .Cast<SpotDimensionType>()
+                    .Select(sdt => new
+                    {
+                        family = "Spot Elevations",
+                        type = sdt.Name
+                    })
+                    .OrderBy(t => t.type)
+                    .ToList();
+
                 // 💥 8. NEW: Get Taggable Views (for Automate Tagging wizard)
                 // Includes Plans, Elevations, and Sections with full metadata for filtering.
                 // Stage/Level/ViewAbbrev are parsed from the A49 view name convention:
@@ -289,6 +303,7 @@ namespace A49AIRevitAssistant.Executor.Commands
                         wall_tags = wallTags,
                         room_tags = roomTags,
                         ceiling_tags = ceilingTags,
+                        spot_elevation_tags = spotElevationTags,
                         // Full taggable views with metadata (used by AutomateTagWizard)
                         taggable_views = taggableViews,
                         // Dimension styles (used by AutomateDimWizard)

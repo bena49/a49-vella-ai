@@ -361,17 +361,21 @@ namespace A49AIRevitAssistant.Executor.Commands
                     var locPt = room.Location as LocationPoint;
                     if (locPt == null) continue;
 
-                    var (faceRef, floorTopZ) = GetFloorTopFaceInfo(doc, room, locPt.Point);
-                    if (faceRef == null) continue;
+                    var (faceRef, floorTopZ, facePoint) = GetFloorTopFaceInfo(doc, room, locPt.Point);
+                    if (faceRef == null || facePoint == null) continue;
 
                     if (skipTagged && taggedFloorIds.Contains(faceRef.ElementId.Value)) continue;
 
-                    // origin must lie on the floor's top face (same XY as room centre, Z = face Z)
-                    XYZ origin = new XYZ(locPt.Point.X, locPt.Point.Y, floorTopZ);
-                    XYZ end    = origin + downDir * offsetFt;
-                    XYZ bend   = origin + downDir * (offsetFt * 0.5);
+                    // origin/refPt must lie ON the face — use pf.Origin (guaranteed on-face).
+                    // end/bend use room-centre XY so the label appears below the room centre.
+                    XYZ origin = facePoint;
+                    XYZ end    = new XYZ(locPt.Point.X + downDir.X * offsetFt,
+                                        locPt.Point.Y + downDir.Y * offsetFt,
+                                        floorTopZ);
+                    XYZ bend   = new XYZ(locPt.Point.X + downDir.X * offsetFt * 0.5,
+                                        locPt.Point.Y + downDir.Y * offsetFt * 0.5,
+                                        floorTopZ);
 
-                    // refPt = point on face where measurement lands (same as origin)
                     SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, origin, bend, end, origin, false);
                     if (sd == null) continue;
 
@@ -444,14 +448,17 @@ namespace A49AIRevitAssistant.Executor.Commands
                         (bb.Min.Y + bb.Max.Y) / 2.0,
                         bb.Max.Z);
 
-                    var (faceRef, floorTopZ) = GetFloorTopFaceAtPoint(doc, floor, worldMid);
-                    if (faceRef == null) continue;
+                    var (faceRef, floorTopZ, facePoint) = GetFloorTopFaceAtPoint(doc, floor, worldMid);
+                    if (faceRef == null || facePoint == null) continue;
 
-                    XYZ origin = new XYZ(worldMid.X, worldMid.Y, floorTopZ);
-                    XYZ end    = origin + downDir * offsetFt;
-                    XYZ bend   = origin + downDir * (offsetFt * 0.5);
+                    XYZ origin = facePoint;
+                    XYZ end    = new XYZ(worldMid.X + downDir.X * offsetFt,
+                                        worldMid.Y + downDir.Y * offsetFt,
+                                        floorTopZ);
+                    XYZ bend   = new XYZ(worldMid.X + downDir.X * offsetFt * 0.5,
+                                        worldMid.Y + downDir.Y * offsetFt * 0.5,
+                                        floorTopZ);
 
-                    // refPt = point on face where measurement lands (same as origin)
                     SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, origin, bend, end, origin, false);
                     if (sd == null) continue;
 
@@ -471,15 +478,16 @@ namespace A49AIRevitAssistant.Executor.Commands
         // GEOMETRY HELPERS
         // ============================================================================
 
-        private (Reference faceRef, double topZ) GetFloorTopFaceInfo(Document doc, Room room, XYZ roomCenter)
+        private (Reference faceRef, double topZ, XYZ facePoint) GetFloorTopFaceInfo(Document doc, Room room, XYZ roomCenter)
         {
             Floor floor = FindFloorUnderRoom(doc, room);
-            if (floor == null) return (null, 0.0);
+            if (floor == null) return (null, 0.0, null);
             return GetFloorTopFaceAtPoint(doc, floor, roomCenter);
         }
 
-        // Returns the highest near-horizontal upward PlanarFace reference on the floor solid.
-        private (Reference faceRef, double topZ) GetFloorTopFaceAtPoint(Document doc, Floor floor, XYZ nearPoint)
+        // Returns the highest near-horizontal upward PlanarFace reference on the floor solid,
+        // plus pf.Origin — a point guaranteed to lie on the face (used as NewSpotElevation origin).
+        private (Reference faceRef, double topZ, XYZ facePoint) GetFloorTopFaceAtPoint(Document doc, Floor floor, XYZ nearPoint)
         {
             try
             {
@@ -491,8 +499,9 @@ namespace A49AIRevitAssistant.Executor.Commands
 
                 GeometryElement geom = floor.get_Geometry(opts);
 
-                Reference bestRef = null;
-                double    bestZ   = double.MinValue;
+                Reference bestRef   = null;
+                double    bestZ     = double.MinValue;
+                XYZ       bestPoint = null;
 
                 foreach (GeometryObject geomObj in geom)
                 {
@@ -508,17 +517,18 @@ namespace A49AIRevitAssistant.Executor.Commands
                         double faceZ = pf.Origin.Z;
                         if (faceZ > bestZ)
                         {
-                            bestZ   = faceZ;
-                            bestRef = face.Reference;
+                            bestZ     = faceZ;
+                            bestRef   = face.Reference;
+                            bestPoint = pf.Origin;  // guaranteed on-face point
                         }
                     }
                 }
 
-                return (bestRef, bestZ);
+                return (bestRef, bestZ, bestPoint);
             }
             catch
             {
-                return (null, 0.0);
+                return (null, 0.0, null);
             }
         }
 

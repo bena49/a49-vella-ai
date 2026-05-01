@@ -60,7 +60,7 @@
 
 	<ItemGroup>
 	  <Reference Include="A49LicenseManager">
-	    <HintPath>C:\Users\Bunda.A49local\OneDrive\00_REVIT API\00_A49 License Manager\A49LicenseManager.dll</HintPath>
+	    <HintPath>..\..\..\Users\Ben Pongprot\OneDrive\00_REVIT API\00_A49 License Manager\A49LicenseManager.dll</HintPath>
 	  </Reference>
 	</ItemGroup>
 </Project>

@@ -151,8 +151,10 @@ namespace A49AIRevitAssistant.Executor.Commands
                 // 💥 7f. NEW: Spot Elevation Types
                 // SpotDimensionType is a system family — no .Family property.
                 // Reported to the wizard as family="Spot Elevations", type=sdt.Name.
+                // OST_SpotElevations filters out Spot Coordinate and Spot Slope types
                 var spotElevationTags = new FilteredElementCollector(_doc)
                     .OfClass(typeof(SpotDimensionType))
+                    .OfCategory(BuiltInCategory.OST_SpotElevations)
                     .Cast<SpotDimensionType>()
                     .Select(sdt => new
                     {

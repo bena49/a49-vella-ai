@@ -26,7 +26,7 @@
         <!-- TAG TYPE DROPDOWN -->
         <div>
           <label class="text-[10px] uppercase tracking-wider text-white/50 font-bold mb-1.5 block">Tag Type</label>
-          <div class="relative">
+          <div class="relative" @click.stop>
             <div @click="toggleDropdown('tagType')" 
                  class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs 
                  text-white outline-none transition cursor-pointer flex justify-between items-center hover:bg-white/15"
@@ -53,7 +53,7 @@
           <label class="text-[10px] uppercase tracking-wider text-white/50 font-bold mb-1.5 block">
             {{ TAG_TYPE_LABELS[selectedTagType] }} Family
           </label>
-          <div class="relative">
+          <div class="relative" @click.stop>
             <div @click="toggleDropdown('tagFamily')"
                  class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs
                  text-white outline-none transition cursor-pointer flex justify-between items-center hover:bg-white/15"
@@ -79,59 +79,50 @@
           </div>
         </div>
 
-        <!-- TAG FAMILY — Spot Elevation: two separate type pickers -->
+        <!-- TAG FAMILY — Spot Elevation: view-type selector then single type picker -->
         <template v-if="isSpotElevation">
-          <!-- Floor Plan Type -->
+          <!-- Step 1: View Type -->
           <div>
-            <label class="text-[10px] uppercase tracking-wider text-white/50 font-bold mb-1.5 block">Floor Plan Type</label>
-            <div class="relative">
-              <div @click="toggleDropdown('spotPlan')"
-                   class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs
-                   text-white outline-none transition cursor-pointer flex justify-between items-center hover:bg-white/15"
-                   :class="isSpotPlanOpen ? 'border-[#FF9800]' : ''">
-                <span :class="selectedSpotPlanType ? '' : 'text-white/40'">
-                  {{ selectedSpotPlanType || 'Select type for Floor Plans...' }}
-                </span>
-                <div class="text-white/50 transform transition-transform duration-200"
-                     :class="isSpotPlanOpen ? 'rotate-180' : ''">▼</div>
-              </div>
-              <div v-if="isSpotPlanOpen"
-                   class="absolute z-[40] w-full mt-1 bg-[#0A1D4A]/80 backdrop-blur-xl border border-white/25 rounded-xl
-                   overflow-hidden shadow-2xl animate-fade-in max-h-48 overflow-y-auto custom-scrollbar">
-                <div v-for="tag in availableTagFamilies" :key="'plan-' + tag.type"
-                     @click="selectedSpotPlanType = tag.type; isSpotPlanOpen = false"
-                     class="px-3 py-2 text-xs text-white hover:bg-white/15 transition cursor-pointer border-b border-white/10 last:border-b-0"
-                     :class="selectedSpotPlanType === tag.type ? 'bg-white/20 font-medium' : ''">
-                  {{ tag.type }}
-                </div>
-                <div v-if="availableTagFamilies.length === 0" class="px-3 py-2 text-xs text-white/40 italic">
-                  No Spot Elevation types found in project
-                </div>
-              </div>
+            <label class="text-[10px] uppercase tracking-wider text-white/50 font-bold mb-1.5 block">View Type</label>
+            <div class="flex gap-2">
+              <button @click="selectSpotViewType('FloorPlan')"
+                class="flex-1 py-2 rounded-xl text-xs font-medium transition-all border"
+                :class="selectedSpotViewType === 'FloorPlan'
+                  ? 'bg-[#FF9800] text-[#0A1D4A] border-transparent'
+                  : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white border-white/15'">
+                Floor Plan
+              </button>
+              <button @click="selectSpotViewType('Section')"
+                class="flex-1 py-2 rounded-xl text-xs font-medium transition-all border"
+                :class="selectedSpotViewType === 'Section'
+                  ? 'bg-[#FF9800] text-[#0A1D4A] border-transparent'
+                  : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white border-white/15'">
+                Building/Wall Sections
+              </button>
             </div>
           </div>
 
-          <!-- Section Type -->
-          <div>
-            <label class="text-[10px] uppercase tracking-wider text-white/50 font-bold mb-1.5 block">Section Type</label>
-            <div class="relative">
-              <div @click="toggleDropdown('spotSection')"
+          <!-- Step 2: Spot Elevation Type (only after view type chosen) -->
+          <div v-if="selectedSpotViewType">
+            <label class="text-[10px] uppercase tracking-wider text-white/50 font-bold mb-1.5 block">Spot Elevation Type</label>
+            <div class="relative" @click.stop>
+              <div @click="toggleDropdown('spotType')"
                    class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs
                    text-white outline-none transition cursor-pointer flex justify-between items-center hover:bg-white/15"
-                   :class="isSpotSectionOpen ? 'border-[#FF9800]' : ''">
-                <span :class="selectedSpotSectionType ? '' : 'text-white/40'">
-                  {{ selectedSpotSectionType || 'Select type for Sections...' }}
+                   :class="isSpotTypeOpen ? 'border-[#FF9800]' : ''">
+                <span :class="selectedSpotType ? '' : 'text-white/40'">
+                  {{ selectedSpotType || 'Select spot elevation type...' }}
                 </span>
                 <div class="text-white/50 transform transition-transform duration-200"
-                     :class="isSpotSectionOpen ? 'rotate-180' : ''">▼</div>
+                     :class="isSpotTypeOpen ? 'rotate-180' : ''">▼</div>
               </div>
-              <div v-if="isSpotSectionOpen"
+              <div v-if="isSpotTypeOpen"
                    class="absolute z-[40] w-full mt-1 bg-[#0A1D4A]/80 backdrop-blur-xl border border-white/25 rounded-xl
                    overflow-hidden shadow-2xl animate-fade-in max-h-48 overflow-y-auto custom-scrollbar">
-                <div v-for="tag in availableTagFamilies" :key="'sect-' + tag.type"
-                     @click="selectedSpotSectionType = tag.type; isSpotSectionOpen = false"
+                <div v-for="tag in availableTagFamilies" :key="tag.type"
+                     @click="selectedSpotType = tag.type; isSpotTypeOpen = false"
                      class="px-3 py-2 text-xs text-white hover:bg-white/15 transition cursor-pointer border-b border-white/10 last:border-b-0"
-                     :class="selectedSpotSectionType === tag.type ? 'bg-white/20 font-medium' : ''">
+                     :class="selectedSpotType === tag.type ? 'bg-white/20 font-medium' : ''">
                   {{ tag.type }}
                 </div>
                 <div v-if="availableTagFamilies.length === 0" class="px-3 py-2 text-xs text-white/40 italic">
@@ -146,15 +137,15 @@
         <div v-if="selectedTagType" class="space-y-3 bg-black/10 border border-white/10 rounded-xl p-3">
           <div class="text-[10px] uppercase tracking-wider text-white/50 font-bold">Filters</div>
 
-          <!-- VIEW TYPE FILTER (chips) -->
-          <div>
+          <!-- VIEW TYPE FILTER (chips) — hidden for spot elevation, view type selected above -->
+          <div v-if="!isSpotElevation">
             <label class="text-[10px] text-white/40 block mb-1">View Type</label>
             <div class="flex flex-wrap gap-1.5">
               <button v-for="vt in compatibleViewTypes" :key="vt.key"
                 @click="toggleViewTypeFilter(vt.key)"
                 class="px-2.5 py-1 rounded-lg text-[11px] transition-all"
                 :class="activeViewTypes.includes(vt.key)
-                  ? 'bg-[#FF9800] text-[#0A1D4A] font-bold' 
+                  ? 'bg-[#FF9800] text-[#0A1D4A] font-bold'
                   : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'">
                 {{ vt.label }}
               </button>
@@ -325,19 +316,18 @@ const VIEW_TYPE_COMPAT = {
 const selectedTagType = ref(null);
 const selectedTagFamily = ref('');
 const selectedTagFamilyType = ref('');
-// Spot Elevation — one type picker per view type
-const selectedSpotPlanType = ref('');
-const selectedSpotSectionType = ref('');
-const activeViewTypes = ref([]);   // view_type keys currently selected as filter
-const activeStages = ref([]);      // stage codes currently selected
-const activeLevels = ref([]);      // level codes currently selected
+// Spot Elevation — dedicated view-type selector + single type picker
+const selectedSpotViewType = ref('');  // 'FloorPlan' | 'Section'
+const selectedSpotType = ref('');      // SpotDimensionType name
+const activeViewTypes = ref([]);
+const activeStages = ref([]);
+const activeLevels = ref([]);
 const selectedViewIds = ref([]);
 const skipTagged = ref(true);
 
 const isTagTypeOpen = ref(false);
 const isTagFamilyOpen = ref(false);
-const isSpotPlanOpen = ref(false);
-const isSpotSectionOpen = ref(false);
+const isSpotTypeOpen = ref(false);
 
 // =====================================================================
 // COMPUTED
@@ -388,14 +378,28 @@ const availableLevels = computed(() => {
 
 const filteredViews = computed(() => {
   if (!selectedTagType.value) return [];
-  const compatibleKeys = compatibleViewTypes.value.map(v => v.key);
 
+  // Spot elevation: view type is driven by the dedicated selector, not the chip filter
+  if (isSpotElevation.value) {
+    if (!selectedSpotViewType.value) return [];
+    return props.taggableViews.filter(v => {
+      if (v.view_type !== selectedSpotViewType.value) return false;
+      if (activeStages.value.length > 0) {
+        const hasOther = activeStages.value.includes('Other');
+        const standardStages = activeStages.value.filter(s => s !== 'Other');
+        const viewStage = v.stage || '';
+        const isStandardMatch = standardStages.includes(viewStage);
+        const isOtherMatch = hasOther && !['WV', 'PD', 'DD', 'CD'].includes(viewStage);
+        if (!isStandardMatch && !isOtherMatch) return false;
+      }
+      return true;
+    });
+  }
+
+  const compatibleKeys = compatibleViewTypes.value.map(v => v.key);
   return props.taggableViews.filter(v => {
-    // 1. Must be compatible with selected tag type
     if (!compatibleKeys.includes(v.view_type)) return false;
-    // 2. View type filter
     if (activeViewTypes.value.length > 0 && !activeViewTypes.value.includes(v.view_type)) return false;
-    // 3. Stage filter — "Other" matches views with empty/unrecognized stage
     if (activeStages.value.length > 0) {
       const hasOther = activeStages.value.includes('Other');
       const standardStages = activeStages.value.filter(s => s !== 'Other');
@@ -404,7 +408,6 @@ const filteredViews = computed(() => {
       const isOtherMatch = hasOther && !['WV', 'PD', 'DD', 'CD'].includes(viewStage);
       if (!isStandardMatch && !isOtherMatch) return false;
     }
-    // 4. Level filter (only applies to Floor/Ceiling Plan)
     if (isLevelFilterActive.value && activeLevels.value.length > 0) {
       if (v.view_type === 'FloorPlan' || v.view_type === 'CeilingPlan') {
         if (!activeLevels.value.includes(v.level)) return false;
@@ -419,27 +422,10 @@ const isAllSelected = computed(() => {
     filteredViews.value.every(v => selectedViewIds.value.includes(v.id));
 });
 
-// For spot_elevation: at least one type must be set for the view types actually selected
-const hasPlanViewsSelected = computed(() =>
-  selectedViewIds.value.some(id => {
-    const v = props.taggableViews.find(v => v.id === id);
-    return v?.view_type === 'FloorPlan';
-  })
-);
-const hasSectionViewsSelected = computed(() =>
-  selectedViewIds.value.some(id => {
-    const v = props.taggableViews.find(v => v.id === id);
-    return v?.view_type === 'Section';
-  })
-);
-
 const canSubmit = computed(() => {
   if (!selectedTagType.value || selectedViewIds.value.length === 0) return false;
-  if (isSpotElevation.value) {
-    const planOk    = !hasPlanViewsSelected.value    || !!selectedSpotPlanType.value;
-    const sectionOk = !hasSectionViewsSelected.value || !!selectedSpotSectionType.value;
-    return planOk && sectionOk && (!!selectedSpotPlanType.value || !!selectedSpotSectionType.value);
-  }
+  if (isSpotElevation.value)
+    return !!selectedSpotViewType.value && !!selectedSpotType.value;
   return !!selectedTagFamily.value;
 });
 
@@ -450,12 +436,11 @@ const elementCap = computed(() => ELEMENT_CAP[selectedTagType.value] || 'Element
 // ACTIONS
 // =====================================================================
 function toggleDropdown(name) {
-  const all = [isTagTypeOpen, isTagFamilyOpen, isSpotPlanOpen, isSpotSectionOpen];
+  const all = [isTagTypeOpen, isTagFamilyOpen, isSpotTypeOpen];
   all.forEach(r => r.value = false);
-  if (name === 'tagType')      isTagTypeOpen.value   = true;
-  if (name === 'tagFamily')    isTagFamilyOpen.value  = true;
-  if (name === 'spotPlan')     isSpotPlanOpen.value   = true;
-  if (name === 'spotSection')  isSpotSectionOpen.value = true;
+  if (name === 'tagType')   isTagTypeOpen.value  = true;
+  if (name === 'tagFamily') isTagFamilyOpen.value = true;
+  if (name === 'spotType')  isSpotTypeOpen.value  = true;
 }
 
 function selectTagType(key) {
@@ -463,11 +448,17 @@ function selectTagType(key) {
   isTagTypeOpen.value = false;
   selectedTagFamily.value = '';
   selectedTagFamilyType.value = '';
-  selectedSpotPlanType.value = '';
-  selectedSpotSectionType.value = '';
+  selectedSpotViewType.value = '';
+  selectedSpotType.value = '';
   activeViewTypes.value = [];
   activeStages.value = [];
   activeLevels.value = [];
+  selectedViewIds.value = [];
+}
+
+function selectSpotViewType(key) {
+  selectedSpotViewType.value = key;
+  selectedSpotType.value = '';
   selectedViewIds.value = [];
 }
 
@@ -551,23 +542,28 @@ function submit() {
     skip_tagged:  skipTagged.value,
   };
   if (isSpotElevation.value) {
-    payload.spot_plan_type    = selectedSpotPlanType.value;
-    payload.spot_section_type = selectedSpotSectionType.value;
+    payload.spot_plan_type    = selectedSpotViewType.value === 'FloorPlan' ? selectedSpotType.value : '';
+    payload.spot_section_type = selectedSpotViewType.value === 'Section'   ? selectedSpotType.value : '';
   }
   emit('submit', payload);
 }
 
-// --- KEYBOARD ---
-const handleKeydown = (e) => {
-  if (e.key === 'Escape') {
-    isTagTypeOpen.value    = false;
-    isTagFamilyOpen.value  = false;
-    isSpotPlanOpen.value   = false;
-    isSpotSectionOpen.value = false;
-  }
-};
-onMounted(() => document.addEventListener('keydown', handleKeydown));
-onUnmounted(() => document.removeEventListener('keydown', handleKeydown));
+// --- CLOSE ALL DROPDOWNS ---
+function closeAllDropdowns() {
+  isTagTypeOpen.value  = false;
+  isTagFamilyOpen.value = false;
+  isSpotTypeOpen.value  = false;
+}
+
+const handleKeydown = (e) => { if (e.key === 'Escape') closeAllDropdowns(); };
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown);
+  document.addEventListener('click', closeAllDropdowns);
+});
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown);
+  document.removeEventListener('click', closeAllDropdowns);
+});
 </script>
 
 <style scoped>

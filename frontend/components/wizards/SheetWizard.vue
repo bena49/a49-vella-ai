@@ -75,12 +75,12 @@
             </button>
           </div>
           <div class="bg-black/20 border border-white/10 rounded-xl p-2 max-h-32 overflow-y-auto custom-scrollbar">
-            <div class="grid grid-cols-4 gap-2"> 
-              <button 
+            <div class="flex flex-wrap gap-1.5">
+              <button
                 v-for="lvl in displayLevels" :key="lvl"
-                @click="!isLevelDisabled(lvl) && toggleLevel(lvl)" 
+                @click="!isLevelDisabled(lvl) && toggleLevel(lvl)"
                 :disabled="isLevelDisabled(lvl)"
-                class="px-2 py-1.5 rounded-lg text-[11px] text-center transition-all duration-100 truncate"
+                class="px-2.5 py-1.5 rounded-lg text-[11px] transition-all duration-100 whitespace-nowrap"
                 :class="[
                   selectedLevels.includes(lvl) 
                     ? 'bg-[#60A5FA] text-[#0A1D4A] font-bold' 
@@ -169,7 +169,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'submit']);
 
 // --- MOCK DATA ---
-const fallbackLevels = Array.from({ length: 10 }, (_, i) => `Level ${i + 1}`); 
+const fallbackLevels = Array.from({ length: 10 }, (_, i) => `LEVEL ${i + 1}`); 
 const fallbackTitleblocks = ["A49_TB_A1_Horizontal : Plan Sheet", "A49_TB_A1_Vertical : Plan Sheet"];
 
 // --- COMPUTED SOURCES ---

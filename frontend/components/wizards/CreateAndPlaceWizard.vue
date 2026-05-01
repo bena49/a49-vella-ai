@@ -84,11 +84,11 @@
               </button>
             </div>
             <div class="bg-black/20 border border-white/10 rounded-xl p-2 max-h-32 overflow-y-auto custom-scrollbar">
-              <div class="grid grid-cols-4 gap-2"> 
+              <div class="flex flex-wrap gap-1.5">
                 <button v-for="lvl in displayLevels" :key="lvl"
                   @click="!isLevelDisabled(lvl) && toggleLevel(lvl)"
                   :disabled="isLevelDisabled(lvl)"
-                  class="px-2 py-1.5 rounded-lg text-[11px] text-center transition-all duration-100 truncate"
+                  class="px-2.5 py-1.5 rounded-lg text-[11px] transition-all duration-100 whitespace-nowrap"
                   :class="[
                     form.levels.includes(lvl) 
                       ? 'bg-[#00BCD4] text-[#0A1D4A] font-bold' 
@@ -332,7 +332,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'submit']);
 
 // --- MOCK DATA ---
-const fallbackLevels = Array.from({ length: 10 }, (_, i) => `L${i + 1}`); 
+const fallbackLevels = Array.from({ length: 10 }, (_, i) => `LEVEL ${i + 1}`); 
 const fallbackTBs = ["A49_TB_A1_Horizontal : Plan Sheet", "A49_TB_A1_Vertical : Plan Sheet"];
 
 const displayLevels = computed(() => (props.levels && props.levels.length) ? props.levels : fallbackLevels);

@@ -76,12 +76,12 @@
           </div>
           
           <div class="bg-black/20 border border-white/10 rounded-xl p-2 max-h-32 overflow-y-auto custom-scrollbar">
-            <div class="grid grid-cols-4 gap-2"> 
-              <button 
+            <div class="flex flex-wrap gap-1.5">
+              <button
                 v-for="lvl in displayLevels" :key="lvl"
                 @click="!isLevelDisabled(lvl) && toggleLevel(lvl); closeAllDropdowns()"
                 :disabled="isLevelDisabled(lvl)"
-                class="px-2 py-1.5 rounded-lg text-[11px] text-center transition-all duration-100 truncate"
+                class="px-2.5 py-1.5 rounded-lg text-[11px] transition-all duration-100 whitespace-nowrap"
                 :class="[
                   selectedLevels.includes(lvl) 
                     ? 'bg-[#4EE29B] text-[#0A1D4A] font-bold' 
@@ -211,7 +211,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'submit', 'refresh-data']); // Added refresh-data
 
 // --- MOCK DATA ---
-const fallbackLevels = Array.from({ length: 10 }, (_, i) => `L${i + 1}`); 
+const fallbackLevels = Array.from({ length: 10 }, (_, i) => `ผังพื้นชั้นที่ ${i + 1}`); 
 const fallbackScopeBoxes = ["SB_PLAN_OVERALL", "SB_PLAN_STAIRS", "SB_PLAN_CORE"];
 const fallbackTemplates = ["A49_CD_A1_FLOOR PLAN", "A49_CD_A1_REFLECTED CEILING PLAN", "A49_PD_FLOOR PLAN"];
 

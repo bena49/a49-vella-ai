@@ -262,6 +262,7 @@ ALLOWED_IMMEDIATE_COMMANDS = [
     "wizard:room_elevations",
     "wizard:automate_tag",
     "wizard:automate_dim",
+    "wizard:insert_standard_details",
     "start_interactive_room_package"
 ]
 

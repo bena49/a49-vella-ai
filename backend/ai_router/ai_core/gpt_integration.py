@@ -62,9 +62,16 @@ def fast_route_intent(user_text):
     if any(word in txt for word in ["preflight", "health check", "check standards"]):
         return {"intent": "preflight_check"}
 
-    # --- INSERT STANDARD DETAILS (wizard direct dispatch) ---
+    # --- INSERT STANDARD DETAILS (wizard direct dispatch from frontend) ---
     if txt == "insert_standard_details":
         return {"intent": "insert_standard_details"}
+
+    # --- INSERT STANDARD DETAILS WIZARD (NLP triggers) ---
+    # Catches phrases like "Insert Standard Details", "Browse EIA details",
+    # "Show me standard details", "Open standard detail file", "I need eia details"...
+    # Substring match on "standard detail" / "eia detail" covers both singular and plural.
+    if "standard detail" in txt or "eia detail" in txt:
+        return {"intent": "wizard:insert_standard_details"}
 
     # --- AUTO-TAG ---
     # Direct execution from wizard payload

@@ -10,7 +10,7 @@
       <!-- HEADER -->
       <div class="p-5 border-b border-white/10 flex justify-between items-center flex-shrink-0">
         <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-full bg-[#607D8B]/20 flex items-center justify-center text-[#607D8B]">
+          <div class="w-8 h-8 rounded-full bg-[#388E3C]/20 flex items-center justify-center text-[#388E3C]">
             <Icon name="material-symbols:library-add-outline-rounded" class="text-xl" />
           </div>
           <h2 class="text-sm font-bold tracking-wide">INSERT STANDARD DETAILS</h2>
@@ -32,30 +32,30 @@
             <button @click="selectPackage('standard')"
               class="p-4 rounded-2xl text-left transition-all border flex flex-col gap-2"
               :class="selectedPackage === 'standard'
-                ? 'bg-[#607D8B] border-transparent text-white shadow-lg shadow-[#607D8B]/30'
+                ? 'bg-[#388E3C] border-transparent text-white shadow-lg shadow-[#388E3C]/30'
                 : 'bg-white/5 hover:bg-white/10 border-white/15 text-white/80'">
               <div class="flex items-center gap-2">
                 <Icon name="lucide:square-stack" class="text-xl" />
                 <span class="font-bold text-sm">Standard</span>
               </div>
               <span class="text-[11px] opacity-80 leading-snug">
-                A49 office-wide standard details
+                A49 Approved Standard Details
               </span>
             </button>
 
             <button @click="selectPackage('eia')"
               class="p-4 rounded-2xl text-left transition-all border flex flex-col gap-2"
               :class="selectedPackage === 'eia'
-                ? 'bg-[#607D8B] border-transparent text-white shadow-lg shadow-[#607D8B]/30'
+                ? 'bg-[#388E3C] border-transparent text-white shadow-lg shadow-[#388E3C]/30'
                 : 'bg-white/5 hover:bg-white/10 border-white/15 text-white/80'">
               <div class="flex items-center gap-2">
                 <Icon name="lucide:leaf" class="text-xl" />
                 <span class="font-bold text-sm">EIA</span>
               </div>
               <span class="text-[11px] opacity-80 leading-snug">
-                Environmental Impact Assessment
+                EIA Package Standard DetailsS
               </span>
-            </button>
+            </button>S
           </div>
         </div>
 
@@ -130,7 +130,7 @@
           :disabled="!canSubmit"
           class="px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
           :class="canSubmit
-            ? 'bg-[#607D8B] hover:bg-[#7a96a3] text-white shadow-lg shadow-[#607D8B]/30'
+            ? 'bg-[#388E3C] hover:bg-[#7a96a3] text-white shadow-lg shadow-[#388E3C]/30'
             : 'bg-white/10 text-white/30 cursor-not-allowed'">
           <span>Browse</span>
           <Icon name="lucide:arrow-right" class="text-sm" />

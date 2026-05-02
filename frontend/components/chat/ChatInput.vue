@@ -74,7 +74,7 @@
         </div>
         <button @click="triggerAction('wizard:insert_standard_details')"
                 class="w-full text-left px-4 py-2 text-xs text-white hover:bg-white/10 flex items-center gap-2 transition">
-          <Icon name="material-symbols:library-add-outline-rounded" class="text-base text-[#607D8B]" />
+          <Icon name="material-symbols:library-add-outline-rounded" class="text-base text-[#388E3C]" />
           <span>Insert Standard Details</span>
         </button>
         <button @click="triggerAction('preflight_check')"

@@ -3,7 +3,7 @@
 
     <!-- HEADER -->
     <div class="space-y-1">
-      <h3 class="text-sm font-bold text-[#60A5FA]">Send a Comment</h3>
+      <h3 class="text-sm font-bold text-[#CDDC39]">Send a Comment</h3>
       <p class="text-[11px] text-white/60 leading-relaxed">
         Help us improve Vella. Your message goes straight to the IRIs team.
       </p>
@@ -37,7 +37,7 @@
       <textarea v-model="message"
         rows="6"
         placeholder="Tell us what you think, what's broken, or what you'd like to see…"
-        class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-white/40 outline-none focus:border-[#60A5FA] transition resize-none leading-relaxed"></textarea>
+        class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-xs text-white placeholder-white/40 outline-none focus:border-[#CDDC39] transition resize-none leading-relaxed"></textarea>
       <div class="flex justify-end mt-1">
         <span class="text-[10px] text-white/40">{{ message.length }} / 2000</span>
       </div>
@@ -66,7 +66,7 @@
         :disabled="!canSubmit"
         class="px-5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2"
         :class="canSubmit
-          ? 'bg-[#60A5FA] hover:bg-[#7eb6ff] text-[#0A1D4A] shadow-lg shadow-blue-900/20'
+          ? 'bg-[#CDDC39] hover:bg-[#E6EE9C] text-[#0A1D4A] shadow-lg shadow-blue-900/20'
           : 'bg-white/10 text-white/30 cursor-not-allowed'">
         <Icon v-if="status === 'sending'" name="lucide:loader-2" class="animate-spin text-sm" />
         <Icon v-else name="lucide:send" class="text-sm" />

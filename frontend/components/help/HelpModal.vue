@@ -11,15 +11,15 @@
       <div class="p-5 md:border-b md:border-white/10 flex justify-between items-center flex-shrink-0">
         <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
-               :class="[activeMeta?.activeBgClass || 'bg-[#60A5FA]/20',
-                        activeMeta?.activeIconClass || 'text-[#60A5FA]']">
+               :class="[activeMeta?.activeBgClass || 'bg-[#EEFF41]/20',
+                        activeMeta?.activeIconClass || 'text-[#EEFF41]']">
             <Icon :name="activeMeta?.icon || 'lucide:circle-question-mark'" />
           </div>
           <div>
             <h2 class="text-sm font-bold tracking-wide">VELLA COMMAND GUIDE</h2>
             <p class="text-[10px] text-white/50 uppercase tracking-wider">
-              <span class="md:hidden">{{ activeMeta?.label || 'Cheat Sheet' }}</span>
-              <span class="hidden md:inline">Cheat Sheet &amp; Standards</span>
+              <span class="md:hidden">{{ activeMeta?.label || 'Help Sheet and Standards' }}</span>
+              <span class="hidden md:inline">Help Sheet and Standards</span>
             </p>
           </div>
         </div>
@@ -28,9 +28,10 @@
         </button>
       </div>
 
-      <!-- Mobile Menu Toggle — narrow only. Single button switches between
-           hamburger/Open Menu and X/Close Menu based on sidebarOpen. -->
-      <button @click="sidebarOpen = !sidebarOpen"
+      <!-- Mobile Menu Toggle — narrow + content mode only. Hidden on the
+           menu landing because the nav already fills the whole screen. -->
+      <button v-if="activeTab !== null"
+              @click="sidebarOpen = !sidebarOpen"
               class="md:hidden flex items-center gap-2 px-5 py-0 border-b border-white/10
                      text-white/70 hover:text-white transition"
               :aria-label="sidebarOpen ? 'Close navigation menu' : 'Open navigation menu'">
@@ -40,26 +41,21 @@
         </span>
       </button>
 
-      <!-- Body: sidebar + content -->
+      <!-- Body: sidebar (full-width in menu mode, drawer in content mode) -->
       <div class="flex flex-1 min-h-0 relative">
 
-        <!-- Sidebar: persistent on md+; slide-over drawer on narrow -->
-        <aside
-          class="bg-[#0A1D4A]/90 border-r border-white/10 flex-shrink-0
-                 flex flex-col
-                 md:static md:translate-x-0 md:w-48
-                 absolute inset-y-0 left-0 z-20 w-56
-                 transition-transform duration-200 ease-out"
-          :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'">
+        <!-- Sidebar: full-width on the menu landing; persistent on md+ /
+             slide-over drawer on narrow once the user picks a tab. -->
+        <aside :class="sidebarClass">
 
-          <nav class="flex-1 overflow-y-auto custom-scrollbar py-3">
+          <nav class="flex-1 overflow-y-auto custom-scrollbar py-1">
             <div v-for="(group, gIdx) in groups" :key="gIdx" class="mb-2">
-              <div class="px-4 py-1.5 text-[9px] font-bold uppercase tracking-wider text-white/40">
+              <div class="px-4 py-1.5 text-[9px] font-bold uppercase tracking-wider text-white/50">
                 {{ group.label }}
               </div>
               <button v-for="item in group.items" :key="item.id"
                       @click="selectTab(item.id)"
-                      class="w-full flex items-center gap-2.5 px-4 py-2 text-xs text-left
+                      class="w-full flex items-center gap-2.5 px-4 py-1.5 text-xs text-left
                              transition border-l-2"
                       :class="activeTab === item.id
                         ? 'bg-white/10 text-white border-white/40 font-medium'
@@ -73,24 +69,26 @@
           <!-- Bottom-anchored: Comment button -->
           <div class="border-t border-white/10 flex-shrink-0">
             <button @click="selectTab(commentItem.id)"
-                    class="w-full flex items-center gap-2.5 px-4 py-3 text-xs text-left
-                           transition border-l-2"
+                    class="w-full flex items-center gap-2.5 px-4 py-2 text-xs text-left
+                           transition border-l-2 text-[#CDDC39]"
                     :class="activeTab === commentItem.id
-                      ? 'bg-white/10 text-white border-white/40 font-medium'
-                      : 'text-white/70 hover:bg-white/5 hover:text-white border-transparent'">
+                      ? 'bg-white/10 border-white/40 font-medium'
+                      : 'hover:bg-white/5 border-transparent'">
               <Icon :name="commentItem.icon" class="text-base flex-shrink-0" />
               <span class="truncate">{{ commentItem.label }}</span>
             </button>
           </div>
         </aside>
 
-        <!-- Drawer backdrop on narrow when open -->
-        <div v-if="sidebarOpen"
+        <!-- Drawer backdrop — only in content mode + drawer open + narrow -->
+        <div v-if="activeTab !== null && sidebarOpen"
              @click="sidebarOpen = false"
              class="md:hidden absolute inset-0 bg-black/30 z-10"></div>
 
-        <!-- Content -->
-        <div class="flex-1 overflow-y-auto p-5 custom-scrollbar min-w-0">
+        <!-- Content panel — only rendered after the user picks a tab. The
+             menu-landing state intentionally has nothing here so the modal
+             body shows just the menu against the modal's gradient background. -->
+        <div v-if="activeTab !== null" class="flex-1 overflow-y-auto p-5 custom-scrollbar min-w-0">
           <component :is="activeComponent"
                      :userName="props.userName"
                      :sessionKey="props.sessionKey"
@@ -154,12 +152,29 @@ const props = defineProps({
   submitDirect: { type: Function, default: null },
 });
 
-const activeTab = ref('views');
+// activeTab === null is the menu-landing state: the nav fills the modal at
+// 100% width and no content panel is rendered. Picking a tab transitions
+// into content mode (sidebar + content panel).
+const activeTab = ref(null);
 const showToast = ref(false);
 
-// Sidebar drawer state — controls narrow-viewport visibility.
+// Sidebar drawer state — controls narrow-viewport visibility in content mode.
 // On md+ the sidebar is always visible regardless of this flag.
 const sidebarOpen = ref(false);
+
+// Class set applied to the <aside>. In menu mode the sidebar is full-width with
+// no bg/border. In content mode it uses the existing positioning + drawer logic.
+const sidebarClass = computed(() => {
+  if (activeTab.value === null) {
+    return 'flex flex-col w-full';
+  }
+  const base = 'flex flex-col bg-[#0A1D4A]/90 border-r border-white/10 flex-shrink-0 ' +
+               'md:static md:translate-x-0 md:w-48 ' +
+               'absolute inset-y-0 left-0 z-20 w-56 ' +
+               'transition-transform duration-200 ease-out';
+  const transform = sidebarOpen.value ? 'translate-x-0' : '-translate-x-full md:translate-x-0';
+  return `${base} ${transform}`;
+});
 
 // Grouped navigation — mirrors the ChatInput "+" menu structure.
 const groups = [
@@ -203,8 +218,8 @@ const commentItem = {
   label:           'Comment',
   comp:            HelpCommentTab,
   icon:            'material-symbols:add-comment-outline-rounded',
-  activeIconClass: 'text-white',
-  activeBgClass:   'bg-white/15',
+  activeIconClass: 'text-[#CDDC39]', // Lime
+  activeBgClass:   'bg-[#CDDC39]/15',
 };
 
 // Flat list for lookup — includes the bottom-anchored Comment item.

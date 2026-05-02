@@ -10,7 +10,7 @@
           class="text-left text-xs text-white hover:text-[#60A5FA] hover:bg-white/10 
                  px-3 py-1.5 -mx-1 rounded-lg w-full <!-- Changed py-2 to py-1.5 -->
                  transition-all duration-200 leading-relaxed font-mono opacity-90 hover:opacity-100 border border-transparent hover:border-white/10"
-          title="Click to copy"
+          title=" "
         >
           {{ p }}
         </button>

@@ -53,9 +53,9 @@
                 <span class="font-bold text-sm">EIA</span>
               </div>
               <span class="text-[11px] opacity-80 leading-snug">
-                EIA Package Standard DetailsS
+                EIA Package Standard Details
               </span>
-            </button>S
+            </button>
           </div>
         </div>
 

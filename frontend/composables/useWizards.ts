@@ -24,6 +24,7 @@ export function useWizards(
   const showRoomWizard        = ref(false);
   const showAutomateTagWizard = ref(false);
   const showAutomateDimWizard = ref(false);
+  const showInsertStandardDetailsWizard = ref(false);
   const showHelp              = ref(false);
 
   // --- WIZARD PROPS ---
@@ -34,6 +35,7 @@ export function useWizards(
   const roomWizardProps        = ref<any>({});
   const automateTagWizardProps = ref<any>({});
   const automateDimWizardProps = ref<any>({});
+  const insertStandardDetailsWizardProps = ref<any>({ previewResult: null });
   const wizardKey              = ref(0);
 
   // --- ACTION DISPATCHER ---
@@ -80,6 +82,11 @@ export function useWizards(
       automateDimWizardProps.value = { dimTypes: [], floorPlanViews: [] };
       showAutomateDimWizard.value = true;
       sendToRevit({ command: "fetch_project_info", args: { types: ["dim_types", "floor_plan_views"] } });
+    }
+    else if (action === "wizard:insert_standard_details") {
+      insertStandardDetailsWizardProps.value = { previewResult: null };
+      showInsertStandardDetailsWizard.value = true;
+      // No initial fetch — preview is requested per-card-pick from inside the wizard.
     }
   }
 
@@ -162,6 +169,44 @@ export function useWizards(
     });
   }
 
+  // 💥 INSERT STANDARD DETAILS — request preview (when card picked)
+  function handleInsertStandardDetailsRequestPreview(payload: any) {
+    sendToBackend({
+      message:     "insert_standard_details",
+      mode:        "preview",
+      package:     payload.package,
+      session_key: sessionKey.value,
+    });
+  }
+
+  // 💥 INSERT STANDARD DETAILS — submit (Browse clicked)
+  function handleInsertStandardDetailsSubmit(payload: any) {
+    showInsertStandardDetailsWizard.value = false;
+    const label = payload.package === "standard" ? "Standard" : "EIA";
+    messages.value.push({
+      from: "vella",
+      text: `📚 Opening Insert Views for ${label} Details — paste path with Ctrl+V in the Revit dialog.`,
+    });
+    sendToBackend({
+      message:     "insert_standard_details",
+      mode:        "execute",
+      package:     payload.package,
+      session_key: sessionKey.value,
+    });
+  }
+
+  // 💥 INSERT STANDARD DETAILS — apply preview/execute result from Revit
+  function applyInsertStandardDetailsResult(result: any) {
+    if (!result) return;
+    if (result.mode === "preview") {
+      // Push to wizard via reactive prop. Replace the whole props object so Vue
+      // sees the change even when keys are deeply equal.
+      insertStandardDetailsWizardProps.value = { previewResult: result };
+      return;
+    }
+    // mode === "execute" → result message goes into chat (handled in useRevitHandler)
+  }
+
   function closeWizard() {
     showWizard.value = false;
   }
@@ -240,14 +285,16 @@ export function useWizards(
     // Visibility
     showWizard, showSheetWizard, showCreatePlaceWizard,
     showRenameWizard, showRoomWizard, showAutomateTagWizard,
-    showAutomateDimWizard, showHelp,
+    showAutomateDimWizard, showInsertStandardDetailsWizard, showHelp,
     // Props
     wizardProps, sheetWizardProps, createPlaceWizardProps,
     renameWizardProps, roomWizardProps, automateTagWizardProps,
-    automateDimWizardProps, wizardKey,
+    automateDimWizardProps, insertStandardDetailsWizardProps, wizardKey,
     // Handlers
     handleAction, handleHelpPrompt, handleWizardSubmit, handleBatchSubmit,
     handleRoomElevationExecute, handleAutomateTagSubmit, handleAutomateDimSubmit,
+    handleInsertStandardDetailsRequestPreview, handleInsertStandardDetailsSubmit,
+    applyInsertStandardDetailsResult,
     closeWizard,
     // Props updaters
     updateWizardProps, updateInventoryProps,

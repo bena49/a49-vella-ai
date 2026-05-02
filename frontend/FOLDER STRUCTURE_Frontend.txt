@@ -45,7 +45,8 @@ UI STRUCTURE
 │   │   ├── RoomElevationWizard.vue    <-- Enlarged Plan and Elevations creation wizard
 │   │   ├── SheetWizard.vue            <-- Sheet creation wizard
 │   │   ├── AutomateTagWizard.vue      <-- Full-featured tagging wizard (incl. Spot Elevation)
-│   │   └── AutomateDimWizard.vue      <-- Auto-dimensioning wizard (floor plan walls/openings/grids)
+│   │   ├── AutomateDimWizard.vue      <-- Auto-dimensioning wizard (floor plan walls/openings/grids)
+│   │   └── InsertStandardDetailsWizard.vue  <-- Standard/EIA detail picker → Revit Insert Views from File
 │   ├── help/
 │   │   ├── HelpCreatePlaceTab.vue  
 │   │   ├── HelpItem.vue    	      

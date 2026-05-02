@@ -72,7 +72,12 @@
         <div class="px-3 py-2 text-[10px] uppercase tracking-wider text-white/50 font-semibold">
           Standards
         </div>
-        <button @click="triggerAction('preflight_check')" 
+        <button @click="triggerAction('wizard:insert_standard_details')"
+                class="w-full text-left px-4 py-2 text-xs text-white hover:bg-white/10 flex items-center gap-2 transition">
+          <Icon name="material-symbols:library-add-outline-rounded" class="text-base text-[#607D8B]" />
+          <span>Insert Standard Details</span>
+        </button>
+        <button @click="triggerAction('preflight_check')"
                 class="w-full text-left px-4 py-2 text-xs text-white hover:bg-white/10 flex items-center gap-2 transition">
           <Icon name="lucide:shield-check" class="text-base text-[#FBBF24]" />
           <span>Preflight Check</span>

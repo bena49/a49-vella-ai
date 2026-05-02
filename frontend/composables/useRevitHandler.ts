@@ -244,7 +244,8 @@ export function useRevitHandler(
   scrollToBottom: () => Promise<void>,
   sendUserPrompt: (revitData?: any) => Promise<void>,
   updateWizardProps: (projectInfo: any) => void,
-  updateInventoryProps: (projectInventory: any) => void
+  updateInventoryProps: (projectInventory: any) => void,
+  applyInsertStandardDetailsResult?: (result: any) => void
 ) {
   async function handleRevitMessage(raw: any) {
     let data = raw;
@@ -325,6 +326,24 @@ export function useRevitHandler(
     if (data.auto_dim_result) {
       const msg = formatAutoDimResult(data.auto_dim_result);
       messages.value.push({ from: "vella", text: msg });
+      scrollToBottom();
+      return;
+    }
+
+    // --- INSERT STANDARD DETAILS RESULT ---
+    if (data.insert_standard_details_result) {
+      const r = data.insert_standard_details_result;
+      // Preview mode → push to wizard via the applicator callback (silent).
+      if (r.mode === "preview") {
+        if (applyInsertStandardDetailsResult) applyInsertStandardDetailsResult(r);
+        return;
+      }
+      // Execute mode → post status message to chat.
+      if (r.status === "error") {
+        messages.value.push({ from: "vella", text: `❌ ${r.message || "Insert Standard Details failed."}` });
+      } else if (r.message) {
+        messages.value.push({ from: "vella", text: r.message });
+      }
       scrollToBottom();
       return;
     }

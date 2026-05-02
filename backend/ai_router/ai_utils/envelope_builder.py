@@ -130,6 +130,15 @@ def envelope_preflight_check(standards_data):
         "raw": standards_data
     }
 
+def envelope_insert_standard_details(mode, package):
+    return {
+        "command": "insert_standard_details",
+        "raw": {
+            "mode": mode,
+            "package": package
+        }
+    }
+
 def envelope_preflight_repair(standards_data, preflight_result):
     return {
         "command": "preflight_repair",

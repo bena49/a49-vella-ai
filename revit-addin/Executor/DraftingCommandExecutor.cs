@@ -153,6 +153,20 @@ namespace A49AIRevitAssistant.Executor
                     case "automate_tag":
                         return new AutoTagCommand(_uiapp).Execute(env);
 
+                    case "insert_standard_details":
+                        {
+                            var insCmd = new InsertStandardDetailsCommand(_uiapp);
+                            string insResult = insCmd.Execute(env);
+
+                            // Push the result to the Vue wizard via the dockable pane,
+                            // matching the fetch_project_info pattern (silent return).
+                            A49AIRevitAssistant.UI.DockablePaneViewer.Instance.Dispatcher.Invoke(() =>
+                            {
+                                A49AIRevitAssistant.UI.DockablePaneViewer.Instance.SendRawMessage(insResult);
+                            });
+                            return "{\"status\":\"silent\"}";
+                        }
+
                     case "auto_dim":
                         {
                             var doc = _uiapp.ActiveUIDocument.Document;

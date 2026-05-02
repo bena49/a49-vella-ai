@@ -103,6 +103,7 @@
     <RoomElevationWizard v-if="showRoomWizard" v-bind="roomWizardProps" :key="'rm-'+wizardKey" @close="showRoomWizard = false" @executeRaw="handleRoomElevationExecute" />
     <AutomateTagWizard v-if="showAutomateTagWizard" v-bind="automateTagWizardProps" :key="'amt-'+wizardKey" @close="showAutomateTagWizard = false" @submit="handleAutomateTagSubmit" />
     <AutomateDimWizard v-if="showAutomateDimWizard" v-bind="automateDimWizardProps" :key="'amd-'+wizardKey" @close="showAutomateDimWizard = false" @submit="handleAutomateDimSubmit" />
+    <InsertStandardDetailsWizard v-if="showInsertStandardDetailsWizard" v-bind="insertStandardDetailsWizardProps" @close="showInsertStandardDetailsWizard = false" @submit="handleInsertStandardDetailsSubmit" @request-preview="handleInsertStandardDetailsRequestPreview" />
     <HelpModal v-if="showHelp" @close="showHelp = false" @submit="handleHelpPrompt" />
 
     <VellaModal
@@ -129,6 +130,7 @@ import RenameWizard from '~/components/wizards/RenameWizard.vue';
 import RoomElevationWizard from '~/components/wizards/RoomElevationWizard.vue';
 import AutomateTagWizard from '~/components/wizards/AutomateTagWizard.vue';
 import AutomateDimWizard from '~/components/wizards/AutomateDimWizard.vue';
+import InsertStandardDetailsWizard from '~/components/wizards/InsertStandardDetailsWizard.vue';
 import HelpModal from '~/components/help/HelpModal.vue';
 import { useRevitBridge } from "~/composables/useRevitBridge";
 
@@ -165,11 +167,15 @@ const {
 // --- WIZARDS (actual init) ---
 const {
   showWizard, showSheetWizard, showCreatePlaceWizard,
-  showRenameWizard, showRoomWizard, showAutomateTagWizard, showAutomateDimWizard, showHelp,
+  showRenameWizard, showRoomWizard, showAutomateTagWizard, showAutomateDimWizard,
+  showInsertStandardDetailsWizard, showHelp,
   wizardProps, sheetWizardProps, createPlaceWizardProps,
-  renameWizardProps, roomWizardProps, automateTagWizardProps, automateDimWizardProps, wizardKey,
+  renameWizardProps, roomWizardProps, automateTagWizardProps, automateDimWizardProps,
+  insertStandardDetailsWizardProps, wizardKey,
   handleAction, handleHelpPrompt, handleWizardSubmit,
   handleBatchSubmit, handleRoomElevationExecute, handleAutomateTagSubmit, handleAutomateDimSubmit,
+  handleInsertStandardDetailsRequestPreview, handleInsertStandardDetailsSubmit,
+  applyInsertStandardDetailsResult,
   closeWizard, updateWizardProps, updateInventoryProps
 } = useWizards(messages, scrollToBottom, handleUserSubmit, sendToBackend, sendToRevit, sessionKey);
 
@@ -179,7 +185,8 @@ _handleAction = handleAction;
 // --- REVIT HANDLER ---
 const { handleRevitMessage } = useRevitHandler(
   messages, sessionKey, scrollToBottom, sendUserPrompt,
-  updateWizardProps, updateInventoryProps
+  updateWizardProps, updateInventoryProps,
+  applyInsertStandardDetailsResult
 );
 
 // --- MODAL (tiny, stays inline) ---

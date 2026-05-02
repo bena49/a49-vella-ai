@@ -26,6 +26,7 @@ ROOT
 │   │   │		├── GetLevelsCommand.cs
 │   │   │		├── GetProjectInfoCommand.cs    <--Levels/templates/sheets/rooms/tags/views/dim_types payload
 │   │   │		├── GetProjectStats.cs
+│   │   │		├── InsertStandardDetailsCommand.cs   <--Standard/EIA detail picker → Revit's ID_INSERT_VIEWS_FROM_FILE
 │   │   │		├── InteractiveRoomPackageCommand.cs   <--Room Elevations
 │   │   │		├── ListScopeBoxesCommand.cs
 │   │   │		├── ListSheetsCommand.cs

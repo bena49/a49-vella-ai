@@ -144,6 +144,35 @@ export function useChat(
     }
   }
 
+  // -------------------------------------------------------------------
+  // submitDirect — for forms that need a backend response without side
+  // effects on the chat (no isThinking flag, no message push, no callback
+  // routing). Returns the raw parsed JSON response.
+  // -------------------------------------------------------------------
+  async function submitDirect(payload: any): Promise<any> {
+    const token = await getValidToken();
+    if (!token) {
+      return { status: "error", message: "Not authenticated." };
+    }
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (res.status === 401) {
+        isAuthenticated.value = false;
+        return { status: "error", message: "Session expired or unauthorized." };
+      }
+      return await res.json();
+    } catch (err: any) {
+      return { status: "error", message: err?.message || String(err) };
+    }
+  }
+
   return {
     messages,
     isThinking,
@@ -153,5 +182,6 @@ export function useChat(
     handleUserSubmit,
     sendUserPrompt,
     sendToBackend,
+    submitDirect,
   };
 }

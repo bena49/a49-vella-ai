@@ -210,3 +210,20 @@ SESSION_COOKIE_SECURE = True  # Set to False if NOT using HTTPS yet
 # =====================================================================
 AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
 AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")
+
+# =====================================================================
+# 📧 EMAIL (Office 365 SMTP) — used by the Help > Comment form
+# =====================================================================
+EMAIL_BACKEND      = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST         = os.environ.get('EMAIL_HOST', 'smtp.office365.com')
+EMAIL_PORT         = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_HOST_USER    = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS      = os.environ.get('EMAIL_USE_TLS', 'True').lower() == 'true'
+DEFAULT_FROM_EMAIL = os.environ.get('EMAIL_FROM', EMAIL_HOST_USER)
+
+# Comma-separated recipients for Vella comment submissions.
+# Add more emails by editing the env var; no code change needed.
+VELLA_COMMENT_RECIPIENTS = [
+    e.strip() for e in os.environ.get('COMMENT_RECIPIENTS', '').split(',') if e.strip()
+]

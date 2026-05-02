@@ -30,7 +30,8 @@ ROOT
 │   │   ├── automate_tag.py             <-- Command handler: category/family/type/views/skip + spot_elevation
 │   │   ├── automate_tag_nlp.py         <-- NLP routing for tag commands (view-type options per category)
 │   │   ├── automate_dim.py             <-- Auto-dimensioning command handler (walls/openings/grids)
-│   │   └── insert_standard_details.py  <-- Standard/EIA detail file picker (preview + execute modes)
+│   │   ├── insert_standard_details.py  <-- Standard/EIA detail file picker (preview + execute modes)
+│   │   └── comment.py                  <-- Help > Comment form → SMTP email (Office 365)
 │   │
 │   ├── ai_core/
 │   │   ├── __init__.py

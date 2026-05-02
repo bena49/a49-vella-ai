@@ -104,7 +104,7 @@
     <AutomateTagWizard v-if="showAutomateTagWizard" v-bind="automateTagWizardProps" :key="'amt-'+wizardKey" @close="showAutomateTagWizard = false" @submit="handleAutomateTagSubmit" />
     <AutomateDimWizard v-if="showAutomateDimWizard" v-bind="automateDimWizardProps" :key="'amd-'+wizardKey" @close="showAutomateDimWizard = false" @submit="handleAutomateDimSubmit" />
     <InsertStandardDetailsWizard v-if="showInsertStandardDetailsWizard" v-bind="insertStandardDetailsWizardProps" @close="showInsertStandardDetailsWizard = false" @submit="handleInsertStandardDetailsSubmit" @request-preview="handleInsertStandardDetailsRequestPreview" />
-    <HelpModal v-if="showHelp" @close="showHelp = false" @submit="handleHelpPrompt" />
+    <HelpModal v-if="showHelp" :userName="userName" :sessionKey="sessionKey" :submitDirect="submitDirect" @close="showHelp = false" @submit="handleHelpPrompt" />
 
     <VellaModal
       :visible="modal.visible"
@@ -161,7 +161,7 @@ const handleActionProxy = (action) => _handleAction(action);
 const {
   messages, isThinking, chatContainer,
   scrollToBottom, clearChatAndMemory,
-  handleUserSubmit, sendUserPrompt, sendToBackend
+  handleUserSubmit, sendUserPrompt, sendToBackend, submitDirect
 } = useChat(getValidToken, isAuthenticated, accessToken, sessionKey, sendToRevit, handleActionProxy);
 
 // --- WIZARDS (actual init) ---

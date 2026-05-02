@@ -17,6 +17,7 @@ from ..ai_engines.titleblock_engine import get_smart_titleblock_options
 from ..ai_engines.conversation_engine import get_fallback_response
 from ..ai_commands.preflight import handle_preflight_check
 from ..ai_commands.insert_standard_details import handle_insert_standard_details
+from ..ai_commands.comment import handle_send_comment
 from ..ai_commands.automate_tag import handle_automate_tag
 from ..ai_commands.automate_tag_nlp import handle_automate_tag_nlp, handle_nlp_tag_conversation, resume_pending_nlp_tag
 from ..ai_commands.automate_dim import handle_automate_dim
@@ -250,6 +251,7 @@ ALLOWED_IMMEDIATE_COMMANDS = [
     "execute_batch_update",
     "preflight_check",
     "insert_standard_details",
+    "send_comment",
     "automate_tag",
     "automate_tag_nlp",
     "automate_dim",
@@ -288,6 +290,10 @@ def dispatch_immediate_command(request, intent, gpt_json):
     # 💥 INSERT STANDARD DETAILS (wizard for A49 standard / EIA detail packages)
     if intent == "insert_standard_details":
         return handle_insert_standard_details(request)
+
+    # 💥 SEND COMMENT (Help > Comment form → SMTP email)
+    if intent == "send_comment":
+        return handle_send_comment(request)
 
     # 💥 AUTOMATE TAG (unified tagging - doors, windows, walls, rooms, ceilings)
     if intent == "automate_tag":

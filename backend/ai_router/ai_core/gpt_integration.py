@@ -66,6 +66,10 @@ def fast_route_intent(user_text):
     if txt == "insert_standard_details":
         return {"intent": "insert_standard_details"}
 
+    # --- SEND COMMENT (Help > Comment form direct dispatch) ---
+    if txt == "send_comment":
+        return {"intent": "send_comment"}
+
     # --- INSERT STANDARD DETAILS WIZARD (NLP triggers) ---
     # Catches phrases like "Insert Standard Details", "Browse EIA details",
     # "Show me standard details", "Open standard detail file", "I need eia details"...

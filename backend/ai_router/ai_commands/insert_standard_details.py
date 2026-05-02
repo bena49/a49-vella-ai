@@ -5,6 +5,12 @@
 # Two modes:
 #   - "preview": wizard requests file existence/version info on open
 #   - "execute": user clicked Browse — copy path to clipboard + post Revit cmd
+#
+# Path config is read from standards.json's "standard_details_file" block,
+# matching the pattern used by preflight's "template_file" config.
+
+import os
+import json
 
 from rest_framework.response import Response
 
@@ -14,6 +20,23 @@ from ..ai_utils.envelope_builder import send_envelope, envelope_insert_standard_
 
 VALID_PACKAGES = {"standard", "eia"}
 VALID_MODES = {"preview", "execute"}
+
+
+def _load_standard_details_config():
+    """
+    Load the standard_details_file block from standards.json.
+    Returns None if missing — handler will surface a clear error.
+    """
+    standards_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),  # ai_router/
+        "standards", "standards.json"
+    )
+    try:
+        with open(standards_path, "r", encoding="utf-8") as f:
+            standards_data = json.load(f)
+        return standards_data.get("standard_details_file")
+    except Exception:
+        return None
 
 
 def handle_insert_standard_details(request):
@@ -33,10 +56,16 @@ def handle_insert_standard_details(request):
             "message": f"❌ Invalid mode '{mode}'. Must be one of: {', '.join(sorted(VALID_MODES))}."
         })
 
+    config = _load_standard_details_config()
+    if not config:
+        return Response({
+            "message": "❌ standard_details_file config missing from standards.json. Cannot resolve file path."
+        })
+
     debug_session(request, f"📚 Insert Standard Details: mode={mode}, package={package}")
 
     if mode == "execute":
         reset_pending(request)
 
-    env = envelope_insert_standard_details(mode, package)
+    env = envelope_insert_standard_details(mode, package, config)
     return send_envelope(request, env)

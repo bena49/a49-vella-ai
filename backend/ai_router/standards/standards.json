@@ -404,5 +404,20 @@
     "base_path": "\\\\159.192.115.63@4999\\DavWWWRoot\\03_BIM_References\\01_Templates",
     "file_pattern": "A49_TEMPLATE_RVT{version}.rvt",
     "note": "Version is derived from Revit's VersionNumber (e.g., 2024 -> RVT24, 2025 -> RVT25)"
+  },
+
+  "standard_details_file": {
+    "base_path": "\\\\159.192.115.63@4999\\DavWWWRoot\\03_BIM_References\\02_Revit_Standard_Detail_File",
+    "packages": {
+      "standard": {
+        "folder": "20240905_A49_Standard_Details_Package",
+        "file_pattern": "A49_Standard_Details_V{version}.rvt"
+      },
+      "eia": {
+        "folder": "20240905_A49_EIA_Details_Package",
+        "file_pattern": "A49_EIA_Details_V{version}.rvt"
+      }
+    },
+    "note": "Version is the last two digits of Revit's VersionNumber (e.g., 2024 -> V24, 2025 -> V25)"
   }
 }

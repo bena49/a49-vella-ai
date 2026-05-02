@@ -130,12 +130,13 @@ def envelope_preflight_check(standards_data):
         "raw": standards_data
     }
 
-def envelope_insert_standard_details(mode, package):
+def envelope_insert_standard_details(mode, package, config):
     return {
         "command": "insert_standard_details",
         "raw": {
             "mode": mode,
-            "package": package
+            "package": package,
+            "config": config  # standards.json's "standard_details_file" block
         }
     }
 

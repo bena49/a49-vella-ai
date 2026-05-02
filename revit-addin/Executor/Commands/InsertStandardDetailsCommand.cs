@@ -11,10 +11,20 @@
 //                 ID_INSERT_VIEWS_FROM_FILE. The user pastes (Ctrl+V) the path
 //                 in Revit's native dialog and proceeds with view selection.
 //
+// Path config is supplied by the backend (read from standards.json's
+// "standard_details_file" block) — same pattern used by template_file.
+//
 // Envelope payload (env.raw):
 //   {
 //     "mode":    "preview" | "execute",
-//     "package": "standard" | "eia"
+//     "package": "standard" | "eia",
+//     "config":  {
+//       "base_path": "\\\\...",
+//       "packages": {
+//         "standard": { "folder": "...", "file_pattern": "...{version}.rvt" },
+//         "eia":      { "folder": "...", "file_pattern": "...{version}.rvt" }
+//       }
+//     }
 //   }
 // ============================================================================
 
@@ -30,18 +40,6 @@ namespace A49AIRevitAssistant.Executor.Commands
     {
         private readonly UIApplication _uiapp;
 
-        // WebDAV-as-UNC root for the Revit standard detail files. Same server as
-        // standards.json's templates path; access is mounted at Revit startup
-        // by a separate A49 utility, so no credential handling is required here.
-        private const string ServerRoot =
-            @"\\159.192.115.63@4999\DavWWWRoot\03_BIM_References\02_Revit_Standard_Detail_File";
-
-        // Folder + file naming conventions per package type.
-        private const string StandardFolder = "20240905_A49_Standard_Details_Package";
-        private const string EiaFolder      = "20240905_A49_EIA_Details_Package";
-        private const string StandardPrefix = "A49_Standard_Details_V";
-        private const string EiaPrefix      = "A49_EIA_Details_V";
-
         public InsertStandardDetailsCommand(UIApplication uiapp)
         {
             _uiapp = uiapp;
@@ -54,19 +52,33 @@ namespace A49AIRevitAssistant.Executor.Commands
                 JObject payload = env.raw;
                 string mode    = (payload?.Value<string>("mode")    ?? "execute").ToLowerInvariant();
                 string package = (payload?.Value<string>("package") ?? "").ToLowerInvariant();
+                JObject config = payload?["config"] as JObject;
 
                 if (package != "standard" && package != "eia")
                     return BuildError("Invalid package. Must be 'standard' or 'eia'.");
 
-                // Resolve Revit version → "2024" → "V24"
-                string versionNumber = _uiapp.Application.VersionNumber; // "2024", "2025", ...
+                if (config == null)
+                    return BuildError("Missing 'config' in envelope. Backend must inject standards.json's standard_details_file block.");
+
+                string basePath = config.Value<string>("base_path");
+                if (string.IsNullOrWhiteSpace(basePath))
+                    return BuildError("config.base_path is empty.");
+
+                JObject pkgConfig = (config["packages"] as JObject)?[package] as JObject;
+                if (pkgConfig == null)
+                    return BuildError($"config.packages.{package} not defined.");
+
+                string folder      = pkgConfig.Value<string>("folder")       ?? "";
+                string filePattern = pkgConfig.Value<string>("file_pattern") ?? "";
+                if (string.IsNullOrWhiteSpace(folder) || string.IsNullOrWhiteSpace(filePattern))
+                    return BuildError($"config.packages.{package} is incomplete (folder or file_pattern missing).");
+
+                // Resolve Revit version → "2024" → "24"
+                string versionNumber = _uiapp.Application.VersionNumber;
                 string versionSuffix = ResolveVersionSuffix(versionNumber);
 
-                // Resolve folder + file name
-                string folder   = (package == "standard") ? StandardFolder : EiaFolder;
-                string prefix   = (package == "standard") ? StandardPrefix : EiaPrefix;
-                string fileName = $"{prefix}{versionSuffix}.rvt";
-                string fullPath = Path.Combine(ServerRoot, folder, fileName);
+                string fileName = filePattern.Replace("{version}", versionSuffix);
+                string fullPath = Path.Combine(basePath, folder, fileName);
 
                 bool fileExists = false;
                 try { fileExists = File.Exists(fullPath); } catch { }
@@ -80,8 +92,6 @@ namespace A49AIRevitAssistant.Executor.Commands
                         $"File not found on server: {fileName}. " +
                         $"Either the file is missing for Revit {versionNumber} or the network drive is not mounted.");
 
-                // Clipboard.SetText must run on an STA thread. The Revit UI
-                // dispatcher gives us that; the executor itself is already on it.
                 bool clipboardOk = false;
                 try
                 {
@@ -93,7 +103,6 @@ namespace A49AIRevitAssistant.Executor.Commands
                     A49Logger.Log($"⚠️ InsertStandardDetails: clipboard failed: {cex.Message}");
                 }
 
-                // Fire Revit's native Insert Views from File command.
                 RevitCommandId commandId = RevitCommandId.LookupCommandId("ID_INSERT_VIEWS_FROM_FILE");
                 if (commandId == null)
                     return BuildError("Revit command ID_INSERT_VIEWS_FROM_FILE not available.");
@@ -127,13 +136,13 @@ namespace A49AIRevitAssistant.Executor.Commands
             {
                 ["insert_standard_details_result"] = new JObject
                 {
-                    ["status"]         = "preview",
-                    ["mode"]           = "preview",
-                    ["package"]        = package,
-                    ["revit_version"]  = version,
-                    ["file_name"]      = fileName,
-                    ["file_path"]      = fullPath,
-                    ["file_exists"]    = fileExists,
+                    ["status"]           = "preview",
+                    ["mode"]             = "preview",
+                    ["package"]          = package,
+                    ["revit_version"]    = version,
+                    ["file_name"]        = fileName,
+                    ["file_path"]        = fullPath,
+                    ["file_exists"]      = fileExists,
                     ["server_reachable"] = fileExists  // Best signal we have without an extra round-trip
                 }
             };
@@ -150,14 +159,14 @@ namespace A49AIRevitAssistant.Executor.Commands
             {
                 ["insert_standard_details_result"] = new JObject
                 {
-                    ["status"]         = "success",
-                    ["mode"]           = "execute",
-                    ["package"]        = package,
-                    ["revit_version"]  = version,
-                    ["file_name"]      = fileName,
-                    ["file_path"]      = fullPath,
-                    ["clipboard_set"]  = clipboardOk,
-                    ["message"]        = msg
+                    ["status"]        = "success",
+                    ["mode"]          = "execute",
+                    ["package"]       = package,
+                    ["revit_version"] = version,
+                    ["file_name"]     = fileName,
+                    ["file_path"]     = fullPath,
+                    ["clipboard_set"] = clipboardOk,
+                    ["message"]       = msg
                 }
             };
             return JsonConvert.SerializeObject(obj);

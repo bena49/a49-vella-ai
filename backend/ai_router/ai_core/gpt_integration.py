@@ -62,6 +62,10 @@ def fast_route_intent(user_text):
     if any(word in txt for word in ["preflight", "health check", "check standards"]):
         return {"intent": "preflight_check"}
 
+    # --- INSERT STANDARD DETAILS (wizard direct dispatch) ---
+    if txt == "insert_standard_details":
+        return {"intent": "insert_standard_details"}
+
     # --- AUTO-TAG ---
     # Direct execution from wizard payload
     if txt == "automate_tag":

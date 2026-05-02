@@ -37,14 +37,26 @@
         
         <div v-if="step === 1" class="space-y-6 animate-fade-in">
           
-          <div class="bg-black/30 border border-[#F43F5E]/30 rounded-xl p-4 flex flex-col gap-2 relative overflow-hidden">
-            <div class="absolute top-0 left-0 w-1 h-full bg-[#F43F5E]"></div>
-            <div class="flex items-center gap-2 text-[#F43F5E] font-bold text-xs uppercase tracking-wider">
-              <Icon name="lucide:frame" />
-              <span>Interactive Workflow</span>
+          <div class="bg-black/30 border border-[#F43F5E]/30 rounded-xl p-4 flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2 text-[#F43F5E] font-bold text-xs uppercase tracking-wider">
+                <Icon name="lucide:frame" />
+                <span>Interactive Workflow</span>
+              </div>
+              <div class="flex items-center bg-white/5 rounded-md border border-white/15 p-0.5">
+                <button @click="setLang('en')"
+                  class="px-2 py-0.5 rounded text-[10px] font-bold transition"
+                  :class="isThai ? 'text-white/50 hover:text-white/80' : 'bg-white/20 text-white'">EN</button>
+                <button @click="setLang('th')"
+                  class="px-2 py-0.5 rounded text-[10px] font-bold transition"
+                  :class="isThai ? 'bg-white/20 text-white' : 'text-white/50 hover:text-white/80'">TH</button>
+              </div>
             </div>
-            <div class="text-xs text-white/80 leading-relaxed">
+            <div v-if="!isThai" class="text-xs text-white/80 leading-relaxed">
               When you start this tool, Vella will prompt you to <strong>physically click a room</strong> in your active floor plan. Please ensure you have the correct floor plan open.
+            </div>
+            <div v-else class="text-xs text-white/80 leading-relaxed">
+              เมื่อคุณเริ่มเครื่องมือนี้ Vella จะให้คุณ<strong>คลิกเลือกห้อง</strong>ในผังพื้น (Floor Plan) ที่เปิดอยู่ในขณะนี้ กรุณาตรวจสอบให้แน่ใจว่าคุณได้เปิดผังพื้นที่ถูกต้อง
             </div>
           </div>
 
@@ -99,7 +111,7 @@
                @click="form.createSheets = !form.createSheets">
             <div>
                <div class="text-sm font-bold">Create New Sheet?</div>
-               <div class="text-[10px] text-white/50">Vella will automatically open the sheet after creation.</div>
+               <div class="text-[11px] text-white/50">Vella will automatically open the sheet after creation.</div>
             </div>
             <div class="w-10 h-6 rounded-full transition-colors relative" :class="form.createSheets ? 'bg-[#FF8A65]' : 'bg-white/20'">
               <div class="absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform" :class="form.createSheets ? 'translate-x-4' : ''"></div>
@@ -128,28 +140,50 @@
           <div class="text-sm font-bold text-center mb-4 text-[#FFB74D]">Ready to Start Interactive Tool</div>
 
           <div class="bg-white/5 border border-white/10 rounded-xl p-5 space-y-4 relative">
-            
-            <div class="flex gap-4 items-start">
+
+            <!-- Language toggle in upper-right corner of the card -->
+            <div class="absolute top-3 right-3 z-10 flex items-center bg-white/5 rounded-md border border-white/15 p-0.5">
+              <button @click="setLang('en')"
+                class="px-2 py-0.5 rounded text-[10px] font-bold transition"
+                :class="isThai ? 'text-white/50 hover:text-white/80' : 'bg-white/20 text-white'">EN</button>
+              <button @click="setLang('th')"
+                class="px-2 py-0.5 rounded text-[10px] font-bold transition"
+                :class="isThai ? 'bg-white/20 text-white' : 'text-white/50 hover:text-white/80'">TH</button>
+            </div>
+
+            <div class="flex gap-4 items-start pr-16">
               <div class="flex-shrink-0 w-6 h-6 rounded-full bg-[#F43F5E]/20 text-[#F43F5E] flex items-center justify-center font-bold text-xs mt-0.5">1</div>
               <div>
-                <div class="text-xs font-bold text-white">Pick the Room</div>
-                <div class="text-[10px] text-white/60 mt-1">Vella will prompt you to select the room in your current plan and generate the Callout.</div>
+                <div class="text-xs font-bold text-white">{{ isThai ? 'เลือกห้อง' : 'Pick the Room' }}</div>
+                <div class="text-[11px] text-white/60 mt-1">
+                  {{ isThai
+                    ? 'Vella จะให้คุณคลิกเลือกห้องในผังปัจจุบัน และสร้าง Callout ให้โดยอัตโนมัติ'
+                    : 'Vella will prompt you to select the room in your current plan and generate the Callout.' }}
+                </div>
               </div>
             </div>
 
             <div v-if="form.createSheets" class="flex gap-4 items-start">
               <div class="flex-shrink-0 w-6 h-6 rounded-full bg-[#FF8A65]/20 text-[#FF8A65] flex items-center justify-center font-bold text-xs mt-0.5">2</div>
               <div>
-                <div class="text-xs font-bold text-white">Sheet Auto-Creation</div>
-                <div class="text-[10px] text-white/60 mt-1">Vella will create the sheet, place the plan, and open the sheet view automatically.</div>
+                <div class="text-xs font-bold text-white">{{ isThai ? 'สร้าง Sheet อัตโนมัติ' : 'Sheet Auto-Creation' }}</div>
+                <div class="text-[11px] text-white/60 mt-1">
+                  {{ isThai
+                    ? 'Vella จะสร้าง Sheet วาง Plan และเปิด Sheet View ให้โดยอัตโนมัติ'
+                    : 'Vella will create the sheet, place the plan, and open the sheet view automatically.' }}
+                </div>
               </div>
             </div>
 
             <div class="flex gap-4 items-start">
               <div class="flex-shrink-0 w-6 h-6 rounded-full bg-[#FFB74D]/20 text-[#FFB74D] flex items-center justify-center font-bold text-xs mt-0.5">{{ form.createSheets ? '3' : '2' }}</div>
               <div>
-                <div class="text-xs font-bold text-white">Place Elevation Marker</div>
-                <div class="text-[10px] text-white/60 mt-1">Vella will activate the plan and ask you to click where the elevation marker should go.</div>
+                <div class="text-xs font-bold text-white">{{ isThai ? 'วาง Elevation Marker' : 'Place Elevation Marker' }}</div>
+                <div class="text-[11px] text-white/60 mt-1">
+                  {{ isThai
+                    ? 'Vella จะกลับมายังผังพื้น และให้คุณคลิกตำแหน่งที่ต้องการวาง Elevation Marker'
+                    : 'Vella will activate the plan and ask you to click where the elevation marker should go.' }}
+                </div>
               </div>
             </div>
 
@@ -180,7 +214,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 
 const props = defineProps({
   titleblocks: { type: Array, default: () => [] },
@@ -188,6 +222,29 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close', 'executeRaw']);
+
+// Instruction language toggle — persisted per browser via localStorage so each
+// staff member's preference (EN / TH) sticks across sessions. Per-wizard key
+// for now; can be unified to a global vella.lang key later.
+const LANG_STORAGE_KEY = 'vella.roomElevation.lang';
+const isThai = ref(false);
+
+onMounted(() => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      isThai.value = window.localStorage.getItem(LANG_STORAGE_KEY) === 'th';
+    }
+  } catch { /* localStorage may be blocked — fall back to default EN */ }
+});
+
+function setLang(lang) {
+  isThai.value = lang === 'th';
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(LANG_STORAGE_KEY, lang);
+    }
+  } catch { /* ignore */ }
+}
 
 // --- HELPER FUNCTIONS ---
 // Resolves the correct template strings based on the current stage

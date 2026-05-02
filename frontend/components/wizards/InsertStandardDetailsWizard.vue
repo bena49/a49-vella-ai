@@ -110,13 +110,43 @@
         </div>
 
         <!-- INSTRUCTIONS -->
-        <div v-if="selectedPackage && preview && preview.file_exists"
-             class="text-[11px] text-white/60 leading-relaxed">
-          After clicking <span class="text-white/80 font-medium">Browse</span>,
-          Revit's <em>Insert Views from File</em> dialog will open. The file path
-          is on your clipboard — paste with <kbd class="px-1.5 py-0.5 rounded bg-white/10 text-white/80 text-[10px]">Ctrl+V</kbd>
-          and press <kbd class="px-1.5 py-0.5 rounded bg-white/10 text-white/80 text-[10px]">Enter</kbd>
-          to navigate, then pick the views you want to insert.
+        <div v-if="selectedPackage && preview && preview.file_exists" class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] uppercase tracking-wider text-white/50 font-bold">
+              Instructions
+            </span>
+            <div class="flex items-center bg-white/5 rounded-md border border-white/15 p-0.5">
+              <button @click="setLang('en')"
+                class="px-2 py-0.5 rounded text-[10px] font-bold transition"
+                :class="isThai ? 'text-white/50 hover:text-white/80' : 'bg-white/20 text-white'">
+                EN
+              </button>
+              <button @click="setLang('th')"
+                class="px-2 py-0.5 rounded text-[10px] font-bold transition"
+                :class="isThai ? 'bg-white/20 text-white' : 'text-white/50 hover:text-white/80'">
+                TH
+              </button>
+            </div>
+          </div>
+
+          <!-- English -->
+          <div v-if="!isThai" class="text-[11px] text-white/60 leading-relaxed">
+            After clicking <span class="text-white/80 font-medium">Browse</span>,
+            Revit's <em>Insert Views from File</em> dialog will open. The file path
+            is on your clipboard — paste with <kbd class="px-1.5 py-0.5 rounded bg-white/10 text-white/80 text-[10px]">Ctrl+V</kbd>
+            and press <kbd class="px-1.5 py-0.5 rounded bg-white/10 text-white/80 text-[10px]">Enter</kbd>
+            to navigate, then pick the views you want to insert.
+          </div>
+
+          <!-- Thai -->
+          <div v-else class="text-[11px] text-white/60 leading-relaxed">
+            หลังจากคลิก <span class="text-white/80 font-medium">Browse</span>
+            หน้าต่าง <em>Insert Views from File</em> ของ Revit จะเปิดขึ้น
+            โดยที่อยู่ไฟล์ (File path) ได้ถูกคัดลอกไว้ในคลิปบอร์ดของคุณแล้ว
+            ให้กด <kbd class="px-1.5 py-0.5 rounded bg-white/10 text-white/80 text-[10px]">Ctrl+V</kbd>
+            เพื่อวาง และกด <kbd class="px-1.5 py-0.5 rounded bg-white/10 text-white/80 text-[10px]">Enter</kbd>
+            เพื่อไปยังตำแหน่งไฟล์ดังกล่าว จากนั้นจึงเลือก (Views) ที่คุณต้องการ
+          </div>
         </div>
       </div>
 
@@ -141,7 +171,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 
 const props = defineProps({
   // Parent supplies the latest preview result (sent from Revit). The wizard
@@ -157,6 +187,28 @@ const emit = defineEmits(['close', 'submit', 'request-preview']);
 const selectedPackage = ref(null);   // 'standard' | 'eia'
 const preview = ref(null);            // applied preview (matched to selectedPackage)
 const isLoadingPreview = ref(false);
+
+// Instruction language toggle — persisted per browser via localStorage
+// so each staff member's preference (EN / TH) sticks across sessions.
+const LANG_STORAGE_KEY = 'vella.insertStandardDetails.lang';
+const isThai = ref(false);
+
+onMounted(() => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      isThai.value = window.localStorage.getItem(LANG_STORAGE_KEY) === 'th';
+    }
+  } catch { /* localStorage may be blocked — fall back to default EN */ }
+});
+
+function setLang(lang) {
+  isThai.value = lang === 'th';
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(LANG_STORAGE_KEY, lang);
+    }
+  } catch { /* ignore */ }
+}
 
 // =====================================================================
 // COMPUTED

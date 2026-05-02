@@ -100,8 +100,10 @@ import HelpViewsTab from './HelpViewsTab.vue';
 import HelpSheetsTab from './HelpSheetsTab.vue';
 import HelpCreatePlaceTab from './HelpCreatePlaceTab.vue';
 import HelpStandardsTab from './HelpStandardsTab.vue';
-import HelpRoomElevationTab from './HelpRoomElevationTab.vue';     
-import HelpMathCalculationTab from './HelpMathCalculationTab.vue'; 
+import HelpRoomElevationTab from './HelpRoomElevationTab.vue';
+import HelpTaggingTab from './HelpTaggingTab.vue';
+import HelpDimensionsTab from './HelpDimensionsTab.vue';
+import HelpMathCalculationTab from './HelpMathCalculationTab.vue';
 
 defineEmits(['close']);
 
@@ -133,19 +135,35 @@ const tabs = [
     activeIconClass: 'text-[#00BCD4]',
     activeBgClass: 'bg-[#00BCD4]/20',
   },
-  { 
-    id: 'room', 
-    label: 'Room Elev', 
-    comp: HelpRoomElevationTab, 
-    icon: 'lucide:frame', 
+  {
+    id: 'room',
+    label: 'Room Elev',
+    comp: HelpRoomElevationTab,
+    icon: 'lucide:frame',
     activeIconClass: 'text-[#F43F5E]', // Rose color to match the wizard UI
     activeBgClass: 'bg-[#F43F5E]/20',
   },
-  { 
-    id: 'math', 
-    label: 'Math', 
-    comp: HelpMathCalculationTab, 
-    icon: 'lucide:calculator', 
+  {
+    id: 'tags',
+    label: 'Tags',
+    comp: HelpTaggingTab,
+    icon: 'lucide:tags',
+    activeIconClass: 'text-[#FF9800]', // Orange to match AutomateTagWizard accent
+    activeBgClass: 'bg-[#FF9800]/20',
+  },
+  {
+    id: 'dim',
+    label: 'Dim',
+    comp: HelpDimensionsTab,
+    icon: 'tabler:ruler-measure',
+    activeIconClass: 'text-[#00BCD4]', // Cyan to match AutomateDimWizard accent
+    activeBgClass: 'bg-[#00BCD4]/20',
+  },
+  {
+    id: 'math',
+    label: 'Math',
+    comp: HelpMathCalculationTab,
+    icon: 'lucide:calculator',
     activeIconClass: 'text-[#FFB74D]', // Orange/Yellow color
     activeBgClass: 'bg-[#FFB74D]/20',
   },

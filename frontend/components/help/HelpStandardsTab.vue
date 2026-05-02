@@ -1,6 +1,27 @@
 <template>
   <div class="space-y-6"> <!-- overall spacing space-y-X -->
-    
+
+    <!-- 0. Standards Commands (NLP triggers) -->
+    <div class="space-y-3">
+      <h3 class="text-sm font-bold text-[#60A5FA] mb-2">Standards Commands</h3>
+
+      <div class="grid gap-3 md:grid-cols-2">
+        <HelpItem label="Preflight Check" :prompts="[
+          'Preflight check',
+          'Run preflight check',
+          'Health check'
+        ]" @pick="$emit('pick', $event)" />
+
+        <HelpItem label="Insert Standard Details" :prompts="[
+          'Insert standard details',
+          'Browse standard details',
+          'Show me standard details',
+          'Insert EIA details',
+          'Browse EIA details'
+        ]" @pick="$emit('pick', $event)" />
+      </div>
+    </div>
+
     <!-- 1. Project Phase -->
     <div class="space-y-3">
       <h3 class="text-sm font-bold text-[#60A5FA] mb-2">Project Phase</h3>
@@ -162,6 +183,9 @@
 
 <script setup>
 import { ref } from 'vue';
+import HelpItem from './HelpItem.vue';
+
+defineEmits(['pick']);
 
 // 1. PROJECT PHASE
 const projectPhases = ref([

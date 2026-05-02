@@ -301,14 +301,14 @@ def dispatch_immediate_command(request, intent, gpt_json):
     if intent == "automate_dim":
         return handle_automate_dim(request)
 
-    # 💥 AUTOMATE DIM WIZARD — clear any stale NLP dim state before opening
+    # 💥 AUTOMATE DIM WIZARD — clear any stale NLP dim state before opening,
+    # then fall through to the generic envelope dispatch below so the response
+    # uses the {revit_command: {command: "wizard:..."}} shape that the frontend
+    # opens wizards from. Returning {message, intent} alone never opens it.
     if intent == "wizard:automate_dim":
         request.session.pop("ai_nlp_dim_state", None)
         request.session.modified = True
-        return Response({
-            "message": "📐 Opening the dimensioning wizard...",
-            "intent": "wizard:automate_dim"
-        })
+        # Don't return — let the generic fallthrough below build the envelope.
 
     # 💥 CACHE DIM INVENTORY (silent — caches floor plan views in session for NLP)
     if intent == "cache_dim_inventory":

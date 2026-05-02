@@ -275,21 +275,41 @@ def handle_nlp_tag_conversation(request, user_text):
     """
     Processes user responses during an active tagging conversation.
     Called from views.py interceptor when ai_nlp_tag_state exists.
-    
-    Returns Response if handled, None if state doesn't exist.
+
+    Returns Response if handled, None if state doesn't exist OR if the user
+    has clearly switched to a different command (state auto-clears).
     """
     state = _get_state(request)
     if not state:
         return None
-    
+
     step = state.get("step")
     txt = user_text.strip()
     txt_lower = txt.lower().strip()
-    
+
     # Allow user to cancel at any step
     if txt_lower in ["cancel", "stop", "nevermind", "never mind", "quit", "exit"]:
         _clear_state(request)
         return Response({"message": "No problem. Tagging cancelled."})
+
+    # Escape hatch: if the user clearly wants a different command (matched by
+    # the fast intent router as a non-tag intent), auto-clear the stale state
+    # and let normal routing handle the new request. Prevents the "Please say
+    # 'Yes' to tag all" loop from intercepting unrelated commands like
+    # "Dimension grids…" or "Create L1 Floor Plan…".
+    try:
+        from ..ai_core.gpt_integration import fast_route_intent
+        routed = fast_route_intent(user_text)
+        routed_intent = (routed or {}).get("intent")
+        # Anything that looks like a different command, EXCEPT tag-related
+        # intents themselves and the bare resume_wizard signal.
+        if routed_intent and not routed_intent.startswith("automate_tag") \
+                         and routed_intent not in ("resume_wizard", "wizard:automate_tag"):
+            _clear_state(request)
+            return None  # Fall through to views.py's normal routing
+    except Exception:
+        # Defensive: never block tag conversation on a routing error
+        pass
     
     category = state.get("tag_category", "")
     element_name = ELEMENT_NAMES.get(category, "elements")

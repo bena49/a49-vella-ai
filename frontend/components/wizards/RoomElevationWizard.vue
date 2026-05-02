@@ -80,8 +80,20 @@
 
             <div>
               <label class="text-[10px] uppercase tracking-wider text-white/50 font-bold mb-1.5 block">Callout Offset (mm)</label>
-              <input v-model.number="form.cropOffset" type="number" 
-                     class="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-1.5 text-sm text-white focus:border-[#F43F5E] outline-none transition font-mono transparent-spinner" />
+              <div class="relative">
+                <input v-model.number="form.cropOffset" type="number"
+                       class="w-full bg-white/10 border border-white/20 rounded-xl pl-3 pr-7 py-1.5 text-sm text-white focus:border-[#F43F5E] outline-none transition font-mono transparent-spinner" />
+                <div class="absolute right-1.5 top-1/2 -translate-y-1/2 flex flex-col gap-0">
+                  <button type="button" @click="form.cropOffset = (form.cropOffset || 0) + 50"
+                          class="text-white/40 hover:text-white transition leading-none">
+                    <Icon name="lucide:chevron-up" class="text-sm" />
+                  </button>
+                  <button type="button" @click="form.cropOffset = Math.max(0, (form.cropOffset || 0) - 50)"
+                          class="text-white/40 hover:text-white transition leading-none">
+                    <Icon name="lucide:chevron-down" class="text-sm" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -312,12 +324,17 @@ function startInteractiveWorkflow() {
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
 
-/* 💥 Transparent Number Input Spinners */
+/* Hide the native browser spinner entirely. We render our own chevron
+   buttons over the input — see the Callout Offset field above. */
 .transparent-spinner::-webkit-inner-spin-button,
 .transparent-spinner::-webkit-outer-spin-button {
-  background: transparent;
-  opacity: 0.3;
-  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+.transparent-spinner {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 @keyframes fade-in-up { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }

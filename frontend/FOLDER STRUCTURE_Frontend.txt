@@ -48,14 +48,16 @@ UI STRUCTURE
 │   │   ├── AutomateDimWizard.vue      <-- Auto-dimensioning wizard (floor plan walls/openings/grids)
 │   │   └── InsertStandardDetailsWizard.vue  <-- Standard/EIA detail picker → Revit Insert Views from File
 │   ├── help/
-│   │   ├── HelpCreatePlaceTab.vue  
-│   │   ├── HelpItem.vue    	      
-│   │   ├── HelpMathCalculationTab.vue    	  	  
-│   │   ├── HelpModal.vue    	  	  
-│   │   ├── HelpRoomElevationTab.vue    	  	  
-│   │   ├── HelpSheetsTab.vue    	  
-│   │   ├── HelpStandardsTab.vue    
-│   │   └── HelpViewsTab.vue    	  
+│   │   ├── HelpCreatePlaceTab.vue
+│   │   ├── HelpDimensionsTab.vue       <-- Auto-dim NLP prompts (walls/grids/openings)
+│   │   ├── HelpItem.vue
+│   │   ├── HelpMathCalculationTab.vue
+│   │   ├── HelpModal.vue
+│   │   ├── HelpRoomElevationTab.vue
+│   │   ├── HelpSheetsTab.vue
+│   │   ├── HelpStandardsTab.vue        <-- Includes Preflight + Insert Standard Details NLP commands
+│   │   ├── HelpTaggingTab.vue          <-- Auto-tag + Spot Elevation NLP prompts
+│   │   └── HelpViewsTab.vue
 │   └── VellaModal.vue          
 │
 ├── composables/

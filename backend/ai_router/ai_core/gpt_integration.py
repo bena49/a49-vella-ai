@@ -65,6 +65,14 @@ def fast_route_intent(user_text):
     if any(word in txt for word in ["preflight", "health check", "check standards"]):
         return {"intent": "preflight_check"}
 
+    # --- REFRESH PROJECT INFO ---
+    # Conversational way for the user to re-prime caches (levels, tags, etc.)
+    # after editing the Revit project. Avoids needing a UI button.
+    if txt in ["refresh", "reload", "refresh project", "reload project",
+               "refresh project info", "reload project info",
+               "update project", "update project info", "sync project"]:
+        return {"intent": "refresh_project_info"}
+
     # --- INSERT STANDARD DETAILS (wizard direct dispatch from frontend) ---
     if txt == "insert_standard_details":
         return {"intent": "insert_standard_details"}

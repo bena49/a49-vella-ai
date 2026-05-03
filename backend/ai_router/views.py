@@ -138,7 +138,7 @@ def ai_router(request):
             # than replying to the prompt (e.g. "Create L1 Floor Plan…"). Clear
             # the stale flag and let normal routing handle the new intent.
             import re as _re
-            if _re.match(r'^\s*(create|make|add|build|generate|new|open|browse|insert|show|run|preflight|tag|dimension)\b',
+            if _re.match(r'^\s*(create|make|add|build|generate|new|open|browse|insert|show|run|preflight|tag|dimension|refresh|reload|update|sync)\b',
                          cleaned, _re.IGNORECASE):
                 debug_session(request, "🛡️ Template selection: user typed a new command — clearing flag.")
                 request.session["ai_expecting_template_selection"] = False

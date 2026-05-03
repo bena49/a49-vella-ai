@@ -1,6 +1,25 @@
 <template>
   <div class="space-y-6"> <!-- overall spacing space-y-X -->
 
+    <!-- 0. Project Sync — note about the refresh command -->
+    <div class="space-y-3">
+      <h3 class="text-sm font-bold text-[#60A5FA] mb-2">Project Sync</h3>
+      <div class="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 space-y-3">
+        <div class="text-[11px] text-white/70 leading-relaxed">
+          Vella caches your project's levels, sheets, and tags so chat commands
+          resolve instantly. The cache primes itself when you sign in. If you
+          rename or add a level / sheet / tag in Revit mid-session, type any
+          of the commands below to re-sync.
+        </div>
+        <HelpItem label="Refresh Project Info" :prompts="[
+          'refresh',
+          'reload',
+          'refresh project',
+          'sync project'
+        ]" @pick="$emit('pick', $event)" />
+      </div>
+    </div>
+
     <!-- 1. Project Phase -->
     <div class="space-y-3">
       <h3 class="text-sm font-bold text-[#60A5FA] mb-2">Project Phase</h3>
@@ -162,6 +181,9 @@
 
 <script setup>
 import { ref } from 'vue';
+import HelpItem from './HelpItem.vue';
+
+defineEmits(['pick']);
 
 // 1. PROJECT PHASE
 const projectPhases = ref([

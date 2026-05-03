@@ -120,7 +120,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, watch } from "vue";
 import ChatInput from "~/components/chat/ChatInput.vue";
 import VellaModal from "~/components/VellaModal.vue";
 import PlanViewWizard from "~/components/wizards/PlanViewWizard.vue"; 
@@ -200,6 +200,18 @@ onMounted(async () => {
   await initMsal();
   listenToRevit(handleRevitMessage);
 });
+
+// Prime the project caches (levels / tags / dim views / etc.) the moment the
+// user is authenticated, so chat commands have accurate data even before any
+// wizard is opened. Without this, typing a level-aware command on a fresh
+// session would resolve against an empty cache and pass tokens through.
+let primedOnce = false;
+watch(isAuthenticated, (authed) => {
+  if (authed && !primedOnce) {
+    primedOnce = true;
+    sendToRevit({ command: "fetch_project_info" });
+  }
+}, { immediate: true });
 </script>
 
 <style scoped>

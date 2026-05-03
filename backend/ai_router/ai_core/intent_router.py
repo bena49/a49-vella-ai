@@ -252,6 +252,7 @@ ALLOWED_IMMEDIATE_COMMANDS = [
     "preflight_check",
     "insert_standard_details",
     "send_comment",
+    "refresh_project_info",
     "automate_tag",
     "automate_tag_nlp",
     "automate_dim",
@@ -295,6 +296,20 @@ def dispatch_immediate_command(request, intent, gpt_json):
     # 💥 SEND COMMENT (Help > Comment form → SMTP email)
     if intent == "send_comment":
         return handle_send_comment(request)
+
+    # 💥 REFRESH PROJECT INFO — conversational cache refresh.
+    # Returns a fetch_project_info revit_command + a confirmation message.
+    # The frontend's existing useChat plumbing routes the revit_command to
+    # Revit, the response goes through useRevitHandler → updateWizardProps,
+    # which re-fires cache_level_inventory (and the tag/dim caches).
+    if intent == "refresh_project_info":
+        env = {"command": "fetch_project_info"}
+        if request.session.session_key:
+            env["session_key"] = request.session.session_key
+        return Response({
+            "message": "🔄 Refreshing project info from Revit...",
+            "revit_command": env
+        })
 
     # 💥 AUTOMATE TAG (unified tagging - doors, windows, walls, rooms, ceilings)
     if intent == "automate_tag":

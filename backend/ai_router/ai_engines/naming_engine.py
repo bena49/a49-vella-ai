@@ -39,15 +39,47 @@ def get_view_sheet_type(view_type_abbrev):
     return MAPPING.get(view_type_abbrev, "A1")
 
 def level_to_code(level):
+    """
+    Reduce a level name (any naming convention — English, English with
+    elevation prefix, Thai with elevation prefix) to the short code used
+    in view names: e.g. "01", "02", "07T", "B1M", "RF", "SITE", "TOP".
+
+    Routes through level_matcher.extract_level_signature for consistent
+    handling across all A49 naming variants. Falls back to legacy regex
+    if the matcher errors (defensive — should never happen in practice).
+    """
     if not level: return ""
+
+    # Primary path: signature extraction (handles all naming conventions)
+    try:
+        from .level_matcher import extract_level_signature
+        sig = extract_level_signature(level)
+        if sig["special"]:
+            # SITE / RF / TOP / MZ / PD / AT — used as-is in the view name
+            return sig["special"]
+        if sig["digit"] is not None:
+            prefix = sig["prefix"] or "L"
+            num    = sig["digit"]
+            suffix = sig["suffix"] or ""
+            if prefix == "L":
+                # Above-ground levels are zero-padded to 2 digits: 01, 02, 07T
+                return f"{num:02d}{suffix}"
+            # Basement / parking / others keep the prefix: B1, B1M, P1
+            return f"{prefix}{num}{suffix}"
+    except Exception:
+        pass
+
+    # Legacy fallback (kept defensive in case the matcher import fails)
     clean = str(level).upper().strip()
-    if "SITE" in clean: return "00" 
+    if "SITE" in clean: return "SITE"   # was "00" — now matches new convention
     if "ROOF" in clean: return "RF"
-    match = re.search(r"\b([BPLM])\s*(\d+)", clean)
+    if "TOP" in clean or "PARAPET" in clean: return "TOP"
+    match = re.search(r"\b([BPLM])\s*(\d+)([A-Z]?)", clean)
     if match:
-        prefix = match.group(1) 
+        prefix = match.group(1)
         num = int(match.group(2))
-        return f"{prefix}{num}" if prefix != "L" else f"{num:02d}"
+        suffix = match.group(3) or ""
+        return f"{prefix}{num}{suffix}" if prefix != "L" else f"{num:02d}{suffix}"
     nums = re.findall(r"\d+", clean)
     if nums: return nums[0].zfill(2)
     return "00"
@@ -88,8 +120,11 @@ def generate_standard_view_name(stage, view_type, level_name, existing_names, te
             if candidate not in existing_names: return candidate
             counter += 1
 
-    # --- EXISTING LOGIC BELOW (Unchanged) ---
-    if level_name and "SITE" in level_name.upper(): abbrev = "SITE"
+    # --- EXISTING LOGIC BELOW ---
+    # NOTE: removed legacy "if SITE in level_name → abbrev=SITE" override.
+    # Floor Plans at the SITE level now produce CD_A1_FL_SITE (preserving
+    # the FL view-type), instead of collapsing to CD_A1_SITE. The lvl_code
+    # itself becomes "SITE" via level_to_code().
     sheet_type = get_view_sheet_type(abbrev)
 
     if sheet_type in ["A8", "A9"] or abbrev in ["SC", "AD", "AW", "D1"]:

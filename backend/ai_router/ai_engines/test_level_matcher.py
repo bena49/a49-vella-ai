@@ -39,6 +39,7 @@ from ai_router.ai_engines.level_matcher import (
     extract_level_signature,
     resolve_tokens_to_project_levels,
 )
+from ai_router.ai_engines.naming_engine import level_to_code
 
 
 # ── PROJECT FIXTURES ──────────────────────────────────────────────────
@@ -133,12 +134,55 @@ CASES = [
     ("Token has no project match", BASE_OPTION, "L99",                         ["L99"]),  # passes through
 ]
 
+# ── level_to_code TEST CASES ──────────────────────────────────────────
+# (description, input_level_name, expected_code)
+# Used in view names like CD_A1_FL_<code>. The resolver above produces
+# the input level name; level_to_code reduces it to the suffix.
+
+CODE_CASES = [
+    # SITE (the bug Ben reported — was "00", should be "SITE")
+    ("SITE token",                  "SITE",                          "SITE"),
+    ("SITE EN with elev",           "+0.00 SITE",                    "SITE"),
+    ("SITE Thai",                   "ระดับพื้นดิน",                   "SITE"),
+    ("SITE Thai with elev",         "+0.00 ระดับพื้นดิน",             "SITE"),
+
+    # ROOF (was broken in Thai projects — returned "32" instead of "RF")
+    ("ROOF token",                  "RF",                            "RF"),
+    ("ROOF EN long",                "ROOF LEVEL",                    "RF"),
+    ("ROOF EN with elev",           "+52.85 ROOF LEVEL",             "RF"),
+    ("ROOF Thai",                   "ระดับพื้นชั้นดาดฟ้า",            "RF"),
+    ("ROOF Thai with elev",         "+32.30 ระดับพื้นชั้นดาดฟ้า",     "RF"),
+
+    # TOP (highest point of building — new code)
+    ("TOP token",                   "TOP",                           "TOP"),
+    ("TOP Thai with elev",          "+37.30 ระดับสูงสุดของอาคาร",     "TOP"),
+
+    # Above-ground numbered (zero-padded to 2 digits)
+    ("L1 token",                    "L1",                            "01"),
+    ("L7 EN",                       "LEVEL 7",                       "07"),
+    ("L7 EN with elev",             "+38.95 LEVEL 7",                "07"),
+    ("L2 Thai with elev",           "+5.50 ระดับพื้นชั้น 2",          "02"),
+    ("L7T intermediate",            "LEVEL 7T",                      "07T"),
+    ("L7T EN with elev",            "+45.45 LEVEL 7T",               "07T"),
+    ("L6M intermediate",            "LEVEL 6M",                      "06M"),
+
+    # Basement
+    ("B1 token",                    "B1",                            "B1"),
+    ("B1 EN with elev",             "-5.82 LEVEL B1",                "B1"),
+    ("B1 Thai with elev",           "-5.82 ระดับชั้นใต้ดิน B1",       "B1"),
+    ("B1M intermediate",            "LEVEL B1M",                     "B1M"),
+    ("B1M Thai with elev",          "-2.42 ระดับชั้นใต้ดิน B1M",      "B1M"),
+    ("B2",                          "LEVEL B2",                      "B2"),
+]
+
 
 # ── HARNESS ───────────────────────────────────────────────────────────
 
 def _run():
     passed, failed = 0, 0
     failures = []
+
+    # ── Resolver tests ───────────────────────────────────────────────
     for desc, project, user_input, expected in CASES:
         tokens = parse_levels(user_input)
         resolved = resolve_tokens_to_project_levels(tokens, project)
@@ -147,15 +191,31 @@ def _run():
         else:
             failed += 1
             failures.append({
-                "case":     desc,
+                "case":     f"[resolver] {desc}",
                 "input":    user_input,
                 "tokens":   tokens,
                 "resolved": resolved,
                 "expected": expected,
             })
 
+    # ── level_to_code tests ──────────────────────────────────────────
+    for desc, level_input, expected_code in CODE_CASES:
+        actual_code = level_to_code(level_input)
+        if actual_code == expected_code:
+            passed += 1
+        else:
+            failed += 1
+            failures.append({
+                "case":     f"[code] {desc}",
+                "input":    level_input,
+                "tokens":   "—",
+                "resolved": actual_code,
+                "expected": expected_code,
+            })
+
+    total = len(CASES) + len(CODE_CASES)
     print("=" * 70)
-    print(f"level_matcher tests:  {passed} passed, {failed} failed  (of {len(CASES)})")
+    print(f"level_matcher + level_to_code tests:  {passed} passed, {failed} failed  (of {total})")
     print("=" * 70)
 
     if failures:

@@ -255,8 +255,9 @@ ALLOWED_IMMEDIATE_COMMANDS = [
     "automate_tag",
     "automate_tag_nlp",
     "automate_dim",
-    "cache_dim_inventory",     
+    "cache_dim_inventory",
     "cache_tag_inventory",
+    "cache_level_inventory",
     "ui:help",
     "wizard:create_views",
     "wizard:create_sheets",
@@ -321,6 +322,15 @@ def dispatch_immediate_command(request, intent, gpt_json):
         request.session["ai_last_known_floor_plan_views"] = request.data.get("floor_plan_views", [])
         request.session.modified = True
         debug_session(request, f"📦 Cached dim inventory: {len(request.data.get('floor_plan_views', []))} floor plan views")
+        return Response({"message": "", "status": "silent"})
+
+    # 💥 CACHE LEVEL INVENTORY (silent — caches actual project level names so
+    # the level_matcher can resolve user input regardless of naming convention)
+    if intent == "cache_level_inventory":
+        levels = request.data.get("levels", []) or []
+        request.session["ai_last_known_levels"] = levels
+        request.session.modified = True
+        debug_session(request, f"📦 Cached level inventory: {len(levels)} levels")
         return Response({"message": "", "status": "silent"})
 
     # 💥 CACHE TAG INVENTORY (silent — caches tag families + views in session for NLP)

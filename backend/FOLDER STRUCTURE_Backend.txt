@@ -43,7 +43,8 @@ ROOT
 │   ├── ai_engines/                     <-- A49 logic and prompt engineering
 │   │   ├── __init__.py
 │   │   ├── conversation_engine.py
-│   │   ├── level_engine.py
+│   │   ├── level_engine.py             <-- Bilingual level parser (English + Thai, intermediate suffixes)
+│   │   ├── level_matcher.py            <-- Resolves parsed tokens to actual project level names
 │   │   ├── math_engine.py
 │   │   ├── naming_engine.py
 │   │   ├── scope_box_engine.py

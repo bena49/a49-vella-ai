@@ -271,6 +271,17 @@ export function useWizards(
       });
     }
 
+    // Cache the project's actual level names to backend so the level_matcher
+    // can resolve user input ("L2", "ชั้น 2", "+5.50 ระดับพื้นชั้น 2") to the
+    // project's exact Revit level name regardless of naming convention.
+    if (projectInfo.levels && projectInfo.levels.length > 0) {
+      sendToBackend({
+        message:     "cache_level_inventory",
+        levels:      projectInfo.levels,
+        session_key: sessionKey.value,
+      });
+    }
+
     wizardKey.value++;
   }
 

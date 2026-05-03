@@ -11,6 +11,7 @@ import re
 DASHES = ["-", "–", "—", "−", "~"]
 
 SPECIAL_LEVEL_MAP = {
+    # English short codes / common phrases
     "g": "L1", "gf": "L1", "ground": "L1", "ground floor": "L1",
     "1st floor": "L1", "first floor": "L1",
     "roof": "RF", "roof level": "RF", "rf": "RF",
@@ -18,7 +19,17 @@ SPECIAL_LEVEL_MAP = {
     "p1": "P1", "p2": "P2", "parking 1": "P1", "parking 2": "P2",
     "pd": "PD", "podium": "PD",
     "at": "AT", "attic": "AT",
-    "site": "SITE", "site plan": "SITE", "site level": "SITE"
+    "site": "SITE", "site plan": "SITE", "site level": "SITE",
+    "top": "TOP", "top of building": "TOP", "top level": "TOP", "parapet": "TOP",
+    # Thai aliases (A49 office naming)
+    "ดาดฟ้า": "RF",
+    "ระดับพื้นชั้นดาดฟ้า": "RF",
+    "ชั้นดาดฟ้า": "RF",
+    "ระดับสูงสุดของอาคาร": "TOP",
+    "สูงสุดของอาคาร": "TOP",
+    "ระดับสูงสุด": "TOP",
+    "พื้นดิน": "SITE",
+    "ระดับพื้นดิน": "SITE",
 }
 
 # ----------------------------------------------------------------------
@@ -91,30 +102,63 @@ def parse_levels(raw_text: str):
     # 4. STRATEGY 1: PHRASE EXTRACTION
     phrase_hits = []
 
-    # English phrases: "level 1", "floor 2", "L1"
-    # Added strict \b to ensure we don't match half-words, but relaxed for "l1"
-    for m in re.findall(r"\b(level|lvl|floor|fl|story|storey|l)\s*([0-9]+)\b", cleaned):
-        _, num = m
-        phrase_hits.append(f"L{int(num)}")
+    # 4a. THAI special-name detection (must come before digit extraction so
+    # "ระดับพื้นชั้นดาดฟ้า" doesn't get parsed as the digit-less prefix only).
+    thai_special_phrases = [
+        ("ระดับพื้นชั้นดาดฟ้า", "RF"),
+        ("ชั้นดาดฟ้า",          "RF"),
+        ("ดาดฟ้า",              "RF"),
+        ("ระดับสูงสุดของอาคาร", "TOP"),
+        ("สูงสุดของอาคาร",      "TOP"),
+        ("ระดับสูงสุด",         "TOP"),
+        ("ระดับพื้นดิน",        "SITE"),
+        ("พื้นดิน",             "SITE"),
+    ]
+    for phrase, token in thai_special_phrases:
+        if phrase in cleaned:
+            phrase_hits.append(token)
 
-    # Basement
-    for m in re.findall(r"\b(basement|b)\s*([0-9]+)\b", cleaned):
-        _, num = m
-        phrase_hits.append(f"B{int(num)}")
+    # 4b. THAI numbered floors:
+    #   ระดับพื้นชั้น 2, ผังพื้นชั้น 2, ชั้นที่ 2, ชั้น 2  (with optional intermediate
+    #   "ที่" between phrase and digit, and optional intermediate suffix letter).
+    for m in re.findall(
+        r"(?:ระดับพื้นชั้น|ผังพื้นชั้น|ชั้นที่|ชั้น)\s*(?:ที่\s*)?([0-9]+)([A-Z]?)",
+        cleaned, re.IGNORECASE
+    ):
+        num, suffix = m
+        phrase_hits.append(f"L{int(num)}{suffix.upper()}")
+
+    # 4c. THAI basement: "ระดับชั้นใต้ดิน B1M"
+    for m in re.findall(r"ระดับชั้นใต้ดิน\s*([Bb])([0-9]+)([A-Z]?)", cleaned, re.IGNORECASE):
+        _, num, suffix = m
+        phrase_hits.append(f"B{int(num)}{suffix.upper()}")
+
+    # English phrases: "level 1", "floor 2", "L1", "level 7T", "level 6M"
+    # Suffix capture preserves intermediate floor markers (T=transfer,
+    # M=mezzanine, etc.). Project-specific — we don't try to define them.
+    for m in re.findall(r"\b(level|lvl|floor|fl|story|storey|l)\s*([0-9]+)([A-Za-z]?)\b", cleaned):
+        _, num, suffix = m
+        phrase_hits.append(f"L{int(num)}{suffix.upper()}")
+
+    # Basement (with optional suffix: B1, B1M, B2)
+    for m in re.findall(r"\b(basement|b)\s*([0-9]+)([A-Za-z]?)\b", cleaned):
+        _, num, suffix = m
+        phrase_hits.append(f"B{int(num)}{suffix.upper()}")
 
     # Parking
-    for m in re.findall(r"\b(parking|p)\s*([0-9]+)\b", cleaned):
-        _, num = m
-        phrase_hits.append(f"P{int(num)}")
-        
-    # Explicit Code Style
-    for m in re.findall(r"(level|lvl)\s*([bpml])([0-9]+)", cleaned):
-        _, prefix, num = m
-        phrase_hits.append(f"{prefix.upper()}{int(num)}")
+    for m in re.findall(r"\b(parking|p)\s*([0-9]+)([A-Za-z]?)\b", cleaned):
+        _, num, suffix = m
+        phrase_hits.append(f"P{int(num)}{suffix.upper()}")
 
-    # Site
-    if "site" in cleaned:
-        phrase_hits.append("SITE")
+    # Explicit Code Style: "level B1M"
+    for m in re.findall(r"(level|lvl)\s*([bpml])([0-9]+)([A-Za-z]?)", cleaned):
+        _, prefix, num, suffix = m
+        phrase_hits.append(f"{prefix.upper()}{int(num)}{suffix.upper()}")
+
+    # Site / Roof / Top (English) — standalone keyword detection.
+    if re.search(r"\bsite\b", cleaned): phrase_hits.append("SITE")
+    if re.search(r"\broof\b", cleaned): phrase_hits.append("RF")
+    if re.search(r"\b(top of building|parapet)\b", cleaned): phrase_hits.append("TOP")
 
     # 5. RETURN IF FOUND
     if phrase_hits:
@@ -183,18 +227,30 @@ def expand_range(text: str):
 
 def normalize_single_level_token(token: str):
     t = token.lower().strip()
+    # Strip elevation prefix like "+45.45 " or "-2.42 "
+    t = re.sub(r"^[+-]?\d+\.\d+\s+", "", t)
+    # Strip language prefix
     t = re.sub(r"^(level|lvl|floor|fl|storey|story)\s+", "", t)
-    
+    t = re.sub(r"^(ระดับพื้นชั้น|ผังพื้นชั้น|ระดับชั้นใต้ดิน|ชั้นที่|ชั้น)\s*(?:ที่\s*)?", "", t)
+
+    # Special-name lookup (handles English + Thai)
     if t in SPECIAL_LEVEL_MAP: return SPECIAL_LEVEL_MAP[t]
+    # Thai special-name substring (in case stripping consumed too aggressively)
+    for phrase, tok in SPECIAL_LEVEL_MAP.items():
+        if len(phrase) >= 5 and phrase in t:
+            return tok
+
     if re.fullmatch(r"\d+", t): return f"L{int(t)}"
-    
-    m = re.fullmatch(r"([a-z]+)?(\d+)", t)
+
+    # Capture optional intermediate suffix letter (T, M, etc.)
+    m = re.fullmatch(r"([a-z]+)?(\d+)([a-z]?)", t)
     if m:
         prefix = (m.group(1) or "").upper()
         num = m.group(2)
-        if prefix == "": return f"L{int(num)}"
-        if prefix in ["L", "B", "P", "UL", "PD", "MZ", "AT"]: return f"{prefix}{int(num)}"
-        return None 
+        suffix = (m.group(3) or "").upper()
+        if prefix == "": return f"L{int(num)}{suffix}"
+        if prefix in ["L", "B", "P", "UL", "PD", "MZ", "AT"]: return f"{prefix}{int(num)}{suffix}"
+        return None
     return None
 
 def extract_prefix_num(tok: str):

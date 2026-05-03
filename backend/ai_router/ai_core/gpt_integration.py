@@ -28,6 +28,9 @@ def fast_route_intent(user_text):
 
     if txt == "cache_dim_inventory":
         return {"intent": "cache_dim_inventory"}
+
+    if txt == "cache_level_inventory":
+        return {"intent": "cache_level_inventory"}
     
     if any(word in txt for word in ["renumber", "rename", "inventory"]):
         return {"intent": "fetch_project_inventory"}
@@ -559,6 +562,26 @@ def route_gpt_fields(request, g):
          request.session["ai_pending_levels_parsed"] = parsed_raw
          request.session["ai_pending_levels_raw"] = ", ".join(parsed_raw)
          has_changes = True
+
+    # 💥 SMART RESOLVE: convert tokens (L1, L7T, RF, SITE) to the project's
+    # ACTUAL level names if the project level list has been cached. This
+    # makes Vella naming-convention-agnostic (English plain, English with
+    # elevation prefix, Thai with elevation prefix all resolve correctly).
+    # Empty cache → no-op (fall back to token output).
+    cached_levels = request.session.get("ai_last_known_levels") or []
+    final_parsed = request.session.get("ai_pending_levels_parsed") or []
+    if cached_levels and final_parsed:
+        try:
+            from ..ai_engines.level_matcher import resolve_tokens_to_project_levels
+            resolved = resolve_tokens_to_project_levels(final_parsed, cached_levels)
+            if resolved and resolved != final_parsed:
+                debug_session(request, f"Levels resolved to project: {final_parsed} -> {resolved}")
+                request.session["ai_pending_levels_parsed"] = resolved
+                request.session["ai_pending_levels_raw"] = ", ".join(resolved)
+                has_changes = True
+        except Exception as ex:
+            # Defensive: never block level extraction on a matcher error.
+            debug_session(request, f"Level matcher error (using tokens): {ex}")
 
     if g.get("batch_count_raw"):
         request.session["ai_pending_batch_count"] = str(g["batch_count_raw"])

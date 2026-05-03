@@ -39,19 +39,17 @@
           <label class="text-[10px] text-white/40 block mb-1">Width</label>
           <HelpNumberInput v-model="area.w" :step="100" :min="0" width-class="w-24" />
         </div>
-        <select v-model="area.wUnit" class="bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-[#FFB74D]">
-          <option value="mm">mm</option>
-          <option value="m">m</option>
-        </select>
-        <span class="pb-1.5 text-white/40">×</span>
+        <div class="pb-0.5">
+          <HelpSelect v-model="area.wUnit" :options="lengthUnitOptions" width-class="w-16" />
+        </div>
+        <span class="pb-2 text-white/40">×</span>
         <div>
           <label class="text-[10px] text-white/40 block mb-1">Height</label>
           <HelpNumberInput v-model="area.h" :step="100" :min="0" width-class="w-24" />
         </div>
-        <select v-model="area.hUnit" class="bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-[#FFB74D]">
-          <option value="mm">mm</option>
-          <option value="m">m</option>
-        </select>
+        <div class="pb-0.5">
+          <HelpSelect v-model="area.hUnit" :options="lengthUnitOptions" width-class="w-16" />
+        </div>
       </div>
       <ResultRow v-if="areaResult !== null" :text="areaText" />
     </div>
@@ -66,29 +64,13 @@
           <label class="text-[10px] text-white/40 block mb-1">Value</label>
           <HelpNumberInput v-model="conv.value" :step="10" width-class="w-28" />
         </div>
-        <select v-model="conv.from" class="bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-[#FFB74D]">
-          <optgroup label="Length">
-            <option v-for="u in unitsByType.length" :key="u.key" :value="u.key">{{ u.label }}</option>
-          </optgroup>
-          <optgroup label="Area">
-            <option v-for="u in unitsByType.area" :key="u.key" :value="u.key">{{ u.label }}</option>
-          </optgroup>
-          <optgroup label="Volume">
-            <option v-for="u in unitsByType.volume" :key="u.key" :value="u.key">{{ u.label }}</option>
-          </optgroup>
-        </select>
-        <span class="pb-1.5 text-white/40">→</span>
-        <select v-model="conv.to" class="bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-xs text-white outline-none focus:border-[#FFB74D]">
-          <optgroup label="Length">
-            <option v-for="u in unitsByType.length" :key="u.key" :value="u.key">{{ u.label }}</option>
-          </optgroup>
-          <optgroup label="Area">
-            <option v-for="u in unitsByType.area" :key="u.key" :value="u.key">{{ u.label }}</option>
-          </optgroup>
-          <optgroup label="Volume">
-            <option v-for="u in unitsByType.volume" :key="u.key" :value="u.key">{{ u.label }}</option>
-          </optgroup>
-        </select>
+        <div class="pb-0.5">
+          <HelpSelect v-model="conv.from" :groups="convUnitGroups" width-class="w-24" />
+        </div>
+        <span class="pb-2 text-white/40">→</span>
+        <div class="pb-0.5">
+          <HelpSelect v-model="conv.to" :groups="convUnitGroups" width-class="w-24" />
+        </div>
       </div>
       <ResultRow v-if="convResult !== null" :text="convText" />
       <ResultRow v-else-if="convTypeMismatch" text="Cannot convert between different unit types (length / area / volume)." :muted="true" />
@@ -198,6 +180,7 @@
 import { ref, reactive, computed, h } from 'vue';
 import HelpItem from './HelpItem.vue';
 import HelpNumberInput from './HelpNumberInput.vue';
+import HelpSelect from './HelpSelect.vue';
 
 defineEmits(['pick']);
 
@@ -227,6 +210,19 @@ const unitsByType = {
   area:   Object.entries(UNITS).filter(([, u]) => u.type === 'area'  ).map(([k, u]) => ({ key: k, label: u.label })),
   volume: Object.entries(UNITS).filter(([, u]) => u.type === 'volume').map(([k, u]) => ({ key: k, label: u.label })),
 };
+
+// Length-only options for the Dimensional Area dropdowns (mm / m).
+const lengthUnitOptions = [
+  { key: 'mm', label: 'mm' },
+  { key: 'm',  label: 'm'  },
+];
+
+// Grouped options for the Unit Conversion dropdowns.
+const convUnitGroups = [
+  { label: 'Length', options: unitsByType.length },
+  { label: 'Area',   options: unitsByType.area   },
+  { label: 'Volume', options: unitsByType.volume },
+];
 
 // Number formatting helpers
 const fmt2 = (n) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

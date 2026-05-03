@@ -63,7 +63,7 @@ You must ALWAYS return a dictionary in the following shape:
   "duplicate_mode_raw": "...",          # NEW — duplicate w/ detailing or not
   "target_sheet_raw": "...",            # NEW — for placing/removing views
   "placement_raw": "...",               # NEW - "MATCH" or "CENTER"
-  "reference_sheet_raw": "...",         # NEW - e.g. "A1.01" for alignment
+  "reference_sheet_raw": "...",         # NEW - e.g. "1010" or legacy "A1.01" for alignment
   "list_query_raw": "...",              # NEW — list views or sheets
   "custom_mode_raw": "...",
   "user_provided_name_raw": "...",
@@ -141,8 +141,8 @@ Triggered by:
 
 Triggered by:
 “rename FL_01 to First Floor Plan”
-“rename A1.01 to Ground Floor Plan”
-“renumber sheets starting from A1.05”
+“rename 1010 to Ground Floor Plan”
+“renumber sheets starting from 1050”
 “rename all views on this sheet”
 “change 'Floor' to 'Level' in all views”
 “change title on sheet to '1st Floor Plan'”
@@ -166,15 +166,15 @@ Triggered by:
 - "place_view_on_sheet"
 
 Triggered by:
-“place FL_01 on A1.02”
-“put section S2 onto sheet A1.03”
+“place FL_01 on 1020”
+“put section S2 onto sheet 1030”
 
 ### REMOVE VIEW FROM SHEET
 - "remove_view_from_sheet"
 
 Triggered by:
-“remove E1 from A1.03”
-“take FL_03 off sheet A1.01”
+“remove E1 from 1030”
+“take FL_03 off sheet 1010”
 
 ### INTERACTIVE TOOLS & WIZARDS
 - "start_interactive_room_package"
@@ -368,7 +368,7 @@ You MUST extract levels for sheet creation ONLY when user explicitly writes:
 - “for B1 and B2”
 
 NEVER infer levels from:
-- Sheet numbers (A1.01)
+- Sheet numbers (1010)
 - Sheet types (A1)
 - View names
 
@@ -401,7 +401,7 @@ You MUST NOT extract stage_raw from:
 - Template names (A49_DD_A1_FLOOR PLAN)
 - Titleblocks (A49_TB_A1_Horizontal : Plan Sheet)
 - View names (PD_A1_FL_01)
-- Sheet names (A1.01_PD)
+- Sheet names (1010_PD)
 
 =====================================================================
 TEMPLATE EXTRACTION RULES
@@ -525,13 +525,28 @@ batch_count_raw MUST contain the exact user text for the count:
 Do NOT convert spelling to numeric.
 
 =====================================================================
+SHEET NUMBER FORMAT (NEW + LEGACY)
+=====================================================================
+
+Two formats are supported and MUST both be accepted verbatim:
+
+- NEW (default for projects after 2026-05): 4-digit numeric or X-prefixed
+  Examples: "1010", "1020", "5040", "9100", "X010"
+- LEGACY (older projects not yet renumbered): letter + dot + digits
+  Examples: "A1.01", "A5.03", "X0.02"
+
+NEVER convert one format to the other. ALWAYS extract the sheet number
+EXACTLY as the user typed it. The downstream Python engine and Revit
+add-in handle both formats interchangeably.
+
+=====================================================================
 RENAME & RENUMBER RULES (CRITICAL UPDATE)
 =====================================================================
 
 1. RENUMBER SHEETS (RANGE or START):
-Trigger: “Renumber sheets starting from A1.05”
+Trigger: “Renumber sheets starting from 1050”
 Intent: "rename_sheet"
-rename_target_raw: "starting from A1.05"
+rename_target_raw: "starting from 1050"
 rename_value_raw: None
 
 2. BATCH RENAME VIEWS (SYNC):
@@ -577,13 +592,13 @@ PLACE / REMOVE VIEW ON SHEET RULES
 =====================================================================
 
 Place:
-“place FL_01 on A1.02”
+“place FL_01 on 1020”
 Extract:
 rename_target_raw = "FL_01"
-target_sheet_raw = "A1.02"
+target_sheet_raw = "1020"
 
 Remove:
-“remove FL_01 from A1.02”
+“remove FL_01 from 1020”
 Extract same way.
 
 =====================================================================
@@ -591,14 +606,14 @@ PLACEMENT / ALIGNMENT STRATEGY
 =====================================================================
 
 Trigger:
-“matching sheet A1.01”
-“align with A1.01”
-“reference sheet A1.01”
-“match reference A1.01”
+“matching sheet 1010”
+“align with 1010”
+“reference sheet 1010”
+“match reference 1010”
 
 Extract:
 placement_raw = "MATCH"
-reference_sheet_raw = "A1.01" (The sheet number)
+reference_sheet_raw = "1010" (The sheet number)
 
 If no match specified, leave as None (system defaults to CENTER).
 
@@ -609,7 +624,7 @@ LIST COMMAND RULES
 Triggered by:
 - “list views”
 - “show all sheets”
-- “list views on A1.02”
+- “list views on 1020”
 - "list scope boxes"
 
 Extract:
@@ -689,7 +704,7 @@ Examples:
 Trigger intent = "rename_view" or "rename_sheet" when user writes:
 
 1. RENAME: “rename FL_01 to First Floor Plan”
-2. RENUMBER: “renumber sheets starting from A1.05”
+2. RENUMBER: “renumber sheets starting from 1050”
 3. BATCH: “rename all views on this sheet”
 4. REPLACE: “change 'Floor' to 'Level'” or “replace 'X' with 'Y'”
 
@@ -737,17 +752,17 @@ rename_target_raw = the target view
 
 Trigger "place_view_on_sheet" when:
 
-“place FL_01 on A1.02”
-“put section S3 on A2.05”
+“place FL_01 on 1020”
+“put section S3 on 2050”
 
 Extract:
 rename_target_raw = "FL_01"
-target_sheet_raw = "A1.02"
+target_sheet_raw = "1020"
 
 Trigger "remove_view_from_sheet" when:
 
-“remove FL_01 from A1.02”
-“take E2 off A1.01”
+“remove FL_01 from 1020”
+“take E2 off 1010”
 
 Same extraction fields.
 
@@ -758,7 +773,7 @@ Same extraction fields.
 Trigger intent:
 - "list_views" for “list views”
 - "list_sheets" for “show all sheets”
-- "list_views_on_sheet" for “list views on A1.02”
+- "list_views_on_sheet" for “list views on 1020”
 - "list_scope_boxes" for “list scope boxes”
 
 Extract:
@@ -874,12 +889,12 @@ You MUST study and follow these patterns EXACTLY.
 #####################################################################
 
 User:
-"Renumber sheets starting from A1.05"
+"Renumber sheets starting from 1050"
 
 Output:
 {
   "intent": "rename_sheet",
-  "rename_target_raw": "starting from A1.05",
+  "rename_target_raw": "starting from 1050",
   "rename_value_raw": None,
   ...
 }
@@ -1139,12 +1154,12 @@ Output:
 }
 
 User:
-"rename A1.01 to Ground Floor Plan"
+"rename 1010 to Ground Floor Plan"
 
 Output:
 {
   "intent": "rename_sheet",
-  "rename_target_raw": "A1.01",
+  "rename_target_raw": "1010",
   "rename_value_raw": "Ground Floor Plan",
   ...
 }
@@ -1187,13 +1202,13 @@ Output:
 #####################################################################
 
 User:
-"place FL_01 on A1.02"
+"place FL_01 on 1020"
 
 Output:
 {
   "intent": "place_view_on_sheet",
   "rename_target_raw": "FL_01",
-  "target_sheet_raw": "A1.02",
+  "target_sheet_raw": "1020",
   ...
 }
 
@@ -1203,13 +1218,13 @@ Output:
 #####################################################################
 
 User:
-"remove E1 from A1.03"
+"remove E1 from 1030"
 
 Output:
 {
   "intent": "remove_view_from_sheet",
   "rename_target_raw": "E1",
-  "target_sheet_raw": "A1.03",
+  "target_sheet_raw": "1030",
   ...
 }
 
@@ -1249,12 +1264,12 @@ Output:
 #####################################################################
 
 User:
-"list views on A1.02"
+"list views on 1020"
 
 Output:
 {
   "intent": "list_views_on_sheet",
-  "list_query_raw": "list views on A1.02",
+  "list_query_raw": "list views on 1020",
   ...
 }
 
@@ -1361,13 +1376,13 @@ Output:
 # 25. RENUMBER RANGE
 #####################################################################
 User:
-"Renumber sheets A9.01 - A9.04 to start at A9.10"
+"Renumber sheets 9010 - 9040 to start at 9100"
 
 Output:
 {
   "intent": "rename_sheet",
-  "rename_target_raw": "A9.01 - A9.04",
-  "rename_value_raw": "A9.10",
+  "rename_target_raw": "9010 - 9040",
+  "rename_value_raw": "9100",
   ...
 }
 

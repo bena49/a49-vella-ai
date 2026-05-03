@@ -165,13 +165,49 @@
             <div v-for="sheet in defaultSheetNames" :key="sheet.category" class="border-b border-white/5 last:border-b-0 pb-2 last:pb-0">
               <span class="text-xs font-medium text-white block mb-1">{{ sheet.category }}</span>
               <div class="flex flex-wrap gap-1">
-                <span v-for="(name, idx) in sheet.items" :key="idx" 
+                <span v-for="(name, idx) in sheet.items" :key="idx"
                       class="text-[11px] text-white/70 bg-white/5 px-2 py-0.5 rounded hover:bg-white/15 hover:text-white transition-all duration-200 cursor-default">
                   {{ name }}
                 </span>
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. Sheet Numbering Format -->
+    <div class="space-y-3">
+      <h3 class="text-sm font-bold text-[#60A5FA] mb-2">Sheet Numbering Format</h3>
+
+      <div class="space-y-3">
+        <!-- Per-series numbering rules + examples -->
+        <div class="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 hover:border-white/20 transition-all duration-200">
+          <div class="text-[10px] uppercase tracking-wider text-white/50 font-bold mb-3">Slot Allocation by Series</div>
+          <div class="space-y-3">
+            <div v-for="fmt in sheetNumberFormat" :key="fmt.category" class="border-b border-white/5 last:border-b-0 pb-2 last:pb-0">
+              <span class="text-xs font-medium text-white block mb-1">{{ fmt.category }}</span>
+              <span class="text-[11px] text-white/50 italic block mb-1">{{ fmt.rule }}</span>
+              <div class="flex flex-wrap gap-1">
+                <span v-for="(ex, idx) in fmt.examples" :key="idx"
+                      class="text-[11px] text-white/70 bg-white/5 px-2 py-0.5 rounded hover:bg-white/15 hover:text-white transition-all duration-200 cursor-default">
+                  {{ ex }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Edge-case rules summary -->
+        <div class="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 hover:border-white/20 transition-all duration-200">
+          <div class="text-[10px] uppercase tracking-wider text-white/50 font-bold mb-3">Numbering Rules &amp; Edge Cases</div>
+          <ul class="space-y-1.5">
+            <li v-for="(rule, idx) in sheetNumberRules" :key="idx"
+                class="text-[11px] text-white/70 leading-relaxed flex gap-2">
+              <span class="text-white/40">•</span>
+              <span>{{ rule }}</span>
+            </li>
+          </ul>
         </div>
       </div>
     </div>
@@ -268,9 +304,13 @@ const templatePhases = ref([
 
 // 4. SCOPE BOX TYPES
 const scopeBoxes = ref([
-  { 
-    category: 'Floor Plans (A1/FL), Site Plans (SITE), Ceiling Plans (A5/CP), Area Plans (AP):',
+  {
+    category: 'Floor Plans (A1/FL), Site Plans (SITE), Ceiling Plans (A5/CP):',
     prefixes: ['SB_PLAN_ (Overall building plan)', 'SB_PARTIAL_ (Partial/section plans)']
+  },
+  {
+    category: 'Area Plans (AP):',
+    prefixes: ['SB_PLAN_ (Overall area plan)', 'SB_AREA_ (Area-specific scope boxes)']
   },
   { 
     category: 'Elevations (A2/EL):',
@@ -320,31 +360,69 @@ const sheetSeries = ref([
   { category: 'A7', items: 'A7_VERTICAL CIRCULATION' },
   { category: 'A8', items: 'A8_DOOR AND WINDOW SCHEDULE' },
   { category: 'A9', items: 'A9_DETAILS' },
-  { category: 'X0', items: 'CUSTOM SHEET' }
+  { category: 'X0', items: 'Custom Sheets (no sheet set)' }
 ]);
 
 const defaultSheetNames = ref([
-  { category: 'A0 - General Information', 
+  { category: 'A0 - General Information',
     items: ['COVER', 'DRAWING INDEX', 'SITE AND VICINITY PLAN', 'STANDARD SYMBOLS', 'SAFETY PLAN', 'WALL TYPES'] },
-  { category: 'A1 - Floor Plans', 
-    items: ['1ST FLOOR PLAN', '2ND FLOOR PLAN', '3RD FLOOR PLAN', '4TH FLOOR PLAN'] },
-  { category: 'A2 - Building Elevations', 
+  { category: 'A1 - Floor Plans',
+    items: ['SITE PLAN', 'LEVEL 1 FLOOR PLAN', 'LEVEL 2 FLOOR PLAN', 'LEVEL B1 FLOOR PLAN', 'LEVEL ROOF PLAN'] },
+  { category: 'A2 - Building Elevations',
     items: ['ELEVATIONS'] },
-  { category: 'A3 - Building Sections', 
+  { category: 'A3 - Building Sections',
     items: ['BUILDING SECTIONS'] },
-  { category: 'A4 - Wall Sections', 
+  { category: 'A4 - Wall Sections',
     items: ['WALL SECTIONS'] },
-  { category: 'A5 - Ceiling Plans', 
-    items: ['1ST FLOOR CEILING PLAN', '2ND FLOOR CEILING PLAN', '3RD FLOOR CEILING PLAN'] },
-  { category: 'A6 - Enlarged Plans', 
+  { category: 'A5 - Ceiling Plans',
+    items: ['LEVEL 1 CEILING PLAN', 'LEVEL 2 CEILING PLAN', 'LEVEL B1 CEILING PLAN', 'LEVEL ROOF CEILING PLAN'] },
+  { category: 'A6 - Enlarged Plans and Interior Elevations',
     items: ['ENLARGED TOILET PLAN', 'FLOOR PATTERN PLAN', 'CANOPY PLAN'] },
-  { category: 'A7 - Vertical Circulation', 
+  { category: 'A7 - Vertical Circulation',
     items: ['ENLARGED STAIR PLAN', 'ENLARGED STAIR SECTION', 'ENLARGED RAMP PLAN', 'ENLARGED LIFT PLAN'] },
-  { category: 'A8 - Schedules', 
+  { category: 'A8 - Door and Window Schedule',
     items: ['DOOR SCHEDULE', 'WINDOW SCHEDULE'] },
-  { category: 'A9 - Details', 
+  { category: 'A9 - Details',
     items: ['DETAILS'] },
-  { category: 'X0 - Custom Sheet', 
+  { category: 'X0 - Custom Sheet',
     items: ['CUSTOM SHEET'] }
+]);
+
+// 7. SHEET NUMBERING FORMAT (post-2026-05 launch spec)
+const sheetNumberFormat = ref([
+  {
+    category: 'A0 - General Information',
+    rule: 'Sequence-based, increments by 10',
+    examples: ['0000 — COVER', '0010 — DRAWING INDEX', '0020 — SITE AND VICINITY PLAN', '0030 — STANDARD SYMBOLS']
+  },
+  {
+    category: 'A1 - Floor Plans',
+    rule: 'Level-based (slot tied to level position)',
+    examples: ['1000 — SITE PLAN', '1009 — LEVEL B1 FLOOR PLAN', '1010 — LEVEL 1 FLOOR PLAN', '1020 — LEVEL 2 FLOOR PLAN', '10x0 — LEVEL ROOF PLAN (max + 10)']
+  },
+  {
+    category: 'A2 / A3 / A4 / A6 / A7 / A8 - Sequence-based',
+    rule: 'Series base + 10, then +10 per sheet',
+    examples: ['2010, 2020, 2030 …', '3010, 3020 …', '6010, 6020 …']
+  },
+  {
+    category: 'A5 - Ceiling Plans',
+    rule: 'Level-based (mirror of A1, no SITE sheet)',
+    examples: ['5009 — LEVEL B1 CEILING PLAN', '5010 — LEVEL 1 CEILING PLAN', '5020 — LEVEL 2 CEILING PLAN', '50x0 — LEVEL ROOF CEILING PLAN']
+  },
+  {
+    category: 'X0 - Custom',
+    rule: 'X-prefix + 3 digits, +10 increment',
+    examples: ['X000, X010, X020 …']
+  }
+]);
+
+const sheetNumberRules = ref([
+  'Above-grade levels: L1=1010, L2=1020 … L99=1990 (cap at L99)',
+  'Below-grade levels: B1=1009, B2=1008 … B9=1001 (descends below SITE)',
+  'Mezzanine / Transfer suffixes (M, T): occupy the parent slot; bare basement shifts down (e.g. B1+B1M → B1=1008, B1M=1009)',
+  'ROOF / TOP: lands at max above-grade level + 10 (project max determines the slot)',
+  'A5 + Site is NOT created (no ceiling plan for site level)',
+  'Legacy "A1.01" format still recognized for older projects (no auto-conversion)'
 ]);
 </script>

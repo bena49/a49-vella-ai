@@ -432,11 +432,18 @@ def process_intent(request, raw_text_original):
         gpt_json = prompt.get("parsed", {})
 
     # 1️⃣ RUN THE ROUTER (updates session state based on intent)
-    # SKIP route_gpt_fields for NLP tag commands — the fast router already
-    # extracted everything needed, and route_gpt_fields would corrupt the
-    # intent by matching keywords like "door" or "tag" against view creation logic.
+    # SKIP route_gpt_fields for transient / silent commands — these shouldn't
+    # mutate ai_pending_intent or other slot state. Without skipping, e.g.
+    # typing "refresh" sets ai_pending_intent="refresh_project_info" which
+    # then leaks into the user's next command if GPT classification is ambiguous.
     intent = gpt_json.get("intent")
-    if intent not in ("automate_tag_nlp", "cache_tag_inventory"):
+    TRANSIENT_INTENTS = (
+        "automate_tag_nlp",
+        "cache_tag_inventory", "cache_dim_inventory", "cache_level_inventory",
+        "refresh_project_info",
+        "send_comment",
+    )
+    if intent not in TRANSIENT_INTENTS:
         route_gpt_fields(request, gpt_json)
         # Re-grab intent AFTER the router runs (it may have changed it)
         intent = gpt_json.get("intent")

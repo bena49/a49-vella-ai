@@ -68,6 +68,7 @@ def finalize_router(request):
              opt_str = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(options)])
              msg = f"Wizard: Which titleblock should I use?\n{opt_str}"
              request.session["ai_expecting_titleblock_selection"] = True
+             request.session["ai_pending_titleblock_options"] = options
              request.session.modified = True
              return JsonResponse({"message": msg, "options": options, "status": "success"})
 
@@ -164,6 +165,7 @@ def finalize_router(request):
              opt_str = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(options)])
              msg = f"Please choose a titleblock for this {cat} sheet:\n{opt_str}"
              request.session["ai_expecting_titleblock_selection"] = True
+             request.session["ai_pending_titleblock_options"] = options
              request.session.modified = True
              return JsonResponse({"message": msg, "options": options, "status": "success"})
 

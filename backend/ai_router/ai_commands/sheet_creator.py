@@ -9,9 +9,15 @@ from ..ai_engines.level_engine import parse_levels
 def message(text):
     return Response({"message": text})
 
-def request_titleblock_choice():
+def request_titleblock_choice(request=None):
     options = get_standard_titleblocks()
     option_list_str = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(options)])
+    # Set the flag + store options so the views.py interceptor can match the
+    # user's reply on the next turn (numeric or exact-string match).
+    if request is not None:
+        request.session["ai_expecting_titleblock_selection"] = True
+        request.session["ai_pending_titleblock_options"] = options
+        request.session.modified = True
     return message(f"Please choose a titleblock for this sheet:\n{option_list_str}")
 
 def finalize_create_sheets(request):
@@ -194,7 +200,7 @@ def execute_sheet_creation(request):
         fam, typ = parse_titleblock_from_user_text(raw_tb)
 
     if not fam or not typ:
-        return request_titleblock_choice()
+        return request_titleblock_choice(request)
 
     # Cache Check
     if not request.session.get("ai_last_known_sheets"):

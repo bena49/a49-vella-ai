@@ -155,7 +155,83 @@ def ai_router(request):
                         f"Or type 'cancel' to abort."
                     )
                 })
-        
+
+        # ==========================================================
+        # 0.9) TITLEBLOCK SELECTION INTERCEPTOR
+        # Same shape as template selection above. When a sheet-creation
+        # flow asks "Please choose a titleblock", it sets
+        # ai_expecting_titleblock_selection + stores the option list.
+        # Catch the user's reply here so it never reaches GPT (which
+        # often fails to recognise the long titleblock string as the
+        # answer to the previous question and re-prompts in a loop).
+        # ==========================================================
+        if request.session.get("ai_expecting_titleblock_selection"):
+            tb_options = request.session.get("ai_pending_titleblock_options") or []
+            cleaned = raw_text_original.strip()
+
+            # Cancel
+            if cleaned.lower() in ["cancel", "stop", "nevermind", "never mind", "quit", "exit"]:
+                debug_session(request, "🛡️ Titleblock selection: user cancelled.")
+                reset_pending(request)
+                request.session["ai_expecting_titleblock_selection"] = False
+                request.session["ai_pending_titleblock_options"] = None
+                request.session.modified = True
+                return Response({"message": "❌ Cancelled. No titleblock selected."})
+
+            # Numeric index (1-based)
+            chosen = None
+            try:
+                idx = int(cleaned) - 1
+                if 0 <= idx < len(tb_options):
+                    chosen = tb_options[idx]
+            except ValueError:
+                pass
+
+            # Exact (case-insensitive) string match. The titleblock string may
+            # contain " : " separators — normalise spacing for tolerant compare.
+            if chosen is None:
+                def _norm(s):
+                    return " ".join(str(s).split()).lower()
+                cleaned_norm = _norm(cleaned)
+                for opt in tb_options:
+                    if _norm(opt) == cleaned_norm:
+                        chosen = opt
+                        break
+
+            if chosen:
+                debug_session(request, f"🛡️ Titleblock selection: user chose '{chosen}'.")
+                request.session["ai_pending_titleblock"] = chosen
+                # Also pre-parse family/type so downstream code doesn't re-ask
+                from .ai_engines.titleblock_engine import parse_titleblock_from_user_text
+                fam, t_type = parse_titleblock_from_user_text(chosen)
+                if fam and t_type:
+                    request.session["titleblock_family"] = fam
+                    request.session["titleblock_type"] = t_type
+                request.session["ai_expecting_titleblock_selection"] = False
+                request.session["ai_pending_titleblock_options"] = None
+                request.session.modified = True
+                # Resume the create flow with the resolved titleblock — no GPT call.
+                return finalize_router(request)
+
+            # Escape hatch: user typed a fresh command rather than answering.
+            import re as _re
+            if _re.match(r'^\s*(create|make|add|build|generate|new|open|browse|insert|show|run|preflight|tag|dimension|refresh|reload|update|sync)\b',
+                         cleaned, _re.IGNORECASE):
+                debug_session(request, "🛡️ Titleblock selection: user typed a new command — clearing flag.")
+                request.session["ai_expecting_titleblock_selection"] = False
+                request.session["ai_pending_titleblock_options"] = None
+                request.session.modified = True
+                # Fall through to normal routing
+            else:
+                option_list = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(tb_options)])
+                return Response({
+                    "message": (
+                        f"I didn't catch that. Please reply with the number "
+                        f"(1–{len(tb_options)}) or the exact titleblock name:\n{option_list}\n"
+                        f"Or type 'cancel' to abort."
+                    )
+                })
+
         # 💥 BULLETPROOF "NO" INTERCEPTOR
         if clean_text in ["no", "none", "skip", "n", "nope", "cancel"]:
             current_intent = request.session.get("ai_pending_intent")

@@ -607,7 +607,13 @@ def route_gpt_fields(request, g):
             request.session["titleblock_type"] = t_type
         has_changes = True
     elif not request.session.get("ai_pending_titleblock"):
-        tb_match = re.search(r'(?:using|with)\s+(A49_TB_[a-zA-Z0-9_]+(?:\s*:\s*[a-zA-Z0-9\s]+)?)', raw_msg, re.IGNORECASE)
+        # Allow an optional "titleblock" word between "using" and the A49_TB_ name,
+        # e.g. "...using titleblock A49_TB_A1_Horizontal: Plan Sheet" — without
+        # the (?:titleblock\s+)? group the regex misses long composite prompts.
+        tb_match = re.search(
+            r'(?:using|with)\s+(?:titleblock\s+)?(A49_TB_[a-zA-Z0-9_]+(?:\s*:\s*[a-zA-Z0-9\s]+)?)',
+            raw_msg, re.IGNORECASE
+        )
         if tb_match:
             found_tb = tb_match.group(1).strip()
             request.session["ai_pending_titleblock"] = found_tb

@@ -81,6 +81,7 @@ def reset_pending(request):
         "ai_expecting_titleblock_selection",
         "ai_expecting_template_selection",
         "ai_pending_template_options",
+        "ai_pending_titleblock_options",
     ]
     
     for k in keys:

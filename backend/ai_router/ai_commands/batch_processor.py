@@ -30,10 +30,10 @@ def finalize_create_and_place(request):
         else:
             request.session["ai_pending_titleblock"] = None
             request.session.modified = True
-            return request_titleblock_choice()
-            
+            return request_titleblock_choice(request)
+
     if not request.session.get("ai_pending_titleblock"):
-        return request_titleblock_choice()
+        return request_titleblock_choice(request)
 
     # 1) CHECK CACHE (With Loop Protection)
     views_cache = request.session.get("ai_last_known_views") or []

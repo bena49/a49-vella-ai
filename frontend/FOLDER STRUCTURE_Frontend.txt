@@ -53,8 +53,9 @@ UI STRUCTURE
 │   │   ├── HelpDimensionsTab.vue                <-- Auto-dim wizard explainer + trigger
 │   │   ├── HelpInsertStandardDetailsTab.vue     <-- Standard / EIA detail picker explainer + NLP triggers
 │   │   ├── HelpItem.vue
-│   │   ├── HelpMathCalculationTab.vue
+│   │   ├── HelpMathCalculationTab.vue           <-- Inline calculators (slope/area/conv/Thai/expr) — no chat round-trip
 │   │   ├── HelpModal.vue                        <-- Responsive sidebar nav (full on md+, drawer on narrow)
+│   │   ├── HelpNumberInput.vue                  <-- Reusable number input with custom chevron spinner
 │   │   ├── HelpPreflightTab.vue                 <-- Preflight Check explainer + NLP triggers
 │   │   ├── HelpRoomElevationTab.vue
 │   │   ├── HelpSheetsTab.vue

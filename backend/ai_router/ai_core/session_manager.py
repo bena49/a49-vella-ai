@@ -78,7 +78,9 @@ def reset_pending(request):
         # Reset Flags
         "ai_expecting_reference_sheet",
         "ai_expecting_alignment_selection",
-        "ai_expecting_titleblock_selection"
+        "ai_expecting_titleblock_selection",
+        "ai_expecting_template_selection",
+        "ai_pending_template_options",
     ]
     
     for k in keys:
@@ -204,6 +206,12 @@ def check_template_requirements(request, intent):
     # Force ask if multiple options and none selected
     if available_templates and user_tpl is None:
         option_list = [f"{i+1}. {tpl}" for i, tpl in enumerate(available_templates)]
+        # Flag so the next user message is intercepted as a template choice
+        # rather than being re-routed through GPT (which often misclassifies
+        # "A49_CD_A1_FLOOR PLAN" as a fresh "create floor plan" command).
+        request.session["ai_expecting_template_selection"] = True
+        request.session["ai_pending_template_options"] = available_templates
+        request.session.modified = True
         return Response({
             "message": f"Multiple template/s found for {primary_vtype} in {stage}. Please choose one of the following:\n" + "\n".join(option_list)
         })

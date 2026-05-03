@@ -586,6 +586,21 @@ def route_gpt_fields(request, g):
                 request.session["titleblock_type"] = t_type
             has_changes = True
 
+    # 💥 FALLBACK: non-TB template (mirror of the titleblock fallback above).
+    # Catches `using A49_<STAGE>_<...>` when GPT drops the template_raw slot
+    # on long composite prompts (e.g. mixed Thai/English level lists). The
+    # negative lookahead for TB_ avoids double-matching titleblocks.
+    if not request.session.get("ai_pending_template"):
+        tpl_match = re.search(
+            r'(?:using|with)\s+(A49_(?!TB_)[A-Za-z0-9_][A-Za-z0-9_ ]*?)'
+            r'(?=\s+(?:and\s+sb_|with\s+sb_|sb_|place|placed|aligned|on\s+a|for\s+sheet)|$)',
+            raw_msg, re.IGNORECASE
+        )
+        if tpl_match:
+            found_tpl = tpl_match.group(1).strip()
+            request.session["ai_pending_template"] = found_tpl
+            has_changes = True
+
     extra_fields = { "rename_target_raw": "ai_pending_rename_target", "rename_value_raw": "ai_pending_rename_value", "duplicate_mode_raw": "ai_pending_duplicate_mode", "target_sheet_raw": "ai_pending_target_sheet", "reference_sheet_raw": "ai_pending_reference_sheet" }
     for gpt_key, session_key in extra_fields.items():
         if g.get(gpt_key):

@@ -87,6 +87,74 @@ def ai_router(request):
         nlp_tag_resp = handle_nlp_tag_conversation(request, raw_text_original)
         if nlp_tag_resp:
             return nlp_tag_resp
+
+        # ==========================================================
+        # 0.8) TEMPLATE SELECTION INTERCEPTOR
+        # When `check_template_requirements` emits the "Multiple
+        # template/s found" prompt it also sets
+        # ai_expecting_template_selection. Catch the user's reply
+        # here so it never reaches GPT (which misclassifies it as a
+        # fresh "create floor plan" prompt and loops).
+        # ==========================================================
+        if request.session.get("ai_expecting_template_selection"):
+            options = request.session.get("ai_pending_template_options") or []
+            cleaned = raw_text_original.strip()
+
+            # Cancel
+            if cleaned.lower() in ["cancel", "stop", "nevermind", "never mind", "quit", "exit"]:
+                debug_session(request, "🛡️ Template selection: user cancelled.")
+                reset_pending(request)
+                request.session["ai_expecting_template_selection"] = False
+                request.session["ai_pending_template_options"] = None
+                request.session.modified = True
+                return Response({"message": "❌ Cancelled. No template selected."})
+
+            # Numeric index (1-based)
+            chosen = None
+            try:
+                idx = int(cleaned) - 1
+                if 0 <= idx < len(options):
+                    chosen = options[idx]
+            except ValueError:
+                pass
+
+            # Exact (case-insensitive) string match
+            if chosen is None:
+                for opt in options:
+                    if opt.upper() == cleaned.upper():
+                        chosen = opt
+                        break
+
+            if chosen:
+                debug_session(request, f"🛡️ Template selection: user chose '{chosen}'.")
+                request.session["ai_pending_template"] = chosen
+                request.session["ai_expecting_template_selection"] = False
+                request.session["ai_pending_template_options"] = None
+                request.session.modified = True
+                # Resume the create flow with the resolved template — no GPT call.
+                return finalize_router(request)
+
+            # Escape hatch: user appears to be starting a fresh command rather
+            # than replying to the prompt (e.g. "Create L1 Floor Plan…"). Clear
+            # the stale flag and let normal routing handle the new intent.
+            import re as _re
+            if _re.match(r'^\s*(create|make|add|build|generate|new|open|browse|insert|show|run|preflight|tag|dimension)\b',
+                         cleaned, _re.IGNORECASE):
+                debug_session(request, "🛡️ Template selection: user typed a new command — clearing flag.")
+                request.session["ai_expecting_template_selection"] = False
+                request.session["ai_pending_template_options"] = None
+                request.session.modified = True
+                # Fall through (no return) — normal routing handles the new command.
+            else:
+                # Reply didn't match any option AND isn't a new command — re-prompt.
+                option_list = "\n".join([f"{i+1}. {tpl}" for i, tpl in enumerate(options)])
+                return Response({
+                    "message": (
+                        f"I didn't catch that. Please reply with the number "
+                        f"(1–{len(options)}) or the exact template name:\n{option_list}\n"
+                        f"Or type 'cancel' to abort."
+                    )
+                })
         
         # 💥 BULLETPROOF "NO" INTERCEPTOR
         if clean_text in ["no", "none", "skip", "n", "nope", "cancel"]:

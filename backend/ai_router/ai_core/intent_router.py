@@ -416,9 +416,25 @@ def process_intent(request, raw_text_original):
     """
     Runs GPT processing (fast route or OpenAI), routes fields into session,
     dispatches immediate commands, or falls through to finalize_router.
-    
+
     Called from ai_router() after all interceptors and callbacks are handled.
     """
+    # 💥 DEFENSIVE: clear any stale transient intent left in session before
+    # we run classification on the new message. Transient intents (refresh,
+    # send_comment, cache_*, automate_tag_nlp) are fire-and-forget and must
+    # not carry over to the next user message — otherwise an ambiguous GPT
+    # classification would land in finalize_router with the wrong intent.
+    _STALE_TRANSIENTS = (
+        "refresh_project_info",
+        "send_comment",
+        "cache_level_inventory", "cache_dim_inventory", "cache_tag_inventory",
+        "automate_tag_nlp",
+    )
+    if request.session.get("ai_pending_intent") in _STALE_TRANSIENTS:
+        debug_session(request, f"🧹 Cleared stale transient intent: {request.session.get('ai_pending_intent')}")
+        request.session["ai_pending_intent"] = None
+        request.session.modified = True
+
     # 💥 A. FAST ROUTE CHECK (0ms Latency)
     fast_json = fast_route_intent(raw_text_original)
     

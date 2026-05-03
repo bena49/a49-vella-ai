@@ -556,7 +556,18 @@ def build_sheets_payload(request_data, existing_sheet_numbers):
     if sheet_type_raw:
         sheet_type = sheet_type_raw.upper().split(",")[0].strip()
     else:
+        # Sheet category was not specified — infer from view_type so e.g. a
+        # "Create Ceiling Plan + place on new sheet" flow lands on A5 (not the
+        # legacy A1 default which silently produced floor-plan sheet numbers).
+        view_type = request_data.get("view_type")
         sheet_type = "A1"
+        if view_type:
+            abbrev = get_view_abbrev(view_type)
+            inferred = get_view_sheet_type(abbrev)
+            # 'AP' (Area Plan) isn't a real sheet category — area plans go on
+            # A1 sheets per A49 standard. All other mappings are real (A1-A9).
+            if inferred and inferred != "AP":
+                sheet_type = inferred
 
     if user_name:
         clean_name = user_name.lower().strip().replace("sheets", "").replace("sheet", "").strip()

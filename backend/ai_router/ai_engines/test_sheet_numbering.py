@@ -448,6 +448,35 @@ PAYLOAD_CASES = [
         },
         "expected_numbers": ["5008", "5009", "5010", "5020", "5030", "5040"],
     },
+
+    # ── view_type → sheet_category inference (Bug fix) ──────────────────
+    # When create_and_place fires for "Create Ceiling Plan" but GPT drops
+    # the sheet_category slot, build_sheets_payload must infer A5 from the
+    # view_type — not silently default to A1.
+    {
+        "desc": "Ceiling Plan view + no sheet_category → A5 inferred",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": None,
+            "view_type": "Ceiling Plan",
+            "stage": "CD",
+            "levels": ["LEVEL 1"],
+            "project_levels": PROJECT_L5,
+        },
+        "expected_numbers": ["5010"],
+    },
+    {
+        "desc": "Floor Plan view + no sheet_category → A1 inferred (regression guard)",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": None,
+            "view_type": "Floor Plan",
+            "stage": "CD",
+            "levels": ["LEVEL 1"],
+            "project_levels": PROJECT_L5,
+        },
+        "expected_numbers": ["1010"],
+    },
 ]
 
 

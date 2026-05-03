@@ -285,7 +285,8 @@ namespace A49AIRevitAssistant.Executor.Commands
                     if (titleblock != null)
                     {
                         // 💥 1. Calculate the safe number BEFORE creating the sheet!
-                        string safeSheetNum = GetSafeSheetNumber(doc, "A6.");
+                        // A6 series = 6000-band (new 4-digit format: 6010, 6020, …).
+                        string safeSheetNum = GetSafeSheetNumber(doc, 6000);
 
                         // 2. Create the sheet (Revit will auto-assign a temporary number here)
                         newSheet = ViewSheet.Create(doc, titleblock.Id);
@@ -446,10 +447,18 @@ namespace A49AIRevitAssistant.Executor.Commands
 
         // ============================================================================
         // HELPER 2: ROBUST SHEET NUMBERING
+        //
+        // Mirrors the Python naming_engine.get_next_sheet_number sequence-based
+        // path: pick max(existing sheets in this series's 1000-band) + 10, then
+        // bump on collision. Format: 4-digit zero-padded (6010, 6020, …).
+        //
+        // seriesBase: the thousand-base for this series (6000 for A6, 7000 for A7).
+        // Only 4-digit numeric sheets in the band [seriesBase, seriesBase+1000)
+        // are considered — legacy "A6.01" sheets are ignored (they coexist but
+        // don't influence the new sequence).
         // ============================================================================
-        private string GetSafeSheetNumber(Document doc, string prefix)
+        private string GetSafeSheetNumber(Document doc, int seriesBase)
         {
-            // 1. Get ALL sheet numbers currently in the Revit Project
             var allSheetNumbers = new FilteredElementCollector(doc)
                 .OfClass(typeof(ViewSheet))
                 .Cast<ViewSheet>()
@@ -457,31 +466,26 @@ namespace A49AIRevitAssistant.Executor.Commands
                 .ToList();
 
             int maxVal = 0;
-
-            // 2. Safely parse the numbers (ignores letters/suffixes like "A6.05a")
             foreach (string num in allSheetNumbers)
             {
-                if (num.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                if (int.TryParse(num, out int val)
+                    && val >= seriesBase && val < seriesBase + 1000)
                 {
-                    string suffixStr = num.Substring(prefix.Length);
-                    string numericPart = new string(suffixStr.TakeWhile(char.IsDigit).ToArray());
-
-                    if (int.TryParse(numericPart, out int val))
-                    {
-                        if (val > maxVal) maxVal = val;
-                    }
+                    if (val > maxVal) maxVal = val;
                 }
             }
 
-            // 3. Generate the next number and guarantee it is 100% unique
-            string nextNum;
-            do
-            {
-                maxVal++;
-                nextNum = $"{prefix}{maxVal:D2}";
-            }
-            while (allSheetNumbers.Contains(nextNum));
+            // First sheet in the series → seriesBase + 10. Otherwise round up
+            // from the highest existing slot to the next +10 boundary (no gap-fill).
+            int nextVal = (maxVal == 0) ? (seriesBase + 10) : (((maxVal / 10) + 1) * 10);
 
+            string nextNum = nextVal.ToString("D4");
+            while (allSheetNumbers.Contains(nextNum))
+            {
+                nextVal += 10;
+                nextNum = nextVal.ToString("D4");
+                if (nextVal >= seriesBase + 1000) break;  // Safety: don't overflow band
+            }
             return nextNum;
         }
     }

@@ -541,10 +541,30 @@ def route_gpt_fields(request, g):
                 val = val.strip()
 
             if session_key == "ai_pending_sheet_category" and request.session.get("ai_pending_intent") == "create_view":
-                continue 
-            
+                continue
+
             request.session[session_key] = val
             has_changes = True
+
+    # 💥 FALLBACK: sheet category (mirror of template / titleblock fallbacks).
+    # GPT sometimes drops sheet_category_raw on long prompts — e.g.
+    # "Create 7 Sheets A0 in CD using titleblock A49_TB_A1_Horizontal: Plan Sheet"
+    # would otherwise fall through to "Please select a sheet category" because
+    # finalize_create_sheets's smart-inference only checks descriptive keywords
+    # (cover, ceiling, etc.) and not direct category codes.
+    if not request.session.get("ai_pending_sheet_category"):
+        valid_codes = {"A0","A1","A2","A3","A4","A5","A6","A7","A8","A9",
+                       "X0","X1","X2","X3","X4","X5","X6","X7","X8","X9"}
+        # Try "sheets X0" or "sheet X0" first — most common.
+        cat_match = re.search(r'\bsheets?\s+([A-Z]\d{1,2})\b', raw_msg, re.IGNORECASE)
+        if not cat_match:
+            # Then "X0 sheets" / "X0 sheet".
+            cat_match = re.search(r'\b([A-Z]\d{1,2})\s+sheets?\b', raw_msg, re.IGNORECASE)
+        if cat_match:
+            cat_code = cat_match.group(1).upper()
+            if cat_code in valid_codes:
+                request.session["ai_pending_sheet_category"] = cat_code
+                has_changes = True
 
     # =========================================================================
     # 6. SMART LEVEL MERGING (GPT vs. RAW REGEX)

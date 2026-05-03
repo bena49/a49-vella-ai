@@ -180,6 +180,15 @@ LEVEL_CASES = [
     # Collision: requested slot already taken → keep +1 until free
     ("A1 + L1 when 1010 taken",  "A1", "LEVEL 1",   PROJECT_L8, ["1010"],            "1011"),
     ("A1 + L1 when 1010+1011 taken", "A1", "LEVEL 1", PROJECT_L8, ["1010", "1011"],  "1012"),
+
+    # Basement collision: pushes DOWN (deeper), not UP into L1 territory
+    ("A1 + B1 when 1009 taken (down)",  "A1", "LEVEL B1", PROJECT_L8, ["1009"],           "1008"),
+    ("A1 + B1 when 1008+1009 taken",    "A1", "LEVEL B1", PROJECT_L8, ["1008", "1009"],   "1007"),
+    # User-reported case: existing [SITE, B1, B1M, L1, L2] + duplicate B1 → 1007
+    ("A1 + B1 user-reported case",      "A1", "LEVEL B1", PROJECT_L8,
+                                        ["1000", "1008", "1009", "1010", "1020"],         "1007"),
+    # A5 mirror: same direction
+    ("A5 + B1 when 5009 taken (down)",  "A5", "LEVEL B1", PROJECT_L8, ["5009"],           "5008"),
 ]
 
 

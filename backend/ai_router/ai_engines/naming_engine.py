@@ -451,12 +451,24 @@ def get_next_sheet_number(sheet_type, existing_numbers, level_name=None,
                                   request_levels=request_levels)
         if slot is None:
             return None
-        # Collision: slot taken → +1 until free. Stay within category band.
+
+        # Collision direction depends on whether the level is above or below
+        # grade. Above-grade and special levels push UP (next +1 slot — uses
+        # the M/T suffix range). Basements push DOWN — pushing UP would land
+        # the duplicate in L1's territory (e.g. duplicate B1 → 1011 instead
+        # of the architecturally-correct 1007 below B1).
         base = _series_base(st)
+        from .level_matcher import extract_level_signature as _extract
+        sig = _extract(level_name)
+        is_basement = sig["prefix"] == "B" and sig["digit"] is not None
+
+        step = -1 if is_basement else 1
         while _format_slot(st, slot) in existing_set:
-            slot += 1
-            if slot >= base + 1000:  # Overflowed into next category
-                return None
+            slot += step
+            if is_basement and slot < base + 1:
+                return None  # Underflowed below the basement range
+            if not is_basement and slot >= base + 1000:
+                return None  # Overflowed into the next category
         return _format_slot(st, slot)
 
     # Sequence-based path — also covers A1/A5 when no level supplied (rare)

@@ -201,9 +201,14 @@ const isLevelBased = computed(() => {
 
 // 2. HELPER: DISABLED CHECK (Must be defined before isAllSelected uses it)
 const isLevelDisabled = (lvl) => {
-  // Rule: No Site for Ceiling Plans (A5)
+  // Rule: No Site for Ceiling Plans (A5).
+  // Thai SITE phrases mirror backend level_matcher._SPECIAL_PHRASES so a
+  // project with Thai level names (e.g. "+0.00 ระดับพื้นดิน") gets the
+  // same disabled treatment as English "SITE".
   const isA5 = selectedSeries.value.startsWith("A5");
-  const isSite = lvl.toUpperCase().includes("SITE");
+  const isSite = lvl.toUpperCase().includes("SITE")
+              || lvl.includes("ระดับพื้นดิน")
+              || lvl.includes("พื้นดิน");
   return isA5 && isSite;
 };
 

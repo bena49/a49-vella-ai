@@ -54,6 +54,7 @@ from ai_router.ai_engines.naming_engine import (
     compute_sheet_slot,
     get_next_sheet_number,
     generate_smart_name,
+    build_sheets_payload,
     SHEET_SET_MAP,
 )
 
@@ -151,6 +152,10 @@ LEVEL_CASES = [
     ("A1 + SITE (Thai)",         "A1", "+0.00 ระดับพื้นดิน", PROJECT_L7_TH, [], "1000"),
 
     # A1 — Roof: max above-grade L + 10. Project max = L8 → 1090.
+    # NOTE: get_next_sheet_number defaults request_levels=None inside this
+    # harness, so these cases hit the project-fallback path. The build_sheets
+    # path passes request_levels for the in-batch case (covered by the next
+    # block + manual Revit testing).
     ("A1 + ROOF (max L8)",       "A1", "ROOF LEVEL", PROJECT_L8, [], "1090"),
     ("A1 + ROOF (max L5)",       "A1", "ROOF LEVEL", PROJECT_L5, [], "1060"),
     ("A1 + ดาดฟ้า (max L7)",      "A1", "+32.30 ระดับพื้นชั้นดาดฟ้า", PROJECT_L7_TH, [], "1080"),
@@ -251,6 +256,94 @@ SHEET_SET_CASES = [
 ]
 
 
+# ── BUILD-PAYLOAD INTEGRATION CASES ───────────────────────────────────────
+# These exercise build_sheets_payload end-to-end (the path the chat command
+# actually takes). Critical regression case: when the project cache is stale
+# or contains hidden reference levels, the request-level max should win for
+# ROOF placement.
+
+PROJECT_STALE_HAS_L45 = [
+    "+45.45 LEVEL 45",   # Stray reference level (e.g. from a prior project)
+    "ROOF LEVEL", "LEVEL 3", "LEVEL 2", "LEVEL 1", "SITE",
+]
+
+USER_REPORTED_TH_PROJECT = [
+    "+11.00 ระดับสูงสุดของอาคาร",
+    "+7.50 ระดับพื้นชั้น 3",
+    "+4.00 ระดับพื้นชั้น 2",
+    "+0.50 ระดับพื้นชั้น 1",
+    "+0.00 ระดับพื้นดิน",
+    "-3.00 ระดับชั้นใต้ดิน B1M",
+    "-6.00 ระดับชั้นใต้ดิน B1",
+]
+
+PAYLOAD_CASES = [
+    # User-reported bug: A1 batch with [SITE, L1, L2, L3, TOP] in a Thai
+    # project — TOP should land at slot 1040 (max in batch is L3 → 4×10).
+    {
+        "desc": "TH project: A1 [SITE, L1, L2, L3, TOP] → TOP=1040",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": [
+                "+0.00 ระดับพื้นดิน",
+                "+0.50 ระดับพื้นชั้น 1",
+                "+4.00 ระดับพื้นชั้น 2",
+                "+7.50 ระดับพื้นชั้น 3",
+                "+11.00 ระดับสูงสุดของอาคาร",
+            ],
+            "project_levels": USER_REPORTED_TH_PROJECT,
+        },
+        "expected_numbers": ["1000", "1010", "1020", "1030", "1040"],
+    },
+    # Same shape, A5 (no SITE sheet → only 4 sheets created)
+    {
+        "desc": "TH project: A5 [L1, L2, L3, TOP] → TOP=5040",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A5",
+            "stage": "CD",
+            "levels": [
+                "+0.50 ระดับพื้นชั้น 1",
+                "+4.00 ระดับพื้นชั้น 2",
+                "+7.50 ระดับพื้นชั้น 3",
+                "+11.00 ระดับสูงสุดของอาคาร",
+            ],
+            "project_levels": USER_REPORTED_TH_PROJECT,
+        },
+        "expected_numbers": ["5010", "5020", "5030", "5040"],
+    },
+    # Stale cache regression: request has L1-L3 + ROOF, but cache contains
+    # a stray L45 (e.g. a hidden reference level or leftover from a prior
+    # project). Request levels must win → ROOF=1040, not 1460.
+    {
+        "desc": "Stale cache (L45 in cache) shouldn't push ROOF to 1460",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": ["LEVEL 1", "LEVEL 2", "LEVEL 3", "ROOF LEVEL"],
+            "project_levels": PROJECT_STALE_HAS_L45,
+        },
+        "expected_numbers": ["1010", "1020", "1030", "1040"],
+    },
+    # Fallback case: request only has ROOF — must use cache to know max.
+    # Here cache is clean PROJECT_L5 (max L5), so ROOF → 1060.
+    {
+        "desc": "ROOF-only request falls back to project cache (max L5)",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": ["ROOF LEVEL"],
+            "project_levels": PROJECT_L5,
+        },
+        "expected_numbers": ["1060"],
+    },
+]
+
+
 # ── HARNESS ───────────────────────────────────────────────────────────────
 
 def _run():
@@ -299,8 +392,22 @@ def _run():
             failures.append({"case": f"[set]  {st}", "input": st,
                              "actual": actual, "expected": expected})
 
+    # Build-payload integration cases
+    for case in PAYLOAD_CASES:
+        existing = []
+        sheets = build_sheets_payload(case["request"], existing)
+        actual_numbers = [s.get("sheet_number") for s in sheets]
+        if actual_numbers == case["expected_numbers"]:
+            passed += 1
+        else:
+            failed += 1
+            failures.append({"case": f"[bld]  {case['desc']}",
+                             "input": case["request"]["levels"],
+                             "actual": actual_numbers,
+                             "expected": case["expected_numbers"]})
+
     total = (len(SEQUENCE_CASES) + len(LEVEL_CASES) +
-             len(NAME_CASES) + len(SHEET_SET_CASES))
+             len(NAME_CASES) + len(SHEET_SET_CASES) + len(PAYLOAD_CASES))
     print("=" * 70)
     print(f"sheet_numbering tests: {passed} passed, {failed} failed  (of {total})")
     print("=" * 70)

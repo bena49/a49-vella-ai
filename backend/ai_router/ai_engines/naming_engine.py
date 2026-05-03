@@ -296,8 +296,16 @@ def _max_above_grade_level(project_levels):
                 max_n = sig["digit"]
     return max_n
 
-def compute_sheet_slot(sheet_type, level_name=None, project_levels=None):
+def compute_sheet_slot(sheet_type, level_name=None, project_levels=None,
+                       request_levels=None):
     """Compute the *initial* slot integer for a sheet, before collision check.
+
+    For ROOF/TOP: prefers the highest above-grade level in `request_levels`
+    (the levels the user is creating sheets for in this batch). Falls back
+    to `project_levels` only when the request has no above-grade levels —
+    e.g. "Create sheet for ROOF only". This insulates ROOF placement from
+    stale/dirty session caches and from hidden Revit reference levels that
+    don't represent real building floors.
 
     Returns:
         int slot, or None if the combination is invalid (e.g. A5+SITE,
@@ -322,9 +330,11 @@ def compute_sheet_slot(sheet_type, level_name=None, project_levels=None):
 
     # ROOF / TOP → max above-grade L + 1, in slot terms (×10)
     if sig["special"] in ("RF", "TOP"):
-        max_n = _max_above_grade_level(project_levels)
+        max_n = _max_above_grade_level(request_levels) if request_levels else 0
         if max_n == 0:
-            max_n = 1  # Defensive: project with no above-grade levels
+            max_n = _max_above_grade_level(project_levels)
+        if max_n == 0:
+            max_n = 1  # Defensive: project/request with no above-grade levels
         return base + (max_n + 1) * 10
 
     # Above grade L<N>
@@ -374,7 +384,7 @@ def _next_sequence_slot(sheet_type, existing_numbers):
 # ── Public: get next sheet number ────────────────────────────────────────
 
 def get_next_sheet_number(sheet_type, existing_numbers, level_name=None,
-                          project_levels=None):
+                          project_levels=None, request_levels=None):
     """Compute the next sheet number for a given category.
 
     Args:
@@ -382,7 +392,10 @@ def get_next_sheet_number(sheet_type, existing_numbers, level_name=None,
         existing_numbers: list of strings — sheets already in the project.
         level_name: required for level-based categories (A1, A5). Ignored otherwise.
         project_levels: full project level inventory (cached on Vella mount).
-            Required for ROOF/TOP slot computation; ignored otherwise.
+            Used as a fallback when request_levels has no above-grade levels.
+        request_levels: levels the user is creating sheets for in this batch.
+            Preferred source for ROOF/TOP max computation (insulates against
+            stale cache).
 
     Returns:
         Sheet-number string (e.g. '1010', 'X020'), or None when the
@@ -394,7 +407,8 @@ def get_next_sheet_number(sheet_type, existing_numbers, level_name=None,
     # Level-based path (A1, A5) — slot dictated by level
     if st in _LEVEL_BASED_CATEGORIES and level_name:
         slot = compute_sheet_slot(st, level_name=level_name,
-                                  project_levels=project_levels)
+                                  project_levels=project_levels,
+                                  request_levels=request_levels)
         if slot is None:
             return None
         # Collision: slot taken → +1 until free. Stay within category band.
@@ -541,7 +555,8 @@ def build_sheets_payload(request_data, existing_sheet_numbers):
         for lvl in levels:
             num = get_next_sheet_number(sheet_type, existing_sheet_numbers,
                                         level_name=lvl,
-                                        project_levels=project_levels)
+                                        project_levels=project_levels,
+                                        request_levels=levels)
             if not num:
                 # Invalid combo (e.g. A5+SITE) — skip silently; caller decides
                 # whether to surface "no sheets created" message.

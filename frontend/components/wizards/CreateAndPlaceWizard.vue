@@ -410,7 +410,12 @@ const isStageDisabled = (stg) => {
 };
 
 const isLevelDisabled = (lvl) => {
-  const isSite = lvl.toUpperCase().includes("SITE");
+  // Site detection mirrors backend level_matcher SITE phrases so projects
+  // with Thai level names ("+0.00 ระดับพื้นดิน") get the same disabled
+  // treatment as English "SITE".
+  const isSite = lvl.toUpperCase().includes("SITE")
+              || lvl.includes("ระดับพื้นดิน")
+              || lvl.includes("พื้นดิน");
   if (form.viewType === "Ceiling Plan" && isSite) return true;
   if (form.viewType === "Area Plan" && isSite) return true;
   return false;

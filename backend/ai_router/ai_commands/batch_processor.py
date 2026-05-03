@@ -5,7 +5,7 @@ from ..ai_core.session_manager import debug_session, reset_pending
 from ..ai_utils.envelope_builder import (
     send_envelope, envelope_create_views, envelope_create_sheets, envelope_place_view_on_sheet
 )
-from ..ai_engines.naming_engine import apply, build_sheets_payload
+from ..ai_engines.naming_engine import apply, build_sheets_payload, sort_key_sheet_number
 from ..ai_engines.titleblock_engine import parse_titleblock_from_user_text
 from .sheet_creator import request_titleblock_choice
 
@@ -105,34 +105,37 @@ def finalize_create_and_place(request):
 
     # 4) CONSTRUCT BATCH ENVELOPE
     steps = []
-    
+
     # 🆕 Retrieve Alignment Data
     align_mode = request.session.get("ai_pending_alignment_mode", "CENTER")
     ref_sheet = request.session.get("ai_pending_reference_sheet")
-    
-    # Loop to handle view+sheet pairs
+
+    # Pair views with sheets and sort the pair list by sheet number ascending
+    # so both the create-order (in Revit) and the success-report (in chat)
+    # read low → high.
+    pairs = []
     for i, view_item in enumerate(created_views):
-        if final_scope_box: view_item["scope_box_id"] = final_scope_box 
-        
-        # Match View[i] to Sheet[i]
         sheet_item = created_sheets[i] if i < len(created_sheets) else created_sheets[0]
-        
+        pairs.append((view_item, sheet_item))
+    pairs.sort(key=lambda p: sort_key_sheet_number(p[1].get("sheet_number")))
+
+    for view_item, sheet_item in pairs:
+        if final_scope_box: view_item["scope_box_id"] = final_scope_box
+
         steps.append(envelope_create_views([view_item]))
         steps.append(envelope_create_sheets([sheet_item]))
-        
+
         # 🆕 Enhanced Placement Logic
         place_payload = envelope_place_view_on_sheet(view_item["name"], sheet_item["sheet_number"])
         place_payload["placement"] = align_mode
         if align_mode == "MATCH" and ref_sheet:
             place_payload["reference_sheet"] = ref_sheet
-            
+
         steps.append(place_payload)
 
     # 5) CONSTRUCT SUCCESS MESSAGE
     msg_lines = []
-    for i, view_item in enumerate(created_views):
-        sheet_item = created_sheets[i] if i < len(created_sheets) else created_sheets[0]
-        
+    for view_item, sheet_item in pairs:
         line = f"• Sheet {sheet_item['sheet_number']} - {sheet_item['sheet_name']} with {view_item['name']}"
         msg_lines.append(line)
 

@@ -269,6 +269,21 @@ def _parse_slot(sheet_number):
     else: cat = f"A{n // 1000}"
     return n, cat
 
+def sort_key_sheet_number(sheet_number):
+    """Stable sort key for sheet numbers. Sorts numeric (0000-9999) ascending,
+    then X-series (X000-X999) ascending, then any unrecognised string last
+    (covers legacy 'A1.01' style if it ever appears alongside new-format data)."""
+    s = str(sheet_number or "").upper().strip()
+    if s.startswith("X"):
+        try:
+            return (1, int(s[1:]), s)
+        except ValueError:
+            return (2, 0, s)
+    try:
+        return (0, int(s), s)
+    except ValueError:
+        return (2, 0, s)
+
 def _existing_in_category(sheet_type, existing_numbers):
     """Subset of existing_numbers belonging to this category (as integer slots)."""
     st = (sheet_type or "").upper()
@@ -347,17 +362,42 @@ def compute_sheet_slot(sheet_type, level_name=None, project_levels=None,
             slot += 1  # M / T / … suffix → +1, FCFS handled by collision loop
         return slot
 
-    # Below grade B<N> — descends into the 1000–1009 range
+    # Below grade B<N> — descends into the 1000–1009 range.
+    # Suffix variants (B<N>M, B<N>T, …) take the parent's natural slot
+    # (closer to grade); the bare basement shifts DOWN by 1 to make room.
+    # Cascades when multiple variants exist (each suffix variant at or above
+    # B<N> pushes B<N> down by 1). Without request context, falls back to
+    # the natural slot (B<N>=base+10−N) — same as before this enhancement.
     if sig["prefix"] == "B" and sig["digit"] is not None:
         n = sig["digit"]
         if n < 1 or n > 9:
             return None  # Cap at B9 (spec: rarely > B5 in practice)
-        slot = base + (10 - n)
-        # Suffix variants (B1M, B2M) are not natively expressible in this
-        # 4-digit format because each basement only owns one slot. Returning
-        # the bare slot lets the collision loop bump it upward (B1M → 1010
-        # if free, else higher) — imperfect but rare. Confirm behavior with
-        # user the first time it surfaces.
+
+        natural_slot = base + (10 - n)
+
+        # Build the basement signature set from the request context. Each
+        # entry is (digit, suffix). Distinct M/T variants count separately;
+        # accidental duplicates collapse via the set.
+        request_basements = set()
+        if request_levels:
+            from .level_matcher import extract_level_signature as _extract
+            for lvl in request_levels:
+                ls = _extract(lvl)
+                if (ls["prefix"] == "B" and ls["digit"] is not None
+                        and 1 <= ls["digit"] <= 9):
+                    request_basements.add((ls["digit"], ls["suffix"] or ""))
+
+        if sig["suffix"]:
+            # Suffix variant: takes its parent's natural slot, shifted only
+            # by suffix variants ABOVE this level (smaller digit).
+            shift = sum(1 for d, s in request_basements if d < n and s)
+        else:
+            # Bare basement: shifted by suffix variants AT OR ABOVE this level.
+            shift = sum(1 for d, s in request_basements if d <= n and s)
+
+        slot = natural_slot - shift
+        if slot < base + 1:
+            return None  # Overflowed past the basement range
         return slot
 
     return None
@@ -584,6 +624,9 @@ def build_sheets_payload(request_data, existing_sheet_numbers):
                 sheet_type, sheet_number=num)
             sheets.append(create_payload(num, final_name.upper()))
 
+    # Sort by sheet number ascending so downstream (Revit creation order
+    # AND chat success-report) always reads low → high.
+    sheets.sort(key=lambda p: sort_key_sheet_number(p.get("sheet_number")))
     return sheets
 
 # =====================================================================

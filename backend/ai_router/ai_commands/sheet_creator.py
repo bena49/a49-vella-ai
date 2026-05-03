@@ -264,6 +264,9 @@ def execute_sheet_creation(request):
     request.session.modified = True
     reset_pending(request)
     
+    # Note: build_sheets_payload already returns sheets sorted by number,
+    # so no extra sort is needed here.
+
     sheet_items = []
     for s in all_created_sheets:
         sheet_items.append({

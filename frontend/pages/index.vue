@@ -88,7 +88,7 @@
     </template>
 
     <div class="absolute bottom-0 w-full text-center text-[10px] text-white/60 mb-1 pointer-events-none">
-      Version 1.1.0 - Developed by IRIs 2026
+      Version 1.2.0 - Developed by IRIs 2026
     </div>
 
     <PlanViewWizard v-if="showWizard" v-bind="wizardProps" :key="wizardKey" @close="closeWizard" @submit="handleWizardSubmit" />

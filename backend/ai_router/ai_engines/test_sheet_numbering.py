@@ -341,6 +341,113 @@ PAYLOAD_CASES = [
         },
         "expected_numbers": ["1060"],
     },
+
+    # ── Basement shift cases ─────────────────────────────────────────────
+    # Suffix variant takes parent's natural slot; bare shifts DOWN.
+
+    # User-reported case: B1 + B1M → B1M=1009 (was at parent's slot),
+    # B1 shifts to 1008 (was at 1009).
+    {
+        "desc": "B1 + B1M → B1M=1009, B1=1008",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": ["LEVEL B1", "LEVEL B1M"],
+            "project_levels": PROJECT_L5,
+        },
+        # Output sorted by number ascending
+        "expected_numbers": ["1008", "1009"],
+    },
+    # B2 alone — natural slot preserved (no shift).
+    {
+        "desc": "B2 alone → 1008 (natural slot)",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": ["LEVEL B2"],
+            "project_levels": PROJECT_L5,
+        },
+        "expected_numbers": ["1008"],
+    },
+    # B2 + B2M (no B1) — B2M takes B2's natural slot, B2 shifts down.
+    {
+        "desc": "B2 + B2M (no B1) → B2M=1008, B2=1007",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": ["LEVEL B2", "LEVEL B2M"],
+            "project_levels": PROJECT_L5,
+        },
+        "expected_numbers": ["1007", "1008"],
+    },
+    # B1 + B2 + B2M — B1 unchanged (no M variant above it), B2/B2M shift.
+    {
+        "desc": "B1 + B2 + B2M → B1=1009, B2M=1008, B2=1007",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": ["LEVEL B1", "LEVEL B2", "LEVEL B2M"],
+            "project_levels": PROJECT_L5,
+        },
+        "expected_numbers": ["1007", "1008", "1009"],
+    },
+    # Worst case: both basements have mezzanines — full cascade.
+    {
+        "desc": "B1 + B1M + B2 + B2M → B1M=1009, B1=1008, B2M=1007, B2=1006",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": ["LEVEL B1", "LEVEL B1M", "LEVEL B2", "LEVEL B2M"],
+            "project_levels": PROJECT_L5,
+        },
+        "expected_numbers": ["1006", "1007", "1008", "1009"],
+    },
+    # User's exact reported case: B1 + B1M alongside the above-grade levels.
+    # No more L1 collision because B1M=1009 (not 1010).
+    {
+        "desc": "User-reported full case: TH project [SITE,B1,B1M,L1,L2,L3,TOP]",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": [
+                "+0.00 ระดับพื้นดิน",
+                "-6.00 ระดับชั้นใต้ดิน B1",
+                "-3.00 ระดับชั้นใต้ดิน B1M",
+                "+0.50 ระดับพื้นชั้น 1",
+                "+4.00 ระดับพื้นชั้น 2",
+                "+7.50 ระดับพื้นชั้น 3",
+                "+11.00 ระดับสูงสุดของอาคาร",
+            ],
+            "project_levels": USER_REPORTED_TH_PROJECT,
+        },
+        # SITE=1000, B2=skipped, B1=1008, B1M=1009, L1=1010, L2=1020, L3=1030, ROOF=1040
+        "expected_numbers": ["1000", "1008", "1009", "1010", "1020", "1030", "1040"],
+    },
+    # Same shape on A5 (no SITE sheet — silently skipped)
+    {
+        "desc": "A5 mirror: [B1,B1M,L1,L2,L3,TOP] → 5008,5009,5010,5020,5030,5040",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A5",
+            "stage": "CD",
+            "levels": [
+                "-6.00 ระดับชั้นใต้ดิน B1",
+                "-3.00 ระดับชั้นใต้ดิน B1M",
+                "+0.50 ระดับพื้นชั้น 1",
+                "+4.00 ระดับพื้นชั้น 2",
+                "+7.50 ระดับพื้นชั้น 3",
+                "+11.00 ระดับสูงสุดของอาคาร",
+            ],
+            "project_levels": USER_REPORTED_TH_PROJECT,
+        },
+        "expected_numbers": ["5008", "5009", "5010", "5020", "5030", "5040"],
+    },
 ]
 
 

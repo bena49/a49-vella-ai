@@ -34,8 +34,11 @@ def format_views_for_display(views, title="Model Views"):
 
 def format_sheets_for_display(sheets):
     if not sheets: return "No sheets found."
+    # Sort by sheet number ascending so listings read low → high.
+    from ..ai_engines.naming_engine import sort_key_sheet_number
+    ordered = sorted(sheets, key=lambda s: sort_key_sheet_number(s.get("number")))
     lines = ["Sheets in Project:\n"]
-    for s in sheets:
+    for s in ordered:
         lines.append(f" {s.get('number', '')} — {s.get('name', '')}")
     return "\n".join(lines)
 

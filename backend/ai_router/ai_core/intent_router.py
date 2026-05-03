@@ -81,7 +81,7 @@ def finalize_router(request):
             return JsonResponse({"message": msg + "\n1. Center\n2. Match Reference", "options": options, "status": "success"})
 
         if align_mode == "MATCH" and not request.session.get("ai_pending_reference_sheet"):
-             return Response({"message": "Which sheet should I use as a reference? (e.g. A1.01)"})
+             return Response({"message": "Which sheet should I use as a reference? (e.g. 1010)"})
 
         request.session["ai_pending_intent"] = "create_and_place"
         request.session.modified = True
@@ -207,7 +207,7 @@ def finalize_router(request):
         if align_mode == "MATCH" and not ref_sheet:
             request.session["ai_expecting_reference_sheet"] = True 
             request.session.modified = True
-            return Response({"message": "Please provide a reference Sheet Number (e.g. A1.01)."})
+            return Response({"message": "Please provide a reference Sheet Number (e.g. 1010)."})
 
         if align_mode == "MATCH" and ref_sheet:
             cached_sheets = request.session.get("ai_last_known_sheets") or []

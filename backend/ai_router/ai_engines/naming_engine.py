@@ -163,25 +163,59 @@ def generate_custom_view_name(user_name, existing_names):
 
 # =====================================================================
 # 2. SHEET HELPERS
+#
+# Sheet numbering format (effective post-2026-05-04 launch):
+#
+#   A0 — General/Cover         sequence  0000, 0010, 0020 …  (+10)
+#   A1 — Floor Plans           level     1000=SITE, 1010=L1 … 1990=L99,
+#                                        B1=1009 … B9=1001, ROOF=max+10
+#   A2-A4, A6-A8 — sequence    series×1000 + 10, 20, 30 …
+#   A5 — Ceiling Plans         level     same shape as A1 (5xxx). NO SITE.
+#   X0 — Custom                sequence  X000, X010, X020 … (X + 3 digits)
+#
+# Special-suffix levels (M, T, …) use base+1, first-come-first-served
+# (collision → keep +1 until a free slot is found).
+#
+# Per-format design + edge cases documented in:
+#   memory/next_release_sheet_numbering_refactor.md
+#   ai_router/ai_engines/test_sheet_numbering.py
 # =====================================================================
 
 SHEET_SET_MAP = {
-    "A0": "A0_GENERAL INFORMATION", "A1": "A1_FLOOR PLANS", "A2": "A2_BUILDING ELEVATIONS", 
+    "A0": "A0_GENERAL INFORMATION", "A1": "A1_FLOOR PLANS", "A2": "A2_BUILDING ELEVATIONS",
     "A3": "A3_BUILDING SECTIONS", "A4": "A4_WALL SECTIONS", "A5": "A5_CEILING PLANS",
-    "A6": "A6_ENLARGED PLANS AND INTERIOR ELEVATIONS", "A7": "A7_VERTICAL CIRCULATION", 
+    "A6": "A6_ENLARGED PLANS AND INTERIOR ELEVATIONS", "A7": "A7_VERTICAL CIRCULATION",
     "A8": "A8_DOOR AND WINDOW SCHEDULE", "A9": "A9_DETAILS"
 }
 PROJECT_PHASE_MAP = {"WV": "00 - WORKING VIEW", "PD": "01 - PRE-DESIGN", "DD": "02 - DESIGN DEVELOPMENT", "CD": "03 - CONSTRUCTION DOCUMENTS", "NONE": None}
+
+# Slot-specific names: only A0/A6/A7/A8 have distinct names per slot.
+# Each list is indexed by slot/10 (slot 0000 → idx 0; slot 0010 → idx 1).
+# A `None` placeholder means "no name at this slot" → falls back to category
+# default below, then to "CUSTOM SHEET".
 DEFAULT_SHEET_NAMES = {
-    "A0": ["COVER", "DRAWING INDEX", "SITE AND VICINITY PLAN", "STANDARD SYMBOLS", "SAFETY PLAN", "WALL TYPES"],
-    "A1": ["1ST FLOOR PLAN", "2ND FLOOR PLAN", "3RD FLOOR PLAN", "4TH FLOOR PLAN"],
-    "A2": ["ELEVATIONS"], "A3": ["BUILDING SECTIONS"], "A4": ["WALL SECTIONS"],
-    "A5": ["1ST FLOOR CEILING PLAN", "2ND FLOOR CEILING PLAN", "3RD FLOOR CEILING PLAN"],
-    "A6": ["ENLARGED TOILET PLAN", "FLOOR PATTERN PLAN", "CANOPY PLAN"],
-    "A7": ["ENLARGED STAIR PLAN", "ENLARGED STAIR SECTION", "ENLARGED RAMP PLAN", "ENLARGED LIFT PLAN"],
-    "A8": ["DOOR SCHEDULE", "WINDOW SCHEDULE"], "A9": ["DETAILS"], "X0": ["CUSTOM SHEET"]
+    "A0": ["COVER", "DRAWING INDEX", "SITE AND VICINITY PLAN",
+           "STANDARD SYMBOLS", "SAFETY PLAN", "WALL TYPES"],
+    "A6": [None, "ENLARGED TOILET PLAN", "FLOOR PATTERN PLAN", "CANOPY PLAN"],
+    "A7": [None, "ENLARGED STAIR PLAN", "ENLARGED STAIR SECTION",
+           "ENLARGED RAMP PLAN", "ENLARGED LIFT PLAN"],
+    "A8": [None, "DOOR SCHEDULE", "WINDOW SCHEDULE"],
+}
+
+# Single repeating name for categories where every slot is the same kind of
+# sheet (A2 = ELEVATIONS, A3 = BUILDING SECTIONS, etc.). Used as the fallback
+# when DEFAULT_SHEET_NAMES doesn't have an entry for the requested slot.
+CATEGORY_DEFAULT_NAME = {
+    "A2": "ELEVATIONS",
+    "A3": "BUILDING SECTIONS",
+    "A4": "WALL SECTIONS",
+    "A9": "DETAILS",
+    "X0": "CUSTOM SHEET",
 }
 COVER_TITLEBLOCK = {"family": "A49_TB_A1_Horizontal_Cover", "type": "Cover"}
+
+# Categories whose slot is determined by a level (not by sequence position).
+_LEVEL_BASED_CATEGORIES = {"A1", "A5"}
 
 def normalize_sheet_type(name_or_title, view_type_raw=None):
     text = (str(name_or_title or "") + " " + str(view_type_raw or "")).lower()
@@ -198,94 +232,248 @@ def normalize_sheet_type(name_or_title, view_type_raw=None):
     if "detail" in text: return "A9"
     return "A1"
 
-def _extract_index(num):
-    match = re.findall(r"\.(\d+)", num)
-    return int(match[0]) if match else 0
+# ── Slot/number primitives ───────────────────────────────────────────────
 
-def get_next_sheet_number(sheet_type, existing_numbers, requested_index=None):
-    prefix = sheet_type + "."
-    taken = set(existing_numbers)
-    if requested_index is not None:
-        target_num = f"{prefix}{str(requested_index).zfill(2)}"
-        if target_num not in taken: return target_num
-        for char in "abcdefghijklmnopqrstuvwxyz":
-            if f"{target_num}{char}" not in taken: return f"{target_num}{char}"
-        return f"{target_num}_Copy"
-    
-    start = 0 if sheet_type in ["A0", "X0"] else 1
-    max_idx = start - 1
-    for num in taken:
-        if num.startswith(prefix):
-            try:
-                suffix = num.split(".")[-1]
-                if suffix.isdigit():
-                    val = int(suffix)
-                    if val > max_idx: max_idx = val
-            except: pass
-    return f"{prefix}{str(max_idx + 1).zfill(2)}"
+def _series_base(sheet_type):
+    """Numeric base for a sheet category. A0=0, A1=1000 … A9=9000.
+    X0 returns None (handled separately as letter-prefix format)."""
+    st = (sheet_type or "").upper()
+    if st == "X0": return None
+    m = re.match(r"^A(\d)$", st)
+    if m: return int(m.group(1)) * 1000
+    return None
 
-def get_ordinal_str(n):
-    if 11 <= (n % 100) <= 13: suffix = 'TH'
-    else: suffix = {1: 'ST', 2: 'ND', 3: 'RD'}.get(n % 10, 'TH')
-    return f"{n}{suffix}"
+def _format_slot(sheet_type, slot):
+    """Render an integer slot as the displayed sheet-number string.
+    A0/A1/…/A9 → 4-digit zero-padded ('0010', '1090').
+    X0 → 'X' + 3-digit ('X010')."""
+    st = (sheet_type or "").upper()
+    if st == "X0": return f"X{int(slot):03d}"
+    return f"{int(slot):04d}"
 
-def get_default_sheet_name(sheet_type, index):
-    seq_idx = index if sheet_type == "A0" else index - 1
-    names = DEFAULT_SHEET_NAMES.get(sheet_type, [])
-    if 0 <= seq_idx < len(names): return names[seq_idx]
-    return "CUSTOM SHEET"
+def _parse_slot(sheet_number):
+    """Extract the numeric slot from a sheet-number string.
+    Returns (slot_int, category_inferred) or (None, None) if not parseable.
+    For X0, returns the integer after the 'X'."""
+    if not sheet_number: return None, None
+    s = str(sheet_number).strip().upper()
+    if s.startswith("X"):
+        try: return int(s[1:]), "X0"
+        except (ValueError, TypeError): return None, None
+    try:
+        n = int(s)
+    except (ValueError, TypeError):
+        return None, None
+    # Infer category from thousands digit
+    if n < 1000: cat = "A0"
+    else: cat = f"A{n // 1000}"
+    return n, cat
 
-def generate_smart_name(sheet_type, level_code=None, sequence_index=0):
-    st = sheet_type.upper()
-    
-    # 1. FLOOR PLANS (A1)
-    if st == "A1":
-        # CASE A: Explicit Level Code (e.g. from View)
-        if level_code: 
-            uc = str(level_code).upper()
-            if uc == "00": return "SITE PLAN"
-            if "B" in uc: return f"{uc} BASEMENT PLAN"
-            if "P" in uc: return f"{uc} PARKING PLAN"
-            digits = re.findall(r'\d+', uc)
-            if digits:
-                num = int(digits[0])
-                ord_str = get_ordinal_str(num)
-                return f"{ord_str} FLOOR PLAN"
-            return "FLOOR PLAN"
-            
-        # 💥 FIX: Offset Correction
-        # sequence_index is 0-based (e.g. A1.01 = 0, A1.08 = 7).
-        # We must ADD 1 to get the human-readable ordinal (0 -> 1st, 7 -> 8th).
-        if sequence_index >= 0:
-            ord_str = get_ordinal_str(sequence_index + 1)
-            return f"{ord_str} FLOOR PLAN"
-            
-        return "FLOOR PLAN"
+def _existing_in_category(sheet_type, existing_numbers):
+    """Subset of existing_numbers belonging to this category (as integer slots)."""
+    st = (sheet_type or "").upper()
+    out = []
+    for num in (existing_numbers or []):
+        slot, cat = _parse_slot(num)
+        if slot is None: continue
+        if st == "X0":
+            if cat == "X0": out.append(slot)
+        elif cat == st:
+            out.append(slot)
+    return out
 
-    # 2. CEILING PLANS (A5)
-    if st == "A5":
-        base = generate_smart_name("A1", level_code, sequence_index)
-        
-        clean_base = re.sub(r"\s+(FLOOR\s+)?PLAN$", "", base, flags=re.IGNORECASE)
-        
-        if "SITE" in clean_base.upper(): return "SITE CEILING PLAN" 
-        
-        if sequence_index >= 0 and "FLOOR" not in clean_base.upper() and "BASEMENT" not in clean_base.upper():
-             return f"{clean_base} FLOOR CEILING PLAN"
-             
-        return f"{clean_base} CEILING PLAN"
+# ── Level → slot resolution (A1 / A5) ────────────────────────────────────
 
-    # 3. OTHER SHEETS (Default List)
-    names_list = DEFAULT_SHEET_NAMES.get(st, [])
-    if not names_list: return "CUSTOM SHEET"
-    if len(names_list) == 1: return names_list[0] 
-    
-    # 💥 FIX: Use sequence_index directly
-    # build_sheets_payload already converts A1.01 -> 0.
-    # Previously, we subtracted 1 again, which was wrong.
-    if 0 <= sequence_index < len(names_list): return names_list[sequence_index] 
-    
-    return "CUSTOM SHEET"
+def _max_above_grade_level(project_levels):
+    """Highest above-grade level number in the project (the L<N> with the
+    largest N, ignoring suffix variants like L7T). Returns 0 if none found."""
+    from .level_matcher import extract_level_signature
+    max_n = 0
+    for lvl in (project_levels or []):
+        sig = extract_level_signature(lvl)
+        if sig["prefix"] == "L" and sig["digit"] is not None and not sig["suffix"]:
+            if sig["digit"] > max_n:
+                max_n = sig["digit"]
+    return max_n
+
+def compute_sheet_slot(sheet_type, level_name=None, project_levels=None):
+    """Compute the *initial* slot integer for a sheet, before collision check.
+
+    Returns:
+        int slot, or None if the combination is invalid (e.g. A5+SITE,
+        unsupported level naming, level out of supported range).
+    """
+    st = (sheet_type or "").upper()
+    base = _series_base(st)
+    if base is None or st not in _LEVEL_BASED_CATEGORIES:
+        return None  # Sequence-based — caller uses _next_sequence_slot
+
+    if not level_name:
+        return None
+
+    from .level_matcher import extract_level_signature
+    sig = extract_level_signature(level_name)
+
+    # SITE → base anchor (only for A1; A5 has no Site ceiling plan)
+    if sig["special"] == "SITE":
+        if st == "A5":
+            return None
+        return base
+
+    # ROOF / TOP → max above-grade L + 1, in slot terms (×10)
+    if sig["special"] in ("RF", "TOP"):
+        max_n = _max_above_grade_level(project_levels)
+        if max_n == 0:
+            max_n = 1  # Defensive: project with no above-grade levels
+        return base + (max_n + 1) * 10
+
+    # Above grade L<N>
+    if sig["prefix"] == "L" and sig["digit"] is not None:
+        n = sig["digit"]
+        if n < 1 or n > 99:
+            return None  # Out of range; spec caps at L99 for now
+        slot = base + n * 10
+        if sig["suffix"]:
+            slot += 1  # M / T / … suffix → +1, FCFS handled by collision loop
+        return slot
+
+    # Below grade B<N> — descends into the 1000–1009 range
+    if sig["prefix"] == "B" and sig["digit"] is not None:
+        n = sig["digit"]
+        if n < 1 or n > 9:
+            return None  # Cap at B9 (spec: rarely > B5 in practice)
+        slot = base + (10 - n)
+        # Suffix variants (B1M, B2M) are not natively expressible in this
+        # 4-digit format because each basement only owns one slot. Returning
+        # the bare slot lets the collision loop bump it upward (B1M → 1010
+        # if free, else higher) — imperfect but rare. Confirm behavior with
+        # user the first time it surfaces.
+        return slot
+
+    return None
+
+# ── Sequence-based slot selection (A0, A2-A4, A6-A8, X0) ─────────────────
+
+def _next_sequence_slot(sheet_type, existing_numbers):
+    """Pick the next +10 slot for a sequence-based category.
+    A0 / X0 begin at slot 0 (cover slot). All others begin at slot 10."""
+    st = (sheet_type or "").upper()
+    cat_slots = _existing_in_category(st, existing_numbers)
+    base = _series_base(st) or 0  # X0 has no numeric base
+
+    if not cat_slots:
+        if st in ("A0", "X0"): return base + 0
+        return base + 10
+
+    # Always advance from the highest existing slot, never gap-fill.
+    # Insert-between is a deliberate user action handled by a future wizard.
+    max_slot = max(cat_slots)
+    next_slot = ((max_slot // 10) + 1) * 10
+    return next_slot
+
+# ── Public: get next sheet number ────────────────────────────────────────
+
+def get_next_sheet_number(sheet_type, existing_numbers, level_name=None,
+                          project_levels=None):
+    """Compute the next sheet number for a given category.
+
+    Args:
+        sheet_type: 'A0' through 'A9', or 'X0'.
+        existing_numbers: list of strings — sheets already in the project.
+        level_name: required for level-based categories (A1, A5). Ignored otherwise.
+        project_levels: full project level inventory (cached on Vella mount).
+            Required for ROOF/TOP slot computation; ignored otherwise.
+
+    Returns:
+        Sheet-number string (e.g. '1010', 'X020'), or None when the
+        combination is invalid (e.g. A5 + SITE).
+    """
+    st = (sheet_type or "").upper()
+    existing_set = set(str(n).upper() for n in (existing_numbers or []))
+
+    # Level-based path (A1, A5) — slot dictated by level
+    if st in _LEVEL_BASED_CATEGORIES and level_name:
+        slot = compute_sheet_slot(st, level_name=level_name,
+                                  project_levels=project_levels)
+        if slot is None:
+            return None
+        # Collision: slot taken → +1 until free. Stay within category band.
+        base = _series_base(st)
+        while _format_slot(st, slot) in existing_set:
+            slot += 1
+            if slot >= base + 1000:  # Overflowed into next category
+                return None
+        return _format_slot(st, slot)
+
+    # Sequence-based path — also covers A1/A5 when no level supplied (rare)
+    slot = _next_sequence_slot(st, existing_numbers or [])
+    while _format_slot(st, slot) in existing_set:
+        slot += 10
+        if st != "X0":
+            base = _series_base(st)
+            if slot >= base + 1000:
+                return None
+    return _format_slot(st, slot)
+
+# ── Smart name generation ────────────────────────────────────────────────
+
+def _level_label(level_name):
+    """Human label for a level. Returns a tuple (label, kind) where kind is
+    'site' | 'roof' | 'normal' so the caller can apply category-specific
+    naming rules (e.g. A1+ROOF drops the 'FLOOR' word)."""
+    if not level_name:
+        return ("", "normal")
+    from .level_matcher import extract_level_signature
+    sig = extract_level_signature(level_name)
+    if sig["special"] == "SITE": return ("SITE", "site")
+    if sig["special"] in ("RF", "TOP"): return ("LEVEL ROOF", "roof")
+    if sig["special"] == "MZ": return ("MEZZANINE", "normal")
+    if sig["special"]: return (sig["special"], "normal")
+    if sig["digit"] is not None:
+        prefix = sig["prefix"] or "L"
+        suffix = sig["suffix"] or ""
+        if prefix == "L":
+            return (f"LEVEL {sig['digit']}{suffix}", "normal")
+        return (f"LEVEL {prefix}{sig['digit']}{suffix}", "normal")
+    return (str(level_name).upper(), "normal")
+
+def generate_smart_name(sheet_type, sheet_number=None, level_name=None):
+    """Default sheet name for a category + slot + (optional) level.
+
+    A1/A5 use the level: 'LEVEL 1 FLOOR PLAN', 'LEVEL B1 CEILING PLAN', etc.
+    Roof drops 'FLOOR' on A1 → 'LEVEL ROOF PLAN'. Site is rejected on A5.
+    Other categories look up the slot in DEFAULT_SHEET_NAMES, then fall back
+    to CATEGORY_DEFAULT_NAME (for A2/A3/A4/A9/X0), then to 'CUSTOM SHEET'.
+    """
+    st = (sheet_type or "").upper()
+
+    # Level-based naming (A1 / A5)
+    if st == "A1" and level_name:
+        label, kind = _level_label(level_name)
+        if kind == "site": return "SITE PLAN"
+        if kind == "roof": return f"{label} PLAN"  # 'LEVEL ROOF PLAN' (no FLOOR)
+        return f"{label} FLOOR PLAN"
+
+    if st == "A5" and level_name:
+        label, kind = _level_label(level_name)
+        if kind == "site": return "SITE CEILING PLAN"  # rejected upstream
+        return f"{label} CEILING PLAN"
+
+    # Sequence-based naming — index into DEFAULT_SHEET_NAMES by slot/10
+    slot, _ = _parse_slot(sheet_number) if sheet_number else (None, None)
+    names = DEFAULT_SHEET_NAMES.get(st, [])
+    fallback = CATEGORY_DEFAULT_NAME.get(st, "CUSTOM SHEET")
+
+    if slot is None:
+        return fallback
+
+    # Slot offset within category. A0 starts at 0, others at 10. X0 has no base.
+    base = _series_base(st)
+    offset = slot if st == "X0" else slot - (base or 0)
+    idx = offset // 10
+    if 0 <= idx < len(names) and names[idx]:
+        return names[idx]
+    return fallback
 
 def make_standard_sheet(sheet_type, sheet_number, sheet_name, stage):
     return {"sheet_number": sheet_number, "sheet_name": sheet_name, "sheet_type": sheet_type, "project_phase": PROJECT_PHASE_MAP.get(stage, None), "sheet_set": SHEET_SET_MAP.get(sheet_type, None), "discipline": "ARCHITECTURE"}
@@ -294,75 +482,93 @@ def make_custom_sheet(sheet_type, sheet_number, sheet_name):
     return {"sheet_number": sheet_number, "sheet_name": sheet_name, "sheet_type": sheet_type, "project_phase": None, "sheet_set": None, "discipline": None}
 
 def build_sheets_payload(request_data, existing_sheet_numbers):
-    stage = request_data.get("stage", "CD") 
+    """Generate the list of sheet payloads for a create_sheet command.
+
+    Reads request_data['project_levels'] (cached from Revit) to resolve
+    ROOF/TOP slots correctly. Falls back to request_data['levels'] if the
+    project inventory wasn't passed in (degraded — ROOF will land at
+    max(levels)+10 instead of project max+10)."""
+    stage = request_data.get("stage", "CD")
     sheet_type_raw = request_data.get("sheet_category")
     mode = request_data.get("mode", "STANDARD")
     user_name = request_data.get("sheet_name")
-    levels = request_data.get("levels") or [] 
+    levels = request_data.get("levels") or []
+    project_levels = request_data.get("project_levels") or levels
     count = request_data.get("batch_count", None)
     forced_fam = request_data.get("titleblock_family")
     forced_type = request_data.get("titleblock_type")
     raw_tb = request_data.get("titleblock_raw")
 
-    if sheet_type_raw: sheet_type = sheet_type_raw.upper().split(",")[0].strip()
-    else: sheet_type = "A1"
+    if sheet_type_raw:
+        sheet_type = sheet_type_raw.upper().split(",")[0].strip()
+    else:
+        sheet_type = "A1"
 
     if user_name:
         clean_name = user_name.lower().strip().replace("sheets", "").replace("sheet", "").strip()
-        generic_terms = ["plan", "plans", "view", "views", "floor plan", "site plan", "elevation", "section", "detail", "schedule"]
-        if clean_name in generic_terms: user_name = None 
+        generic_terms = ["plan", "plans", "view", "views", "floor plan", "site plan",
+                         "elevation", "section", "detail", "schedule"]
+        if clean_name in generic_terms:
+            user_name = None
 
     sheets = []
+
     def create_payload(num, name):
-        if forced_fam and forced_type: fam, t_type = forced_fam, forced_type
-        else: fam, t_type = determine_titleblock(num, override_family=raw_tb, mode="STANDARD")
-        if num.startswith("A0.00"): fam, t_type = "A49_TB_A1_Horizontal_Cover", "Cover"
-        if mode == "CUSTOM" or sheet_type.startswith("X"): p = make_custom_sheet(sheet_type, num, name)
-        else: p = make_standard_sheet(sheet_type, num, name, stage)
+        if forced_fam and forced_type:
+            fam, t_type = forced_fam, forced_type
+        else:
+            fam, t_type = determine_titleblock(num, override_family=raw_tb, mode="STANDARD")
+        # Cover slot always uses the cover titleblock
+        if num == "0000":
+            fam, t_type = "A49_TB_A1_Horizontal_Cover", "Cover"
+        if mode == "CUSTOM" or sheet_type.startswith("X"):
+            p = make_custom_sheet(sheet_type, num, name)
+        else:
+            p = make_standard_sheet(sheet_type, num, name, stage)
         p["titleblock_family"] = fam
         p["titleblock_type"] = t_type
         return p
 
+    # A0 + cover keyword in user input → force the 0000 cover slot
     force_cover = False
     if sheet_type == "A0":
         view_type = request_data.get("view_type")
-        if (user_name and "cover" in user_name.lower()) or (view_type and "cover" in view_type.lower()): force_cover = True
+        if (user_name and "cover" in user_name.lower()) or \
+           (view_type and "cover" in view_type.lower()):
+            force_cover = True
 
-    if levels and sheet_type in ["A1", "A5"]:
+    if levels and sheet_type in _LEVEL_BASED_CATEGORIES:
         for lvl in levels:
-            lvl_code = level_to_code(lvl)
-            if sheet_type == "A5" and lvl_code == "00": continue 
-            prefix = sheet_type + "."
-            target_num = f"{prefix}{lvl_code}"
-            final_num = target_num
-            suffix_char = 'a'
-            while final_num in existing_sheet_numbers:
-                final_num = f"{target_num}{suffix_char}"
-                suffix_char = chr(ord(suffix_char) + 1)
-            existing_sheet_numbers.append(final_num)
-            final_name = user_name if user_name else generate_smart_name(sheet_type, lvl_code)
-            sheets.append(create_payload(final_num, final_name.upper()))
-    else:
-        try: total_count = int(count) if count else 1
-        except: total_count = 1
-        total = len(levels) if levels else total_count
-        for i in range(total):
-            if force_cover and i == 0:
-                base_num = "A0.00"
-                if base_num in existing_sheet_numbers: num = get_next_sheet_number(sheet_type, existing_sheet_numbers, 0)
-                else: num = base_num
-            else: num = get_next_sheet_number(sheet_type, existing_sheet_numbers)
+            num = get_next_sheet_number(sheet_type, existing_sheet_numbers,
+                                        level_name=lvl,
+                                        project_levels=project_levels)
+            if not num:
+                # Invalid combo (e.g. A5+SITE) — skip silently; caller decides
+                # whether to surface "no sheets created" message.
+                continue
             existing_sheet_numbers.append(num)
-            try:
-                parts = re.split(r"[^\d]", num)
-                digits = [p for p in parts if p.isdigit()]
-                if digits:
-                    val = int(digits[-1])
-                    seq_idx = val if sheet_type == "A0" else val - 1
-                else: seq_idx = i
-            except: seq_idx = i
-            final_name = user_name if user_name else generate_smart_name(sheet_type, None, seq_idx)
+            final_name = user_name if user_name else generate_smart_name(
+                sheet_type, sheet_number=num, level_name=lvl)
             sheets.append(create_payload(num, final_name.upper()))
+    else:
+        try:
+            total_count = int(count) if count else 1
+        except (TypeError, ValueError):
+            total_count = 1
+        total = len(levels) if levels else total_count
+
+        for i in range(total):
+            if force_cover and i == 0 and "0000" not in existing_sheet_numbers:
+                num = "0000"
+            else:
+                num = get_next_sheet_number(sheet_type, existing_sheet_numbers)
+            if not num:
+                continue
+            existing_sheet_numbers.append(num)
+            final_name = user_name if user_name else generate_smart_name(
+                sheet_type, sheet_number=num)
+            sheets.append(create_payload(num, final_name.upper()))
+
     return sheets
 
 # =====================================================================

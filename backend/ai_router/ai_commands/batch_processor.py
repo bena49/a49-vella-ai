@@ -89,12 +89,14 @@ def finalize_create_and_place(request):
         "sheet_category": request.session.get("ai_pending_sheet_category"),
         "stage": request.session.get("ai_pending_stage"),
         "titleblock_raw": request.session.get("ai_pending_titleblock"),
-        "titleblock_family": request.session.get("titleblock_family"), 
-        "titleblock_type": request.session.get("titleblock_type"), 
+        "titleblock_family": request.session.get("titleblock_family"),
+        "titleblock_type": request.session.get("titleblock_type"),
         "view_type": request.session.get("ai_pending_view_type"),
         "levels": request.session.get("ai_pending_levels_parsed"),
+        # Project-wide level inventory for ROOF/TOP slot computation.
+        "project_levels": request.session.get("ai_last_known_levels", []),
     }
-    
+
     created_sheets = build_sheets_payload(sheet_req, sheets_cache)
     
     if not created_sheets:

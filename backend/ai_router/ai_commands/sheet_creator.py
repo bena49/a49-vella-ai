@@ -218,21 +218,25 @@ def execute_sheet_creation(request):
 
     existing_views = request.session.get("ai_last_known_views", [])
     existing_sheets = request.session.get("ai_last_known_sheets", [])
+    # Project-wide level inventory — needed by the naming engine to compute
+    # ROOF/TOP slot (= max above-grade level + 10) regardless of which levels
+    # are in this request.
+    project_levels = request.session.get("ai_last_known_levels", [])
     categories = [c.strip() for c in cat_raw.split(",")]
-    
+
     counts = [b.strip() for b in str(batch_raw).split(",")] if batch_raw else ["1"] * len(categories)
     if len(counts) == 1 and len(categories) > 1:
         counts = [counts[0]] * len(categories)
 
     all_created_sheets = []
-    
+
     try:
         for idx, cat in enumerate(categories):
             current_count = counts[idx] if idx < len(counts) else "1"
-            
+
             final_name = user_name
             if levels and len(levels) > 0:
-                final_name = None 
+                final_name = None
 
             req = {
                 "command": "create_sheet",
@@ -243,7 +247,8 @@ def execute_sheet_creation(request):
                 "batch_count": current_count,
                 "titleblock_raw": raw_tb,
                 "view_type": view_type,
-                "levels": levels, 
+                "levels": levels,
+                "project_levels": project_levels,
                 "sheet_name": final_name
             }
             naming = apply(req, existing_views, existing_sheets)

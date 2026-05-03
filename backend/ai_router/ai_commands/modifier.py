@@ -54,14 +54,22 @@ def finalize_modification_command(request):
             if match:
                 start_num_destination = match.group(1).upper()
                 
-                # 🛡️ A49 STANDARD SAFEGUARD
+                # 🛡️ A49 STANDARD SAFEGUARD — A1 (floor plans) and A5 (ceiling
+                # plans) are level-based; renumbering breaks the level↔slot link.
+                # Detects both legacy (A1./A5.) and new-format (1xxx/5xxx) ranges.
+                category_label = None
                 if start_num_destination.startswith("A1") or start_num_destination.startswith("A5"):
+                    category_label = start_num_destination[:2]
+                elif re.match(r"^[15]\d{3}$", start_num_destination):
+                    category_label = "A" + start_num_destination[0]
+
+                if category_label:
                     if not request.session.get("ai_renumber_confirmed"):
                         request.session["ai_expecting_renumber_confirmation"] = True
                         request.session.modified = True
                         return Response({
                             "message": (
-                                f"⚠️ **Standard Warning**: A49 Standards link {start_num_destination[:2]} sheets directly to floor levels.\n"
+                                f"⚠️ **Standard Warning**: A49 Standards link {category_label} sheets directly to floor levels.\n"
                                 "Renumbering them will break this correlation.\n\n"
                                 "**Are you sure you want to proceed?** (Reply 'Yes' or 'No')"
                             )
@@ -77,7 +85,7 @@ def finalize_modification_command(request):
                 })
             else:
                 # Only show error if we are SURE it's a range request
-                return message("I see you want to renumber a range, but I couldn't figure out the **Start Number**. (e.g., 'to A9.05')")
+                return message("I see you want to renumber a range, but I couldn't figure out the **Start Number**. (e.g., 'to 9050')")
 
         # 💥 STRATEGY B: SIMPLE RENAME (Singular)
         if not target_raw: return ask_for_missing_info(request, "rename_sheet")

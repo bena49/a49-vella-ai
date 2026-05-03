@@ -684,14 +684,15 @@ def route_gpt_fields(request, g):
             has_changes = True
 
     # 💥 FALLBACK: reference sheet number when alignment is MATCH.
-    # Catches "match sheet A1.xx", "matching reference A1.01", "to A1.02".
-    # Sheet numbers follow the A49 convention: A<digit>(.<digits or xx>).
-    # Accepts uppercase or lowercase 'xx' as a placeholder for "any".
+    # Catches "match sheet 1010", "matching reference 1010", "to A1.02".
+    # Accepts BOTH formats:
+    #   - New format (post-2026-05 spec): 4-digit (1010, 0000, 5090) or X+3 (X010)
+    #   - Legacy format: A<digit>(.<digits or xx>)  — for projects not yet renumbered
     if (request.session.get("ai_pending_alignment_mode") == "MATCH"
         and not request.session.get("ai_pending_reference_sheet")):
         ref_match = re.search(
             r'(?:match(?:ing)?|reference|to)\s+(?:sheet\s+)?'
-            r'(A\d+\.(?:\d+|xx))\b',
+            r'(A\d+\.(?:\d+|xx)|X\d{3}|\d{4})\b',
             raw_msg, re.IGNORECASE
         )
         if ref_match:

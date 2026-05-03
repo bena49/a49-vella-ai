@@ -146,8 +146,9 @@ def determine_titleblock(sheet_number, override_family=None, override_type=None,
     if mode.upper() == "NONE":
         return None, None
 
-    # COVER SHEET HANDLING (A0.00)
-    if sheet_number == "A0.00":
+    # COVER SHEET HANDLING (slot 0000 in the new format; "A0.00" kept for
+    # legacy projects still using the dotted convention)
+    if sheet_number in ("0000", "A0.00"):
         return get_cover_titleblock()
 
     # 1. OVERRIDE (user explicitly selected)

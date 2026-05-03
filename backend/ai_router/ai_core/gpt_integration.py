@@ -552,11 +552,18 @@ def route_gpt_fields(request, g):
     # would otherwise fall through to "Please select a sheet category" because
     # finalize_create_sheets's smart-inference only checks descriptive keywords
     # (cover, ceiling, etc.) and not direct category codes.
+    #
+    # Negative lookahead `(?![.\d])` excludes legacy reference sheet numbers
+    # (e.g. "matching sheet A1.xx" / "match sheet A1.01") from being treated as
+    # the new sheet's category — the reference-sheet regex above handles those.
+    # Without this, "Create Ceiling Plan ... place it on a new A5 sheet ...
+    # matching sheet A1.xx" would incorrectly set sheet_category=A1 (matching
+    # 'sheet A1' inside 'sheet A1.xx') instead of A5.
     if not request.session.get("ai_pending_sheet_category"):
         valid_codes = {"A0","A1","A2","A3","A4","A5","A6","A7","A8","A9",
                        "X0","X1","X2","X3","X4","X5","X6","X7","X8","X9"}
         # Try "sheets X0" or "sheet X0" first — most common.
-        cat_match = re.search(r'\bsheets?\s+([A-Z]\d{1,2})\b', raw_msg, re.IGNORECASE)
+        cat_match = re.search(r'\bsheets?\s+([A-Z]\d{1,2})(?![.\d])\b', raw_msg, re.IGNORECASE)
         if not cat_match:
             # Then "X0 sheets" / "X0 sheet".
             cat_match = re.search(r'\b([A-Z]\d{1,2})\s+sheets?\b', raw_msg, re.IGNORECASE)

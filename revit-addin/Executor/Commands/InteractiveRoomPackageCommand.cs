@@ -1,7 +1,7 @@
 ﻿// ============================================================================
 // InteractiveRoomPackageCommand.cs — Vella AI
 // Executes a 2-part interactive workflow: Pick Room -> Create Callout ->
-// Switch View -> Pick Marker -> Generate Elevations -> Create & Populate Sheet.
+// Switch View -> Pick Marker -> Generate Elevations -> Create & Populate Sheet. 
 // ============================================================================
 
 using System;

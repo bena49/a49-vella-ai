@@ -510,19 +510,22 @@ const filteredTitleblocks = computed(() => {
 // --- STEP 3 LOGIC (VALIDATION + FILTER) ---
 const cleanSheetNumber = (str) => str.split(' - ')[0].trim();
 
-// Strict A49 sheet-number format (post-2026-05 spec):
-//   A1 → 1000-1999, A5 → 5000-5999, X-series → X000-X999.
-// Mirrored against the backend reference-sheet regex in gpt_integration.py
-// so anything the wizard accepts will also be accepted server-side.
-const REF_SHEET_FORMAT = /^(?:[15]\d{3}|X\d{3})$/i;
+// Category-based filter: surface every sheet whose number starts with the
+// A1 (1xxx), A5 (5xxx), or X-series prefix. We deliberately accept any
+// suffix shape — including placeholders like "10XX - LEVEL 1 (MASTER)" —
+// because validation below requires the picked value to actually exist in
+// the project, which is a stronger guarantee than a format regex.
+const isReferenceCategory = (s) => {
+    const num = cleanSheetNumber(s).toUpperCase();
+    return num.startsWith('1') || num.startsWith('5') || num.startsWith('X');
+};
 
 const conformantSheets = computed(() =>
-    props.existingSheets.filter(s => REF_SHEET_FORMAT.test(cleanSheetNumber(s)))
+    props.existingSheets.filter(isReferenceCategory)
 );
 
 // Total count of A1/A5/X-series sheets in the project — surfaced in the UI
-// so the user can tell at a glance whether the data has loaded and whether
-// any conformant sheets exist to match against.
+// so the user can tell at a glance whether the data has loaded.
 const availableReferenceCount = computed(() => conformantSheets.value.length);
 
 const filteredReferenceSheets = computed(() => {
@@ -536,12 +539,19 @@ const filteredReferenceSheets = computed(() => {
 // When the user picks "Match Reference", auto-focus the input and open the
 // dropdown so they immediately see what's available without needing to click
 // into the field. Same trick for "Center" → close the dropdown.
-watch(() => form.placement, (mode) => {
+//
+// Use `await nextTick()` (not the callback form) so the watcher reliably
+// waits for the v-if'd input to mount — without this the input ref is still
+// null when we try to focus it, which is what was causing the "click into
+// the box, then click out, then click back in" workaround.
+watch(() => form.placement, async (mode) => {
     if (mode === 'MATCH') {
-        nextTick(() => {
-            refSheetInput.value?.focus?.();
-            isRefSheetOpen.value = true;
-        });
+        await nextTick();
+        // Second tick guards against the rare case where the v-if subtree
+        // mounts a render pass later than the watcher fires.
+        await nextTick();
+        refSheetInput.value?.focus?.();
+        isRefSheetOpen.value = true;
     } else {
         isRefSheetOpen.value = false;
     }
@@ -551,9 +561,10 @@ const isValidReference = computed(() => {
   if (form.placement !== 'MATCH') return true;
   if (!form.referenceSheet) return false;
   const typed = form.referenceSheet.toUpperCase().trim();
-  // Reject inputs that don't match the A49 format up front so non-conformant
-  // strings (e.g. "1010XX") never make it past the wizard to the backend.
-  if (!REF_SHEET_FORMAT.test(typed)) return false;
+  // Existence check is the only validation we need — the dropdown only lets
+  // users pick real sheets from the project, and the backend will validate
+  // again against its own cached sheet list. No format regex needed (and
+  // adding one would block legitimate placeholder sheets like "10XX").
   return props.existingSheets.some(s => cleanSheetNumber(s).toUpperCase() === typed);
 });
 

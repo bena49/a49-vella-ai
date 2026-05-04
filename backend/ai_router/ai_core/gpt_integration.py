@@ -689,16 +689,20 @@ def route_gpt_fields(request, g):
             has_changes = True
 
     # 💥 FALLBACK: reference sheet number when alignment is MATCH.
-    # Catches "match sheet 1010", "matching reference 1010", "to X010".
-    # Only the post-2026-05 numbering scheme is accepted: 4-digit (1010,
-    # 0000, 5090) or X+3 (X010). Legacy A<digit>.<digits|xx> input is
-    # deprecated and will fall through to the "please provide a reference
-    # sheet" prompt so users migrate to the new format.
+    # Catches "match sheet 1010", "matching reference 10XX", "to X010".
+    # Accepts 4-character A49 sheet numbers under the post-2026-05 spec:
+    #   - First char: a digit 1-9 (A1=1xxx, A5=5xxx, A9=9xxx ...) or "X"
+    #     (custom X-series).
+    #   - Last 3 chars: digits and/or "X" — the latter so placeholder/master
+    #     sheets like "10XX" or "X0XX" (used as alignment templates) can
+    #     also be referenced.
+    # Legacy A<digit>.<digits|xx> input remains deprecated and will fall
+    # through to the "please provide a reference sheet" prompt.
     if (request.session.get("ai_pending_alignment_mode") == "MATCH"
         and not request.session.get("ai_pending_reference_sheet")):
         ref_match = re.search(
             r'(?:match(?:ing)?|reference|to)\s+(?:sheet\s+)?'
-            r'(X\d{3}|\d{4})\b',
+            r'([1-9X][\dXx]{3})\b',
             raw_msg, re.IGNORECASE
         )
         if ref_match:

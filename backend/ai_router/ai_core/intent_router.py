@@ -43,6 +43,22 @@ def finalize_router(request):
         request.session["ai_pending_intent"] = intent
         request.session.modified = True
 
+    # 💥 STALE-STATE CLEANUP — only Create-and-Place uses MATCH alignment +
+    # reference-sheet state. Any other settled intent (create_view, create_sheet,
+    # batch_create, modifications, etc.) shouldn't carry that state forward.
+    # Runs AFTER the upgrade above so we know the final intent is settled.
+    if intent and intent != "create_and_place":
+        if (request.session.get("ai_pending_alignment_mode")
+            or request.session.get("ai_pending_reference_sheet")
+            or request.session.get("ai_expecting_reference_sheet")
+            or request.session.get("ai_expecting_alignment_selection")):
+            debug_session(request, f"🧹 Cleared stale alignment state (final intent: {intent})")
+            request.session["ai_pending_alignment_mode"] = None
+            request.session["ai_pending_reference_sheet"] = None
+            request.session["ai_expecting_reference_sheet"] = False
+            request.session["ai_expecting_alignment_selection"] = False
+            request.session.modified = True
+
     # WIZARD FLOW
     if intent == "create_view_and_sheet_wizard":
         if not request.session.get("ai_pending_view_type"):
@@ -471,25 +487,6 @@ def process_intent(request, raw_text_original):
         route_gpt_fields(request, gpt_json)
         # Re-grab intent AFTER the router runs (it may have changed it)
         intent = gpt_json.get("intent")
-
-    # 2️⃣b. DEFENSIVE CLEANUP — clear lingering MATCH-alignment / reference-
-    # sheet state when the new command isn't a Create-and-Place. Without
-    # this, a half-failed Create-and-Place attempt (e.g. invalid reference
-    # sheet) leaves alignment_mode=MATCH in the session, which then re-fires
-    # the "Please provide a reference Sheet Number" prompt on the user's
-    # next unrelated wizard command.
-    settled_intent = request.session.get("ai_pending_intent")
-    if settled_intent and settled_intent != "create_and_place":
-        if (request.session.get("ai_pending_alignment_mode")
-            or request.session.get("ai_pending_reference_sheet")
-            or request.session.get("ai_expecting_reference_sheet")
-            or request.session.get("ai_expecting_alignment_selection")):
-            debug_session(request, f"🧹 Cleared stale alignment state (new intent: {settled_intent})")
-            request.session["ai_pending_alignment_mode"] = None
-            request.session["ai_pending_reference_sheet"] = None
-            request.session["ai_expecting_reference_sheet"] = False
-            request.session["ai_expecting_alignment_selection"] = False
-            request.session.modified = True
 
     # 3️⃣ CHECK IMMEDIATE COMMANDS
     immediate_resp = dispatch_immediate_command(request, intent, gpt_json)

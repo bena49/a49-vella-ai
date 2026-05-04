@@ -63,7 +63,7 @@ You must ALWAYS return a dictionary in the following shape:
   "duplicate_mode_raw": "...",          # NEW — duplicate w/ detailing or not
   "target_sheet_raw": "...",            # NEW — for placing/removing views
   "placement_raw": "...",               # NEW - "MATCH" or "CENTER"
-  "reference_sheet_raw": "...",         # NEW - e.g. "1010" or legacy "A1.01" for alignment
+  "reference_sheet_raw": "...",         # e.g. "1010" or "X010" for alignment
   "list_query_raw": "...",              # NEW — list views or sheets
   "custom_mode_raw": "...",
   "user_provided_name_raw": "...",
@@ -525,19 +525,17 @@ batch_count_raw MUST contain the exact user text for the count:
 Do NOT convert spelling to numeric.
 
 =====================================================================
-SHEET NUMBER FORMAT (NEW + LEGACY)
+SHEET NUMBER FORMAT
 =====================================================================
 
-Two formats are supported and MUST both be accepted verbatim:
+The A49 numbering scheme uses 4-digit numeric or X-prefixed numbers:
+  Examples: "0000", "1010", "1020", "5040", "9100", "X010"
 
-- NEW (default for projects after 2026-05): 4-digit numeric or X-prefixed
-  Examples: "1010", "1020", "5040", "9100", "X010"
-- LEGACY (older projects not yet renumbered): letter + dot + digits
-  Examples: "A1.01", "A5.03", "X0.02"
-
-NEVER convert one format to the other. ALWAYS extract the sheet number
-EXACTLY as the user typed it. The downstream Python engine and Revit
-add-in handle both formats interchangeably.
+ALWAYS extract the sheet number EXACTLY as the user typed it. Do NOT
+coerce or convert formats. The legacy "A1.01" / "A1.xx" dotted format
+is deprecated — if a user types it, leave it as raw text and let the
+downstream parser surface a "please provide a reference sheet" prompt
+so they migrate to the new numbering.
 
 =====================================================================
 RENAME & RENUMBER RULES (CRITICAL UPDATE)

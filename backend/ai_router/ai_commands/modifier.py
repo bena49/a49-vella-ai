@@ -27,40 +27,38 @@ def finalize_modification_command(request):
     # =================================================================
     if intent == "rename_sheet":
         
-        # 💥 STRATEGY A: RANGE DETECTION ("Renumber A9.01-A9.04 to A9.05")
+        # 💥 STRATEGY A: RANGE DETECTION ("Renumber 1010-1040 to 1050")
         is_range_request = False
         start_num_destination = None
 
         # 1. Check Keywords
         if target_raw and any(k in target_raw.lower() for k in ["start", "from", "renumber"]):
             is_range_request = True
-        
+
         # 2. Check Regex (Strict: Must contain digits to avoid matching "Change sheet to X")
-        # Matches: "A101-A105", "A101 to A105", "101-105"
+        # Matches: "1010-1040", "1010 to 1040", "X010-X040". Legacy dotted
+        # format (A1.01-A1.05) is deprecated and intentionally not matched.
         if target_raw:
-             # Look for: (Word+Digit) space/dash/to (Word+Digit)
-             range_pattern = r"[A-Z\.]*\d+[A-Z\.]*\s*[-to]+\s*[A-Z\.]*\d+[A-Z\.]*"
+             range_pattern = r"[A-Z]*\d+[A-Z]*\s*[-to]+\s*[A-Z]*\d+[A-Z]*"
              if re.search(range_pattern, target_raw, re.IGNORECASE):
                  is_range_request = True
 
         if is_range_request:
             # We need to find the DESTINATION Start Number.
             search_text = (value_raw or "") + " " + (target_raw or "")
-            match = re.search(r"([A-Z0-9]+[\.\-]?\d+(?:\.\d+)?)", value_raw or "", re.IGNORECASE)
-            
+            match = re.search(r"([A-Z0-9]+\-?\d+)", value_raw or "", re.IGNORECASE)
+
             if not match:
-                match = re.search(r"(?:start|from|to)\s*([A-Z0-9]+[\.\-]?\d+(?:\.\d+)?)", target_raw or "", re.IGNORECASE)
+                match = re.search(r"(?:start|from|to)\s*([A-Z0-9]+\-?\d+)", target_raw or "", re.IGNORECASE)
 
             if match:
                 start_num_destination = match.group(1).upper()
-                
+
                 # 🛡️ A49 STANDARD SAFEGUARD — A1 (floor plans) and A5 (ceiling
                 # plans) are level-based; renumbering breaks the level↔slot link.
-                # Detects both legacy (A1./A5.) and new-format (1xxx/5xxx) ranges.
+                # Post-2026-05 numbering: A1 → 1xxx, A5 → 5xxx.
                 category_label = None
-                if start_num_destination.startswith("A1") or start_num_destination.startswith("A5"):
-                    category_label = start_num_destination[:2]
-                elif re.match(r"^[15]\d{3}$", start_num_destination):
+                if re.match(r"^[15]\d{3}$", start_num_destination):
                     category_label = "A" + start_num_destination[0]
 
                 if category_label:

@@ -167,8 +167,12 @@ def finalize_create_views(request):
             return message("Nothing to create. Please check levels or view types.")
 
         # 3) CLEANUP
-        request.session["ai_last_known_views"] = existing_views 
-        
+        # Clear (don't persist the in-memory append) so the next Create Views
+        # command refetches fresh state from Revit. Otherwise views the user
+        # deleted in Revit between commands would still appear "taken" here
+        # and force the next batch into wrong slots. Mirrors sheet_creator.py.
+        request.session["ai_last_known_views"] = []
+
         request.session["ai_pending_request_data"] = None
         request.session["ai_pending_scope_box_id"] = None
         request.session["ai_scope_box_checked"] = False

@@ -553,12 +553,10 @@ def route_gpt_fields(request, g):
     # finalize_create_sheets's smart-inference only checks descriptive keywords
     # (cover, ceiling, etc.) and not direct category codes.
     #
-    # Negative lookahead `(?![.\d])` excludes legacy reference sheet numbers
-    # (e.g. "matching sheet A1.xx" / "match sheet A1.01") from being treated as
-    # the new sheet's category — the reference-sheet regex above handles those.
-    # Without this, "Create Ceiling Plan ... place it on a new A5 sheet ...
-    # matching sheet A1.xx" would incorrectly set sheet_category=A1 (matching
-    # 'sheet A1' inside 'sheet A1.xx') instead of A5.
+    # Negative lookahead `(?![.\d])` defends against any decimal-suffixed
+    # token (e.g. a stray "A1.5" elevation) being misread as the sheet
+    # category code. Sheet categories are bare two-character codes (A0-A9,
+    # X0-X9) under the post-2026-05 spec.
     if not request.session.get("ai_pending_sheet_category"):
         valid_codes = {"A0","A1","A2","A3","A4","A5","A6","A7","A8","A9",
                        "X0","X1","X2","X3","X4","X5","X6","X7","X8","X9"}
@@ -680,7 +678,7 @@ def route_gpt_fields(request, g):
         has_changes = True
 
     # 💥 FALLBACK: alignment mode (mirror of the titleblock / template
-    # fallbacks above). Catches phrases like "match sheet A1.01", "matching
+    # fallbacks above). Catches phrases like "match sheet 1010", "matching
     # reference", "aligned to center" when GPT drops the placement_raw slot.
     if not request.session.get("ai_pending_alignment_mode"):
         if re.search(r'\b(match|matching|reference)\b', raw_msg, re.IGNORECASE):
@@ -691,15 +689,16 @@ def route_gpt_fields(request, g):
             has_changes = True
 
     # 💥 FALLBACK: reference sheet number when alignment is MATCH.
-    # Catches "match sheet 1010", "matching reference 1010", "to A1.02".
-    # Accepts BOTH formats:
-    #   - New format (post-2026-05 spec): 4-digit (1010, 0000, 5090) or X+3 (X010)
-    #   - Legacy format: A<digit>(.<digits or xx>)  — for projects not yet renumbered
+    # Catches "match sheet 1010", "matching reference 1010", "to X010".
+    # Only the post-2026-05 numbering scheme is accepted: 4-digit (1010,
+    # 0000, 5090) or X+3 (X010). Legacy A<digit>.<digits|xx> input is
+    # deprecated and will fall through to the "please provide a reference
+    # sheet" prompt so users migrate to the new format.
     if (request.session.get("ai_pending_alignment_mode") == "MATCH"
         and not request.session.get("ai_pending_reference_sheet")):
         ref_match = re.search(
             r'(?:match(?:ing)?|reference|to)\s+(?:sheet\s+)?'
-            r'(A\d+\.(?:\d+|xx)|X\d{3}|\d{4})\b',
+            r'(X\d{3}|\d{4})\b',
             raw_msg, re.IGNORECASE
         )
         if ref_match:

@@ -272,7 +272,7 @@ def _parse_slot(sheet_number):
 def sort_key_sheet_number(sheet_number):
     """Stable sort key for sheet numbers. Sorts numeric (0000-9999) ascending,
     then X-series (X000-X999) ascending, then any unrecognised string last
-    (covers legacy 'A1.01' style if it ever appears alongside new-format data)."""
+    (defensive — should not occur under the post-2026-05 numbering spec)."""
     s = str(sheet_number or "").upper().strip()
     if s.startswith("X"):
         try:

@@ -5,7 +5,7 @@
 #
 # Handles:
 #   - List of available titleblocks
-#   - Cover sheet automatic logic (A0.00)
+#   - Cover sheet automatic logic (slot 0000)
 #   - Validation of user-selected titleblocks
 #   - Parsing text like "horizontal plan sheet" into family + type
 #   - Override logic
@@ -44,7 +44,7 @@ def get_standard_titleblocks():
 
 
 # ---------------------------------------------------------------------
-# Helper: Return cover titleblock (for sheet A0.00 only)
+# Helper: Return cover titleblock (for slot 0000 only)
 # ---------------------------------------------------------------------
 def get_cover_titleblock():
     for family, types in TITLEBLOCKS["cover"].items():
@@ -146,9 +146,8 @@ def determine_titleblock(sheet_number, override_family=None, override_type=None,
     if mode.upper() == "NONE":
         return None, None
 
-    # COVER SHEET HANDLING (slot 0000 in the new format; "A0.00" kept for
-    # legacy projects still using the dotted convention)
-    if sheet_number in ("0000", "A0.00"):
+    # COVER SHEET HANDLING — slot 0000 under the post-2026-05 numbering scheme.
+    if sheet_number == "0000":
         return get_cover_titleblock()
 
     # 1. OVERRIDE (user explicitly selected)

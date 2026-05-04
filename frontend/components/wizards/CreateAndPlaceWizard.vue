@@ -493,15 +493,16 @@ const filteredTitleblocks = computed(() => {
 // --- STEP 3 LOGIC (VALIDATION + FILTER) ---
 const cleanSheetNumber = (str) => str.split(' - ')[0].trim();
 
-// Filter to only show A1 (1xxx), A5 (5xxx), and X-series sheets — those
-// are the layouts whose viewport position is meaningful to copy from.
-// Numbering follows the post-2026-05 spec: A1 → 1000-1099, A5 → 5000-5099,
-// X-series → X000-X999.
+// Strict A49 sheet-number format (post-2026-05 spec):
+//   A1 → 1000-1999, A5 → 5000-5999, X-series → X000-X999.
+// Mirrored against the backend reference-sheet regex in gpt_integration.py
+// so anything the wizard accepts will also be accepted server-side.
+const REF_SHEET_FORMAT = /^(?:[15]\d{3}|X\d{3})$/i;
+
 const filteredReferenceSheets = computed(() => {
-    const categoryFiltered = props.existingSheets.filter(s => {
-        const num = cleanSheetNumber(s).toUpperCase();
-        return num.startsWith('1') || num.startsWith('5') || num.startsWith('X');
-    });
+    const categoryFiltered = props.existingSheets.filter(s =>
+        REF_SHEET_FORMAT.test(cleanSheetNumber(s))
+    );
 
     if (!form.referenceSheet) return categoryFiltered;
 
@@ -514,6 +515,9 @@ const isValidReference = computed(() => {
   if (form.placement !== 'MATCH') return true;
   if (!form.referenceSheet) return false;
   const typed = form.referenceSheet.toUpperCase().trim();
+  // Reject inputs that don't match the A49 format up front so non-conformant
+  // strings (e.g. "1010XX") never make it past the wizard to the backend.
+  if (!REF_SHEET_FORMAT.test(typed)) return false;
   return props.existingSheets.some(s => cleanSheetNumber(s).toUpperCase() === typed);
 });
 

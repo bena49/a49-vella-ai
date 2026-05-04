@@ -689,20 +689,23 @@ def route_gpt_fields(request, g):
             has_changes = True
 
     # 💥 FALLBACK: reference sheet number when alignment is MATCH.
-    # Catches "match sheet 1010", "matching reference 10XX", "to X010".
-    # Accepts 4-character A49 sheet numbers under the post-2026-05 spec:
-    #   - First char: a digit 1-9 (A1=1xxx, A5=5xxx, A9=9xxx ...) or "X"
-    #     (custom X-series).
-    #   - Last 3 chars: digits and/or "X" — the latter so placeholder/master
-    #     sheets like "10XX" or "X0XX" (used as alignment templates) can
-    #     also be referenced.
-    # Legacy A<digit>.<digits|xx> input remains deprecated and will fall
-    # through to the "please provide a reference sheet" prompt.
+    # Catches "match sheet 1010", "matching reference 10XX", "to X010",
+    # "matching sheet 1010XX" (project-specific master/placeholder sheet).
+    # Accepts 4-8 character sheet numbers under the post-2026-05 spec:
+    #   - First char: digit 1-9 (A1=1xxx, A5=5xxx ... A9=9xxx) or "X"
+    #     (custom X-series). A0 (0xxx) is excluded — covers/index/symbols
+    #     don't have alignment to copy.
+    #   - Remaining 3-7 chars: digits or letters, so the regex captures
+    #     both standard 4-digit numbers AND project-specific extensions
+    #     like "1010XX", "1010M", "X0MASTER".
+    # Existence is validated downstream against the cached sheet list, so
+    # the regex only needs to be permissive enough to extract the token.
+    # Legacy A<digit>.<digits|xx> input remains deprecated.
     if (request.session.get("ai_pending_alignment_mode") == "MATCH"
         and not request.session.get("ai_pending_reference_sheet")):
         ref_match = re.search(
             r'(?:match(?:ing)?|reference|to)\s+(?:sheet\s+)?'
-            r'([1-9X][\dXx]{3})\b',
+            r'([1-9X][\dA-Za-z]{3,7})\b',
             raw_msg, re.IGNORECASE
         )
         if ref_match:

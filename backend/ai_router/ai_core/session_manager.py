@@ -74,7 +74,13 @@ def reset_pending(request):
         
         "ai_pending_scope_box_id",
         "ai_scope_box_checked",
-        
+
+        # Loop guard for the one-shot get_levels round-trip kicked off by
+        # view_creator / sheet_creator / batch_processor when a chat-typed
+        # command needs to resolve Thai/special tokens (SITE, TOP, RF) but
+        # ai_last_known_levels has not been cached yet.
+        "ai_levels_fetch_attempted",
+
         # Reset Flags
         "ai_expecting_reference_sheet",
         "ai_expecting_alignment_selection",

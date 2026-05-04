@@ -1,23 +1,25 @@
-﻿// ============================================================================
+// ============================================================================
 // GetLevelsCommand.cs  —  Vella AI
 // ----------------------------------------------------------------------------
-// Replaces GetLevelsInfo.cs
-//
 // Purpose:
-//   • Returns a clean JSON-like string describing the actual Revit levels.
-//   • Used by Python's level_engine to debug mappings.
-//   • Called by envelope: { "command": "get_levels" }
+//   • Collects the active project's levels and posts them to Django as
+//     "list_levels_result" so the level_matcher can resolve user-supplied
+//     tokens (SITE, TOP, RF, L1, B1M ...) to the project's exact Revit
+//     level names regardless of naming convention (English / Thai / mixed).
+//   • Follows the same Django-round-trip pattern as ListViewsCommand /
+//     ListSheetsCommand: posts the result, then auto-executes any
+//     "revit_command" follow-up envelope returned by Django.
 //
-// Output Format:
-//   L1 → “Level 1”, “L2”, “02”, "B1", “Roof”, etc.
-//   Returns all levels exactly as Revit sees them.
+// Called by envelope: { "command": "get_levels", "session_key": "..." }
 // ============================================================================
 
+using A49AIRevitAssistant.Models;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Linq;
-using System.Text;
+using System.Threading.Tasks;
 
 namespace A49AIRevitAssistant.Executor.Commands
 {
@@ -30,40 +32,65 @@ namespace A49AIRevitAssistant.Executor.Commands
             _uiapp = uiapp;
         }
 
-        // ============================================================================
-        // EXECUTE
-        // ============================================================================
-        public string Execute()
+        public string Execute(string sessionKey)
         {
             try
             {
                 UIDocument uidoc = _uiapp.ActiveUIDocument;
                 Document doc = uidoc.Document;
 
+                A49Logger.Log("🔍 GetLevelsCommand: Collecting project levels...");
+
                 var levels = new FilteredElementCollector(doc)
                     .OfClass(typeof(Level))
                     .Cast<Level>()
                     .OrderBy(l => l.Elevation)
+                    .Select(l => new
+                    {
+                        name = l.Name ?? "Unnamed",
+                        elevation_mm = Math.Round(
+                            UnitUtils.ConvertFromInternalUnits(l.Elevation, UnitTypeId.Millimeters),
+                            2)
+                    })
                     .ToList();
 
-                if (levels.Count == 0)
-                    return "[]";
+                A49Logger.Log($"📤 Sending {levels.Count} levels to Django for Session: {sessionKey}");
 
-                // Build JSON-like text for Python
-                StringBuilder sb = new StringBuilder();
-                sb.Append("[\n");
-
-                foreach (var lvl in levels)
+                JObject response = Task.Run(async () => await DjangoBridge.SendAsync(new
                 {
-                    double elevFeet = lvl.Elevation;
-                    double elevMM = UnitUtils.ConvertFromInternalUnits(elevFeet, UnitTypeId.Millimeters);
+                    list_levels_result = levels,
+                    session_key = sessionKey
+                })).GetAwaiter().GetResult();
 
-                    sb.Append($"  {{ \"name\": \"{lvl.Name}\", \"elevation_mm\": {Math.Round(elevMM, 2)} }},\n");
+                if (response == null)
+                    return "❌ No response from Vella (Check Internet/Logs).";
+
+                // Auto-execute follow-up command (the original create_view /
+                // create_sheet envelope, now with resolved level names).
+                if (response["revit_command"] is JObject cmdObj)
+                {
+                    A49Logger.Log("⚡ Follow-up command detected in GetLevels response.");
+                    try
+                    {
+                        var followUpEnvelope = cmdObj.ToObject<RevitCommandEnvelope>();
+                        var executor = new DraftingCommandExecutor(_uiapp);
+                        string followUpResult = executor.ExecuteEnvelope(followUpEnvelope);
+
+                        string aiMessage = response["message"]?.ToString() ?? "";
+                        return string.IsNullOrWhiteSpace(aiMessage)
+                            ? followUpResult
+                            : $"{aiMessage}\n{followUpResult}";
+                    }
+                    catch (Exception ex)
+                    {
+                        return $"❌ Error executing follow-up command: {ex.Message}";
+                    }
                 }
 
-                sb.Append("]");
+                if (response["message"] != null)
+                    return response["message"].ToString();
 
-                return sb.ToString();
+                return "✅ Levels synced (Silent success).";
             }
             catch (Exception ex)
             {

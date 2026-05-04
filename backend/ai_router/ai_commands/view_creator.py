@@ -48,6 +48,29 @@ def finalize_create_views(request):
         request.session["ai_last_known_views"] = []
         request.session.modified = True
 
+    # STEP 0.7: LEVEL CACHE CHECK
+    # Chat-typed commands skip the wizard's cache_level_inventory step, so
+    # ai_last_known_levels can be empty here. If the user asked for levels
+    # that include special tokens (SITE, TOP, RF) — which have no digit for
+    # C#'s ResolveLevel digit-fallback to grab onto — they would silently be
+    # skipped. Force a one-shot get_levels round-trip to fill the cache;
+    # the callback will resolve tokens to project-native names and resume.
+    fetch_attempted = request.session.get("ai_levels_fetch_attempted")
+    if levels and not request.session.get("ai_last_known_levels") and not fetch_attempted:
+        request.session["ai_levels_fetch_attempted"] = True
+        request.session["ai_pending_request_data"] = {
+            "intent": request.session.get("ai_pending_intent"),
+            "view_type": raw_vt,
+            "levels": levels,
+            "stage": stage,
+            "template": tpl,
+            "batch": batch_raw,
+            "scope_box_id": raw_scope_box_id,
+            "user_provided_name": user_provided_name
+        }
+        request.session.modified = True
+        return send_envelope(request, {"command": "get_levels"})
+
     # 1) CACHE CHECK
     if not request.session.get("ai_last_known_views"):
         request.session["ai_pending_request_data"] = {

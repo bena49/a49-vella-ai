@@ -2,6 +2,7 @@
 # Extracted from views.py — Revit list-result callback handlers
 
 import json
+import re
 from rest_framework.response import Response
 
 from ..ai_utils.formatters import (
@@ -163,13 +164,92 @@ def handle_list_scope_boxes_result(request, finalize_router_fn):
 
 
 # =====================================================================
+# CALLBACK: list_levels_result
+# =====================================================================
+
+def _parse_levels_result(raw_result):
+    """
+    Normalizes the get_levels response into a list of level-name strings.
+    C# GetLevelsCommand may post the levels either:
+      - as a JSON array of {name, elevation_mm} dicts (preferred, post-fix), or
+      - as a stringified JSON-LIKE blob with a trailing comma before "]"
+        (legacy GetLevelsCommand StringBuilder output).
+    Both shapes are accepted.
+    """
+    if not raw_result:
+        return []
+    levels_data = raw_result
+    if isinstance(raw_result, str):
+        text = raw_result.strip()
+        if not text:
+            return []
+        # Strip the legacy trailing-comma artifact ("[ ..., ]") so json.loads succeeds.
+        text = re.sub(r",\s*\]", "]", text)
+        try:
+            levels_data = json.loads(text)
+        except Exception:
+            return []
+
+    names = []
+    if isinstance(levels_data, list):
+        for entry in levels_data:
+            if isinstance(entry, dict):
+                name = entry.get("name")
+                if name:
+                    names.append(name)
+            elif isinstance(entry, str) and entry.strip():
+                names.append(entry.strip())
+    return names
+
+
+def handle_list_levels_result(request, finalize_router_fn):
+    """
+    Handles the list_levels_result callback from C# (sent by GetLevelsCommand).
+    Populates ai_last_known_levels, resolves any pending level tokens against
+    the actual project level names, then resumes the original chat command.
+    """
+    raw_result = request.data.get("list_levels_result")
+    level_names = _parse_levels_result(raw_result)
+
+    request.session["ai_last_known_levels"] = level_names
+    request.session.modified = True
+
+    pending_data = request.session.get("ai_pending_request_data")
+    if pending_data:
+        _restore_pending_data(request, pending_data, _FULL_PENDING_KEY_MAP)
+
+        # Resolve raw tokens (e.g. SITE, TOP, L1, B1M) to the project's exact
+        # Revit level names so the C# add-in can match them directly. Without
+        # this step, tokens with no digit (SITE, TOP, RF) fail C#'s digit-based
+        # fallback in projects where level names are Thai or otherwise
+        # non-English.
+        if level_names:
+            try:
+                from ..ai_engines.level_matcher import resolve_tokens_to_project_levels
+                tokens = request.session.get("ai_pending_levels_parsed") or []
+                if tokens:
+                    resolved = resolve_tokens_to_project_levels(tokens, level_names)
+                    if resolved and resolved != tokens:
+                        request.session["ai_pending_levels_parsed"] = resolved
+                        request.session.modified = True
+            except Exception:
+                # Best-effort; if resolution fails the existing C# fallback
+                # still runs for digit-bearing tokens.
+                pass
+
+        return finalize_router_fn(request)
+
+    return Response({"message": "Levels cached.", "session_key": request.session.session_key})
+
+
+# =====================================================================
 # DISPATCHER: Check all callbacks in one call
 # =====================================================================
 
 def handle_revit_callbacks(request, finalize_router_fn):
     """
     Checks request.data for any Revit list-result callback keys.
-    
+
     Returns:
         Response if a callback was handled, None if no callback found.
     """
@@ -183,6 +263,9 @@ def handle_revit_callbacks(request, finalize_router_fn):
 
     if "list_scope_boxes_result" in data_keys:
         return handle_list_scope_boxes_result(request, finalize_router_fn)
+
+    if "list_levels_result" in data_keys:
+        return handle_list_levels_result(request, finalize_router_fn)
 
     # auto_dim_result arrives via Django if the C# bridge routes through backend.
     # In the standard flow it is sent directly via SendRawMessage to the frontend,

@@ -126,7 +126,7 @@ namespace A49AIRevitAssistant.Executor
                         return new ListViewsOnSheetCommand(_uiapp).Execute(targetSheet);
 
                     case "get_levels":
-                        return new GetLevelsCommand(_uiapp).Execute();
+                        return new GetLevelsCommand(_uiapp).Execute(env.session_key);
 
                     case "list_scope_boxes":
                         return new ListScopeBoxesCommand(_uiapp).Execute(env.session_key);

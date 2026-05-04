@@ -129,6 +129,18 @@ CASES = [
     ("Opt2 · ระดับชั้นใต้ดิน B1",   OPTION_2_TH, "ระดับชั้นใต้ดิน B1",           ["-5.82 ระดับชั้นใต้ดิน B1"]),
     ("Opt2 · multi mix EN list",   OPTION_2_TH, "L1, L2, L3",                  ["+0.50 ระดับพื้นชั้น 1", "+5.50 ระดับพื้นชั้น 2", "+10.50 ระดับพื้นชั้น 3"]),
 
+    # The exact bug Ben reported 2026-05-04: chat-typed command with the full
+    # Thai level list including SITE + TOP. Pre-fix this skipped TOP and SITE
+    # because they have no digit for C#'s ResolveLevel digit-fallback. Post-fix
+    # this resolves all 7 to the project's exact Thai names so C# matches
+    # them directly.
+    # Note: parse_levels emits special tokens (TOP, SITE) before digit-bearing
+    # ones (L1, L2 ...) regardless of input order — sheet_creator.level_sort_key
+    # re-sorts before display, so the user-visible order is unaffected.
+    ("Opt2 · full Thai list bug repro", OPTION_2_TH,
+     "ระดับพื้นดิน, ระดับพื้นชั้น 1, ระดับพื้นชั้น 2, ระดับพื้นชั้น 3, ระดับสูงสุดของอาคาร, ระดับชั้นใต้ดิน B1, ระดับชั้นใต้ดิน B1M",
+     ["+37.30 ระดับสูงสุดของอาคาร", "+0.00 ระดับพื้นดิน", "+0.50 ระดับพื้นชั้น 1", "+5.50 ระดับพื้นชั้น 2", "+10.50 ระดับพื้นชั้น 3", "-5.82 ระดับชั้นใต้ดิน B1", "-2.42 ระดับชั้นใต้ดิน B1M"]),
+
     # ── EDGE CASES ───────────────────────────────────────────────────
     ("Empty cache passthrough",    [],          "L2",                          ["L2"]),
     ("Token has no project match", BASE_OPTION, "L99",                         ["L99"]),  # passes through

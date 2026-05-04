@@ -38,12 +38,24 @@ def finalize_create_and_place(request):
     # 1) CHECK CACHE (With Loop Protection)
     views_cache = request.session.get("ai_last_known_views") or []
     sheets_cache = request.session.get("ai_last_known_sheets") or []
-    
+    levels_cache = request.session.get("ai_last_known_levels") or []
+
     has_views = len(views_cache) > 0
     has_sheets = len(sheets_cache) > 0
-    
+    has_levels = len(levels_cache) > 0
+
+    pending_levels = request.session.get("ai_pending_levels_parsed") or []
     pending_data = request.session.get("ai_pending_request_data") or {}
     last_action = pending_data.get("last_action")
+    fetch_attempted = request.session.get("ai_levels_fetch_attempted")
+
+    # A0. Need Levels? (Chat-typed commands skip the wizard's level cache step.
+    # Without this, special tokens like SITE / TOP fail downstream because the
+    # C# digit-fallback can't match them against Thai-named project levels.)
+    if pending_levels and not has_levels and not fetch_attempted:
+        request.session["ai_levels_fetch_attempted"] = True
+        save_pending_state(request, "fetching_levels")
+        return send_envelope(request, {"command": "get_levels"})
 
     # A. Need Views?
     if not has_views:

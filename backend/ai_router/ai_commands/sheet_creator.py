@@ -202,6 +202,27 @@ def execute_sheet_creation(request):
     if not fam or not typ:
         return request_titleblock_choice(request)
 
+    # Level Cache Check
+    # Chat-typed commands may arrive with parsed level tokens (SITE, TOP,
+    # L1, B1M ...) but no project-level cache. Sheet numbering for level-
+    # based categories (A1, A5) and the ROOF/TOP slot computation both
+    # depend on knowing the actual project levels, so fetch them once
+    # before proceeding. The callback resolves tokens and re-enters here.
+    fetch_attempted = request.session.get("ai_levels_fetch_attempted")
+    if levels and not request.session.get("ai_last_known_levels") and not fetch_attempted:
+        request.session["ai_levels_fetch_attempted"] = True
+        request.session["ai_pending_request_data"] = {
+            "intent": request.session.get("ai_pending_intent"),
+            "sheet_category": cat_raw,
+            "stage": stage,
+            "titleblock": raw_tb,
+            "batch": batch_raw,
+            "levels": levels,
+            "view_type": view_type
+        }
+        request.session.modified = True
+        return send_envelope(request, {"command": "get_levels"})
+
     # Cache Check
     if not request.session.get("ai_last_known_sheets"):
         request.session["ai_pending_request_data"] = {

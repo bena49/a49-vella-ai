@@ -255,9 +255,9 @@
             </label>
             
             <div class="relative" ref="refSheetDropdownWrapper">
-                <input v-model="form.referenceSheet" 
-                       type="text" 
-                       placeholder="Type to search (e.g. A1.01)" 
+                <input v-model="form.referenceSheet"
+                       type="text"
+                       placeholder="Type to search (e.g. 1010)"
                        class="w-full bg-[#0A1D4A]/50 border rounded-lg px-3 py-2 text-sm text-white outline-none font-mono focus:bg-[#0A1D4A]/80 transition"
                        :class="isValidReference ? 'border-[#00BCD4]/50 focus:border-[#00BCD4]' : 'border-red-500/50 focus:border-red-500'"
                        @focus="isRefSheetOpen = true"
@@ -493,18 +493,19 @@ const filteredTitleblocks = computed(() => {
 // --- STEP 3 LOGIC (VALIDATION + FILTER) ---
 const cleanSheetNumber = (str) => str.split(' - ')[0].trim();
 
-// 💥 1. UPDATED FILTER TO ONLY SHOW A1, A5, X
+// Filter to only show A1 (1xxx), A5 (5xxx), and X-series sheets — those
+// are the layouts whose viewport position is meaningful to copy from.
+// Numbering follows the post-2026-05 spec: A1 → 1000-1099, A5 → 5000-5099,
+// X-series → X000-X999.
 const filteredReferenceSheets = computed(() => {
-    // Step A: Pre-filter for relevant categories (A1, A5, X series)
     const categoryFiltered = props.existingSheets.filter(s => {
         const num = cleanSheetNumber(s).toUpperCase();
-        return num.startsWith('A1') || num.startsWith('A5') || num.startsWith('X');
+        return num.startsWith('1') || num.startsWith('5') || num.startsWith('X');
     });
 
-    // Step B: Search Filter (if typing)
     if (!form.referenceSheet) return categoryFiltered;
-    
-    return categoryFiltered.filter(s => 
+
+    return categoryFiltered.filter(s =>
         s.toUpperCase().includes(form.referenceSheet.toUpperCase())
     );
 });

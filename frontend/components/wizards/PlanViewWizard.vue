@@ -281,11 +281,16 @@ watch(selectedType, (newType) => {
   }
 });
 
-// 💥 UPDATED: Disable SITE for both Ceiling Plans AND Area Plans
+// 💥 UPDATED: Disable SITE for both Ceiling Plans AND Area Plans.
+// Thai SITE phrases mirror backend level_matcher._SPECIAL_PHRASES so a
+// project with Thai level names (e.g. "+0.00 ระดับพื้นดิน") gets the
+// same disabled treatment as English "SITE".
 const isLevelDisabled = (lvl) => {
   const type = selectedType.value;
   const isRestrictedType = type === "Ceiling Plan" || type === "Area Plan";
-  const isSite = lvl.toUpperCase().includes("SITE");
+  const isSite = lvl.toUpperCase().includes("SITE")
+              || lvl.includes("ระดับพื้นดิน")
+              || lvl.includes("พื้นดิน");
   return isRestrictedType && isSite;
 };
 

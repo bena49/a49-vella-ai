@@ -1,6 +1,11 @@
 import random
 from rest_framework.response import Response
 from ..ai_core.session_manager import reset_session_completely, reset_pending
+from .naming_engine import (
+    SCHEMES,
+    resolve_scheme_for_request,
+    _detect_scheme_from_sheets,
+)
 
 def process_conversational_intent(raw_text_lower, request):
     """
@@ -140,14 +145,120 @@ def process_conversational_intent(raw_text_lower, request):
     # 4. RESET / CLEAR
     # ==========================================================
     resets = {
-        "reset", "clear", "clear memory", "start over", "new session", 
+        "reset", "clear", "clear memory", "start over", "new session",
         "forget everything", "รีเซ็ต", "เริ่มใหม่", "ล้างข้อมูล"
     }
-    
+
     if clean_text in resets:
         reset_session_completely(request)
         msg = "✅ ระบบได้ถูกรีเซ็ตเรียบร้อยแล้วค่ะ เริ่มงานใหม่ได้เลย!" if is_thai else "✅ Session reset. We are ready to start fresh!"
         return Response({"message": msg})
+
+    # ==========================================================
+    # 5. NUMBERING SCHEME TOGGLE (V1 small / V2 large)
+    # ==========================================================
+    # Quick chat command for opting a new/empty project into the v2 5-digit
+    # numbering scheme. Auto-detect (resolve_scheme_for_request) takes over
+    # once the project has its first v2 sheet — at that point the override
+    # becomes a no-op. Use these to bootstrap empty projects only.
+
+    set_v2 = {
+        "use v2 numbering", "use v2", "switch to v2",
+        "use large project numbering", "use large numbering",
+        "use 5 digit numbering", "use 5-digit numbering",
+        "ใช้เลขแบบ v2", "ใช้เลข 5 หลัก", "ใช้เลขโครงการใหญ่",
+    }
+
+    set_v1 = {
+        "use v1 numbering", "use v1", "switch to v1",
+        "use small project numbering", "use small numbering",
+        "use 4 digit numbering", "use 4-digit numbering",
+        "ใช้เลขแบบ v1", "ใช้เลข 4 หลัก", "ใช้เลขโครงการเล็ก",
+    }
+
+    inquire_scheme = {
+        "what numbering scheme", "what scheme", "which numbering scheme",
+        "current scheme", "current numbering scheme",
+        "what numbering scheme is active", "show numbering scheme",
+        "เลขแบบไหน", "ใช้เลขแบบไหน", "ตอนนี้ใช้เลขอะไร",
+    }
+
+    if clean_text in set_v2 or clean_text in set_v1:
+        target_name = "v2_large" if clean_text in set_v2 else "v1_small"
+        request.session["ai_numbering_scheme"] = target_name
+        request.session.modified = True
+
+        # Show the user what will actually be used (auto-detect can override
+        # if the project already has sheets of the other shape).
+        effective = resolve_scheme_for_request(request)
+        effective_name = next(
+            (n for n, cfg in SCHEMES.items() if cfg is effective), "unknown")
+        cached_sheets = request.session.get("ai_last_known_sheets") or []
+        detected = _detect_scheme_from_sheets(cached_sheets)
+
+        target_label = "5-digit (large project)" if target_name == "v2_large" else "4-digit (small project)"
+        target_label_th = "เลข 5 หลัก (โครงการใหญ่)" if target_name == "v2_large" else "เลข 4 หลัก (โครงการเล็ก)"
+
+        if effective_name == target_name:
+            if is_thai:
+                msg = f"✅ ตั้งค่าเป็น {target_label_th} เรียบร้อยแล้วค่ะ ใช้กับ Sheet ใหม่ได้เลย!"
+            else:
+                msg = f"✅ Numbering scheme set to **{target_label}**. New sheets will use this format."
+        else:
+            # Override was set, but auto-detect won — explain why.
+            effective_label = "5-digit (v2)" if effective_name == "v2_large" else "4-digit (v1)"
+            if is_thai:
+                msg = (
+                    f"⚠️ ตั้งค่าเป็น {target_label_th} แล้ว แต่ระบบตรวจพบว่าโครงการนี้มี Sheet "
+                    f"แบบ {effective_label} อยู่แล้ว — เพื่อไม่ให้ผสมกัน ระบบจะใช้ {effective_label} ต่อค่ะ\n"
+                    f"ถ้าต้องการเปลี่ยนจริง ๆ ต้องเปลี่ยนเลข Sheet เก่าให้ตรงกับรูปแบบใหม่ก่อนนะคะ"
+                )
+            else:
+                msg = (
+                    f"⚠️ Override saved as **{target_label}**, but this project already has "
+                    f"**{effective_label}** sheets — auto-detect wins to prevent mixing.\n"
+                    f"Renumber the existing sheets first if you want to switch the whole project."
+                )
+        return Response({"message": msg, "session_key": request.session.session_key})
+
+    if clean_text in inquire_scheme:
+        effective = resolve_scheme_for_request(request)
+        effective_name = next(
+            (n for n, cfg in SCHEMES.items() if cfg is effective), "unknown")
+        override = request.session.get("ai_numbering_scheme")
+        cached_sheets = request.session.get("ai_last_known_sheets") or []
+        detected = _detect_scheme_from_sheets(cached_sheets)
+
+        # Identify which mechanism actually picked the active scheme.
+        if detected and detected in SCHEMES:
+            reason = "auto-detected"
+            reason_th = "ตรวจพบจาก Sheet ที่มีอยู่"
+        elif override and override in SCHEMES:
+            reason = "session override"
+            reason_th = "ตั้งค่าโดยผู้ใช้"
+        else:
+            reason = "default"
+            reason_th = "ค่าเริ่มต้น"
+
+        digit_count = effective["digit_count"]
+        scheme_label = f"{effective_name} ({digit_count}-digit)"
+
+        if is_thai:
+            msg = (
+                f"📐 รูปแบบเลข Sheet ที่ใช้: **{scheme_label}**\n"
+                f"แหล่งที่มา: {reason_th}"
+            )
+            if override and detected and override != detected:
+                msg += f"\n(หมายเหตุ: ตั้ง Override เป็น {override} แต่ตรวจพบ {detected} ในโครงการ — ระบบใช้ตามที่ตรวจพบ)"
+        else:
+            msg = (
+                f"📐 Active numbering scheme: **{scheme_label}**\n"
+                f"Source: {reason}"
+            )
+            if override and detected and override != detected:
+                msg += f"\n(Override is `{override}` but project sheets are `{detected}` — auto-detect wins.)"
+
+        return Response({"message": msg, "session_key": request.session.session_key})
 
     # No conversational match found
     return None

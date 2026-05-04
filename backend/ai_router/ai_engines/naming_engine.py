@@ -189,18 +189,12 @@ SHEET_SET_MAP = {
 }
 PROJECT_PHASE_MAP = {"WV": "00 - WORKING VIEW", "PD": "01 - PRE-DESIGN", "DD": "02 - DESIGN DEVELOPMENT", "CD": "03 - CONSTRUCTION DOCUMENTS", "NONE": None}
 
-# Slot-specific names: only A0/A6/A7/A8 have distinct names per slot.
-# Each list is indexed by slot/10 (slot 0000 → idx 0; slot 0010 → idx 1).
-# A `None` placeholder means "no name at this slot" → falls back to category
-# default below, then to "CUSTOM SHEET".
-DEFAULT_SHEET_NAMES = {
-    "A0": ["COVER", "DRAWING INDEX", "SITE AND VICINITY PLAN",
-           "STANDARD SYMBOLS", "SAFETY PLAN", "WALL TYPES"],
-    "A6": [None, "ENLARGED TOILET PLAN", "FLOOR PATTERN PLAN", "CANOPY PLAN"],
-    "A7": [None, "ENLARGED STAIR PLAN", "ENLARGED STAIR SECTION",
-           "ENLARGED RAMP PLAN", "ENLARGED LIFT PLAN"],
-    "A8": [None, "DOOR SCHEDULE", "WINDOW SCHEDULE"],
-}
+# Slot-specific names live inside each scheme's category config under
+# `named_slots`. Indexed by primary slot position (slot offset / primary_increment):
+#   v1 A0: idx 0 = slot 0000 → "COVER"; idx 1 = slot 0010 → "DRAWING INDEX"; …
+#   v2 A0: idx 0 = slot 00000 → "COVER"; idx 1 = slot 00100 → "DRAWING INDEX"; …
+# A `None` placeholder means "no name at this slot" → falls back to
+# CATEGORY_DEFAULT_NAME below, then to "CUSTOM SHEET".
 
 # Single repeating name for categories where every slot is the same kind of
 # sheet (A2 = ELEVATIONS, A3 = BUILDING SECTIONS, etc.). Used as the fallback
@@ -214,8 +208,196 @@ CATEGORY_DEFAULT_NAME = {
 }
 COVER_TITLEBLOCK = {"family": "A49_TB_A1_Horizontal_Cover", "type": "Cover"}
 
+# =====================================================================
+# NUMBERING SCHEMES (single source of truth)
+#
+# Every sheet-number computation reads from the active scheme — base values,
+# slot increments, level/sub-level encoding, and slot string format. This
+# lets us swap between numbering conventions (e.g. 4-digit small-project vs
+# future 5-digit large-project) without touching slot logic.
+#
+# Per-category fields:
+#   type ........... "level" (A1/A5) or "sequence" (everything else)
+#   base ........... starting integer for the category (e.g. A1 = 1000)
+#   format ......... str.format template applied to the integer slot
+#   primary_increment . step between primary slots (e.g. 1010 → 1020 = +10)
+#   sub_increment ..... step for M/T sub-level slots and basement spacing
+#   level_increment ... only "level" type — step between L<N> slots
+#                       (e.g. L1 = base+10, L2 = base+20 → +10)
+#   sub_level_increment . only "level" type — step for M/T variants
+#                         (collisions on L1 push +1 in v1 small)
+#   site_slots ........ only "level" type — count of SITE slots reserved at
+#                       the very base (A1 has 1 in v1; A5 has 0 = no SITE)
+#   basement_count .... only "level" type — max basement number supported
+#                       (B<n> for n in 1..basement_count)
+#   roof_offset ....... only "level" type — "auto" = max above-grade L + 1,
+#                       or an int = fixed offset from base
+#
+# Phase 1: only "v1_small" registered. Phase 2 will add "v2_large".
+# =====================================================================
+
+SCHEMES = {
+    "v1_small": {
+        "digit_count": 4,
+        "categories": {
+            "A0": {"type": "sequence", "base": 0,    "primary_increment": 10, "sub_increment": 1, "format": "{:04d}",
+                   "named_slots": ["COVER", "DRAWING INDEX", "SITE AND VICINITY PLAN",
+                                   "STANDARD SYMBOLS", "SAFETY PLAN", "WALL TYPES"]},
+            "A1": {"type": "level",    "base": 1000, "level_increment": 10, "sub_level_increment": 1,
+                                       "site_slots": 1, "basement_count": 9, "roof_offset": "auto",
+                                       "format": "{:04d}"},
+            "A2": {"type": "sequence", "base": 2000, "primary_increment": 10, "sub_increment": 1, "format": "{:04d}"},
+            "A3": {"type": "sequence", "base": 3000, "primary_increment": 10, "sub_increment": 1, "format": "{:04d}"},
+            "A4": {"type": "sequence", "base": 4000, "primary_increment": 10, "sub_increment": 1, "format": "{:04d}"},
+            "A5": {"type": "level",    "base": 5000, "level_increment": 10, "sub_level_increment": 1,
+                                       "site_slots": 0, "basement_count": 9, "roof_offset": "auto",
+                                       "format": "{:04d}"},
+            # A6 reordered per V2 spec (applied to both schemes for consistency):
+            # FLOOR PATTERN PLAN at 6010, ENLARGED TOILET PLAN at 6020.
+            "A6": {"type": "sequence", "base": 6000, "primary_increment": 10, "sub_increment": 1, "format": "{:04d}",
+                   "named_slots": [None, "FLOOR PATTERN PLAN", "ENLARGED TOILET PLAN", "CANOPY PLAN"]},
+            "A7": {"type": "sequence", "base": 7000, "primary_increment": 10, "sub_increment": 1, "format": "{:04d}",
+                   "named_slots": [None, "ENLARGED STAIR PLAN", "ENLARGED STAIR SECTION",
+                                   "ENLARGED RAMP PLAN", "ENLARGED LIFT PLAN"]},
+            "A8": {"type": "sequence", "base": 8000, "primary_increment": 10, "sub_increment": 1, "format": "{:04d}",
+                   "named_slots": [None, "DOOR SCHEDULE", "WINDOW SCHEDULE"]},
+            "A9": {"type": "sequence", "base": 9000, "primary_increment": 10, "sub_increment": 1, "format": "{:04d}"},
+            "X0": {"type": "sequence", "base": 0,    "primary_increment": 10, "sub_increment": 1, "format": "X{:03d}"},
+        },
+    },
+    "v2_large": {
+        # V2 5-digit format for large projects: every increment is ×10 the
+        # v1 value (primary 100 vs 10, sub 10 vs 1). Same conceptual shape,
+        # more breathing room. SITE has 10 slots in A1 instead of 1; basements
+        # span 9 slots (B9-B1) at +10 spacing instead of 3 slots at +1.
+        "digit_count": 5,
+        "categories": {
+            "A0": {"type": "sequence", "base": 0,     "primary_increment": 100, "sub_increment": 10, "format": "{:05d}",
+                   "named_slots": ["COVER", "DRAWING INDEX", "SITE AND VICINITY PLAN",
+                                   "STANDARD SYMBOLS", "SAFETY PLAN", "WALL TYPES"]},
+            "A1": {"type": "level",    "base": 10000, "level_increment": 100, "sub_level_increment": 10,
+                                       "site_slots": 10, "basement_count": 9, "roof_offset": "auto",
+                                       "format": "{:05d}"},
+            "A2": {"type": "sequence", "base": 20000, "primary_increment": 100, "sub_increment": 10, "format": "{:05d}"},
+            "A3": {"type": "sequence", "base": 30000, "primary_increment": 100, "sub_increment": 10, "format": "{:05d}"},
+            "A4": {"type": "sequence", "base": 40000, "primary_increment": 100, "sub_increment": 10, "format": "{:05d}"},
+            "A5": {"type": "level",    "base": 50000, "level_increment": 100, "sub_level_increment": 10,
+                                       "site_slots": 0, "basement_count": 9, "roof_offset": "auto",
+                                       "format": "{:05d}"},
+            # A6 reordered per V2 spec: FLOOR PATTERN first, TOILET second.
+            "A6": {"type": "sequence", "base": 60000, "primary_increment": 100, "sub_increment": 10, "format": "{:05d}",
+                   "named_slots": [None, "FLOOR PATTERN PLAN", "ENLARGED TOILET PLAN", "CANOPY PLAN"]},
+            "A7": {"type": "sequence", "base": 70000, "primary_increment": 100, "sub_increment": 10, "format": "{:05d}",
+                   "named_slots": [None, "ENLARGED STAIR PLAN", "ENLARGED STAIR SECTION",
+                                   "ENLARGED RAMP PLAN", "ENLARGED LIFT PLAN"]},
+            "A8": {"type": "sequence", "base": 80000, "primary_increment": 100, "sub_increment": 10, "format": "{:05d}",
+                   "named_slots": [None, "DOOR SCHEDULE", "WINDOW SCHEDULE"]},
+            "A9": {"type": "sequence", "base": 90000, "primary_increment": 100, "sub_increment": 10, "format": "{:05d}"},
+            "X0": {"type": "sequence", "base": 0,     "primary_increment": 100, "sub_increment": 10, "format": "X{:04d}"},
+        },
+    },
+}
+
+
+def get_active_scheme(scheme_name=None):
+    """Return the scheme config dict to use for slot calculations.
+
+    When called with no arguments, returns the global default (v1_small).
+    Per-request resolution should use `resolve_scheme_for_request(request)`
+    instead — it inspects the project's existing sheets and the user's
+    session override.
+    """
+    return SCHEMES[scheme_name or "v1_small"]
+
+
+def _cat_cfg(sheet_type, scheme=None):
+    """Look up a category's config from the active (or supplied) scheme."""
+    scheme = scheme or get_active_scheme()
+    return scheme["categories"].get((sheet_type or "").upper())
+
+
+# ── Per-request scheme resolution ────────────────────────────────────────
+# Selects v1_small or v2_large based on (in priority order):
+#   1. Auto-detect from cached project sheets — if any A49-shaped sheet
+#      number is 5+ chars, the project is on v2 (decisive — wins over the
+#      override so a v2 project can never accidentally write v1 slots).
+#   2. Explicit session override — `request.session['ai_numbering_scheme']`,
+#      used for new/empty projects where auto-detect can't decide.
+#   3. Default — v1_small.
+#
+# This implements the user-approved "B + A combined" toggle from the
+# Phase 0 design conversation: auto-detect is primary, override is a
+# fallback for empty projects.
+
+def _detect_scheme_from_sheets(sheets):
+    """Inspect a list of cached sheet-number strings and return the scheme
+    name that matches the dominant numbering shape:
+      - "v2_large" if any sheet looks like a 5+ char A49 number (4-digit
+        post-X for X-series, 5+ digits for A-series).
+      - "v1_small" if at least one sheet looks like a valid A49 number but
+        none is 5+ chars (i.e. the project is established on v1).
+      - None if the cache is empty or contains no recognisably-A49 sheets
+        (caller falls back to override or default).
+
+    Only sheets whose number portion is pure digits or X+digits count
+    toward detection. User-renamed / non-conformant sheets are ignored
+    so they can't poison the auto-detect.
+    """
+    if not sheets:
+        return None
+    saw_any_a49 = False
+    for s in sheets:
+        num = str(s).split(" - ")[0].strip().upper()
+        if not num:
+            continue
+        is_a49 = (num.isdigit()) or (num.startswith("X") and num[1:].isdigit())
+        if not is_a49:
+            continue
+        saw_any_a49 = True
+        if len(num) >= 5:
+            return "v2_large"
+    return "v1_small" if saw_any_a49 else None
+
+
+def resolve_scheme_for_request(request):
+    """Determine the active numbering scheme for this request's session.
+
+    Returns the scheme dict (suitable for passing into
+    `build_sheets_payload(..., scheme=...)`, `get_next_sheet_number(..., scheme=...)`,
+    etc.). Falls back to the global default (v1_small) when no request
+    context is available.
+    """
+    if request is None:
+        return get_active_scheme()
+
+    # 1. Auto-detect from cached project sheets — wins over override so a
+    #    project with v2 sheets is never written to v1 by accident.
+    cached_sheets = []
+    try:
+        cached_sheets = request.session.get("ai_last_known_sheets") or []
+    except Exception:
+        pass
+    detected = _detect_scheme_from_sheets(cached_sheets)
+    if detected and detected in SCHEMES:
+        return SCHEMES[detected]
+
+    # 2. Session override — used for new/empty projects.
+    try:
+        override = request.session.get("ai_numbering_scheme")
+    except Exception:
+        override = None
+    if override and override in SCHEMES:
+        return SCHEMES[override]
+
+    # 3. Default
+    return SCHEMES["v1_small"]
+
+
 # Categories whose slot is determined by a level (not by sequence position).
-_LEVEL_BASED_CATEGORIES = {"A1", "A5"}
+# Derived from the active scheme so swapping schemes can't desync this.
+def _level_based_categories(scheme=None):
+    scheme = scheme or get_active_scheme()
+    return {name for name, cfg in scheme["categories"].items() if cfg.get("type") == "level"}
 
 def normalize_sheet_type(name_or_title, view_type_raw=None):
     text = (str(name_or_title or "") + " " + str(view_type_raw or "")).lower()
@@ -234,27 +416,32 @@ def normalize_sheet_type(name_or_title, view_type_raw=None):
 
 # ── Slot/number primitives ───────────────────────────────────────────────
 
-def _series_base(sheet_type):
-    """Numeric base for a sheet category. A0=0, A1=1000 … A9=9000.
-    X0 returns None (handled separately as letter-prefix format)."""
+def _series_base(sheet_type, scheme=None):
+    """Numeric base for a sheet category, read from the active scheme.
+    Returns None for X0 (preserves the prior contract — call sites use
+    ``_series_base(...) or 0``)."""
     st = (sheet_type or "").upper()
     if st == "X0": return None
-    m = re.match(r"^A(\d)$", st)
-    if m: return int(m.group(1)) * 1000
-    return None
+    cat = _cat_cfg(st, scheme)
+    return cat["base"] if cat else None
 
-def _format_slot(sheet_type, slot):
-    """Render an integer slot as the displayed sheet-number string.
-    A0/A1/…/A9 → 4-digit zero-padded ('0010', '1090').
-    X0 → 'X' + 3-digit ('X010')."""
-    st = (sheet_type or "").upper()
-    if st == "X0": return f"X{int(slot):03d}"
-    return f"{int(slot):04d}"
+def _format_slot(sheet_type, slot, scheme=None):
+    """Render an integer slot as the displayed sheet-number string,
+    using the format template defined by the active scheme.
+    v1_small: A0-A9 → 4-digit zero-padded; X0 → 'X' + 3-digit.
+    v2_large: A0-A9 → 5-digit zero-padded; X0 → 'X' + 4-digit."""
+    cat = _cat_cfg(sheet_type, scheme)
+    if cat and cat.get("format"):
+        return cat["format"].format(int(slot))
+    # Fallback (shouldn't happen for registered categories)
+    scheme = scheme or get_active_scheme()
+    return f"{int(slot):0{scheme['digit_count']}d}"
 
-def _parse_slot(sheet_number):
+def _parse_slot(sheet_number, scheme=None):
     """Extract the numeric slot from a sheet-number string.
     Returns (slot_int, category_inferred) or (None, None) if not parseable.
-    For X0, returns the integer after the 'X'."""
+    Category is inferred by checking which scheme category's range contains
+    the slot (so this works for both 4-digit and 5-digit schemes)."""
     if not sheet_number: return None, None
     s = str(sheet_number).strip().upper()
     if s.startswith("X"):
@@ -264,10 +451,22 @@ def _parse_slot(sheet_number):
         n = int(s)
     except (ValueError, TypeError):
         return None, None
-    # Infer category from thousands digit
-    if n < 1000: cat = "A0"
-    else: cat = f"A{n // 1000}"
-    return n, cat
+
+    # Find which category owns this slot. Each numeric A-category occupies
+    # the range [base, base + range_size), where range_size = 10^(digit_count-1)
+    # — i.e. 1000 for v1 (A0=0-999, A1=1000-1999, …) and 10000 for v2.
+    scheme = scheme or get_active_scheme()
+    range_size = 10 ** (scheme["digit_count"] - 1)
+    for cat_name, cat_cfg in scheme["categories"].items():
+        if cat_name == "X0": continue
+        base = cat_cfg.get("base")
+        if base is None: continue
+        if base <= n < base + range_size:
+            return n, cat_name
+    # Fallback: derive from leading digit so unrecognised numbers still
+    # round-trip (matches prior "A{n // 1000}" behaviour for 4-digit numbers).
+    if n < range_size: return n, "A0"
+    return n, f"A{n // range_size}"
 
 def sort_key_sheet_number(sheet_number):
     """Stable sort key for sheet numbers. Sorts numeric (0000-9999) ascending,
@@ -312,7 +511,7 @@ def _max_above_grade_level(project_levels):
     return max_n
 
 def compute_sheet_slot(sheet_type, level_name=None, project_levels=None,
-                       request_levels=None):
+                       request_levels=None, scheme=None):
     """Compute the *initial* slot integer for a sheet, before collision check.
 
     For ROOF/TOP: prefers the highest above-grade level in `request_levels`
@@ -322,14 +521,28 @@ def compute_sheet_slot(sheet_type, level_name=None, project_levels=None,
     stale/dirty session caches and from hidden Revit reference levels that
     don't represent real building floors.
 
+    All slot math is parameterized via the active scheme:
+      - level_increment ........ step between L<N> slots
+      - sub_level_increment .... step for M/T variants and basement spacing
+      - basement_count ......... max basement number supported
+      - site_slots ............. count of SITE slots reserved at base (0 = no SITE)
+      - roof_offset ............ "auto" (= max above-grade L + 1) or fixed int
+
     Returns:
         int slot, or None if the combination is invalid (e.g. A5+SITE,
         unsupported level naming, level out of supported range).
     """
     st = (sheet_type or "").upper()
-    base = _series_base(st)
-    if base is None or st not in _LEVEL_BASED_CATEGORIES:
+    cat = _cat_cfg(st, scheme)
+    if cat is None or cat.get("type") != "level":
         return None  # Sequence-based — caller uses _next_sequence_slot
+
+    base = cat["base"]
+    level_inc = cat["level_increment"]
+    sub_inc = cat["sub_level_increment"]
+    site_slots = cat.get("site_slots", 0)
+    basement_count = cat.get("basement_count", 0)
+    roof_offset = cat.get("roof_offset", "auto")
 
     if not level_name:
         return None
@@ -337,43 +550,45 @@ def compute_sheet_slot(sheet_type, level_name=None, project_levels=None,
     from .level_matcher import extract_level_signature
     sig = extract_level_signature(level_name)
 
-    # SITE → base anchor (only for A1; A5 has no Site ceiling plan)
+    # SITE → base anchor (only when this category reserves SITE slots).
+    # A5 has site_slots=0 → SITE is rejected for ceiling plans.
     if sig["special"] == "SITE":
-        if st == "A5":
+        if site_slots <= 0:
             return None
-        return base
+        return base  # First SITE slot — collision loop allocates further sites
 
-    # ROOF / TOP → max above-grade L + 1, in slot terms (×10)
+    # ROOF / TOP → max above-grade L + 1, scaled by the level increment.
     if sig["special"] in ("RF", "TOP"):
+        if roof_offset != "auto":
+            return base + roof_offset
         max_n = _max_above_grade_level(request_levels) if request_levels else 0
         if max_n == 0:
             max_n = _max_above_grade_level(project_levels)
         if max_n == 0:
             max_n = 1  # Defensive: project/request with no above-grade levels
-        return base + (max_n + 1) * 10
+        return base + (max_n + 1) * level_inc
 
     # Above grade L<N>
     if sig["prefix"] == "L" and sig["digit"] is not None:
         n = sig["digit"]
         if n < 1 or n > 99:
             return None  # Out of range; spec caps at L99 for now
-        slot = base + n * 10
+        slot = base + n * level_inc
         if sig["suffix"]:
-            slot += 1  # M / T / … suffix → +1, FCFS handled by collision loop
+            slot += sub_inc  # M / T / … suffix → +1 (v1) or +10 (v2), FCFS via collision loop
         return slot
 
-    # Below grade B<N> — descends into the 1000–1009 range.
+    # Below grade B<N> — natural slot = base + (10 - N) * sub_increment
+    # (so B<basement_count> sits closest to base, B1 closest to L1).
     # Suffix variants (B<N>M, B<N>T, …) take the parent's natural slot
-    # (closer to grade); the bare basement shifts DOWN by 1 to make room.
-    # Cascades when multiple variants exist (each suffix variant at or above
-    # B<N> pushes B<N> down by 1). Without request context, falls back to
-    # the natural slot (B<N>=base+10−N) — same as before this enhancement.
+    # (closer to grade); the bare basement shifts DOWN by sub_increment to
+    # make room. Cascades when multiple variants exist.
     if sig["prefix"] == "B" and sig["digit"] is not None:
         n = sig["digit"]
-        if n < 1 or n > 9:
-            return None  # Cap at B9 (spec: rarely > B5 in practice)
+        if n < 1 or n > basement_count:
+            return None
 
-        natural_slot = base + (10 - n)
+        natural_slot = base + (10 - n) * sub_inc
 
         # Build the basement signature set from the request context. Each
         # entry is (digit, suffix). Distinct M/T variants count separately;
@@ -384,7 +599,7 @@ def compute_sheet_slot(sheet_type, level_name=None, project_levels=None,
             for lvl in request_levels:
                 ls = _extract(lvl)
                 if (ls["prefix"] == "B" and ls["digit"] is not None
-                        and 1 <= ls["digit"] <= 9):
+                        and 1 <= ls["digit"] <= basement_count):
                     request_basements.add((ls["digit"], ls["suffix"] or ""))
 
         if sig["suffix"]:
@@ -395,8 +610,8 @@ def compute_sheet_slot(sheet_type, level_name=None, project_levels=None,
             # Bare basement: shifted by suffix variants AT OR ABOVE this level.
             shift = sum(1 for d, s in request_basements if d <= n and s)
 
-        slot = natural_slot - shift
-        if slot < base + 1:
+        slot = natural_slot - shift * sub_inc
+        if slot < base + sub_inc:
             return None  # Overflowed past the basement range
         return slot
 
@@ -404,27 +619,30 @@ def compute_sheet_slot(sheet_type, level_name=None, project_levels=None,
 
 # ── Sequence-based slot selection (A0, A2-A4, A6-A8, X0) ─────────────────
 
-def _next_sequence_slot(sheet_type, existing_numbers):
-    """Pick the next +10 slot for a sequence-based category.
-    A0 / X0 begin at slot 0 (cover slot). All others begin at slot 10."""
+def _next_sequence_slot(sheet_type, existing_numbers, scheme=None):
+    """Pick the next primary-increment slot for a sequence-based category.
+    A0 / X0 begin at slot 0 (cover slot). All others begin at the first
+    primary slot above base."""
     st = (sheet_type or "").upper()
     cat_slots = _existing_in_category(st, existing_numbers)
-    base = _series_base(st) or 0  # X0 has no numeric base
+    base = _series_base(st, scheme) or 0  # X0 has no numeric base
+    cat = _cat_cfg(st, scheme) or {}
+    primary_inc = cat.get("primary_increment", 10)
 
     if not cat_slots:
         if st in ("A0", "X0"): return base + 0
-        return base + 10
+        return base + primary_inc
 
     # Always advance from the highest existing slot, never gap-fill.
     # Insert-between is a deliberate user action handled by a future wizard.
     max_slot = max(cat_slots)
-    next_slot = ((max_slot // 10) + 1) * 10
+    next_slot = ((max_slot // primary_inc) + 1) * primary_inc
     return next_slot
 
 # ── Public: get next sheet number ────────────────────────────────────────
 
 def get_next_sheet_number(sheet_type, existing_numbers, level_name=None,
-                          project_levels=None, request_levels=None):
+                          project_levels=None, request_levels=None, scheme=None):
     """Compute the next sheet number for a given category.
 
     Args:
@@ -436,50 +654,58 @@ def get_next_sheet_number(sheet_type, existing_numbers, level_name=None,
         request_levels: levels the user is creating sheets for in this batch.
             Preferred source for ROOF/TOP max computation (insulates against
             stale cache).
+        scheme: optional override for the active numbering scheme.
 
     Returns:
         Sheet-number string (e.g. '1010', 'X020'), or None when the
         combination is invalid (e.g. A5 + SITE).
     """
+    scheme = scheme or get_active_scheme()
     st = (sheet_type or "").upper()
+    cat = _cat_cfg(st, scheme) or {}
     existing_set = set(str(n).upper() for n in (existing_numbers or []))
 
+    # Range size per category (1000 for v1's 4-digit, 10000 for v2's 5-digit).
+    range_size = 10 ** (scheme["digit_count"] - 1)
+
     # Level-based path (A1, A5) — slot dictated by level
-    if st in _LEVEL_BASED_CATEGORIES and level_name:
+    if cat.get("type") == "level" and level_name:
         slot = compute_sheet_slot(st, level_name=level_name,
                                   project_levels=project_levels,
-                                  request_levels=request_levels)
+                                  request_levels=request_levels,
+                                  scheme=scheme)
         if slot is None:
             return None
 
         # Collision direction depends on whether the level is above or below
-        # grade. Above-grade and special levels push UP (next +1 slot — uses
-        # the M/T suffix range). Basements push DOWN — pushing UP would land
-        # the duplicate in L1's territory (e.g. duplicate B1 → 1011 instead
-        # of the architecturally-correct 1007 below B1).
-        base = _series_base(st)
+        # grade. Above-grade / special levels push UP by sub_increment (into
+        # the M/T sub-slot range). Basements push DOWN by sub_increment —
+        # pushing UP would land the duplicate in L1's territory.
+        base = cat["base"]
+        sub_inc = cat["sub_level_increment"]
         from .level_matcher import extract_level_signature as _extract
         sig = _extract(level_name)
         is_basement = sig["prefix"] == "B" and sig["digit"] is not None
 
-        step = -1 if is_basement else 1
-        while _format_slot(st, slot) in existing_set:
+        step = -sub_inc if is_basement else sub_inc
+        while _format_slot(st, slot, scheme) in existing_set:
             slot += step
-            if is_basement and slot < base + 1:
+            if is_basement and slot < base + sub_inc:
                 return None  # Underflowed below the basement range
-            if not is_basement and slot >= base + 1000:
+            if not is_basement and slot >= base + range_size:
                 return None  # Overflowed into the next category
-        return _format_slot(st, slot)
+        return _format_slot(st, slot, scheme)
 
     # Sequence-based path — also covers A1/A5 when no level supplied (rare)
-    slot = _next_sequence_slot(st, existing_numbers or [])
-    while _format_slot(st, slot) in existing_set:
-        slot += 10
+    primary_inc = cat.get("primary_increment", 10)
+    slot = _next_sequence_slot(st, existing_numbers or [], scheme=scheme)
+    while _format_slot(st, slot, scheme) in existing_set:
+        slot += primary_inc
         if st != "X0":
-            base = _series_base(st)
-            if slot >= base + 1000:
+            base = cat.get("base", 0)
+            if slot >= base + range_size:
                 return None
-    return _format_slot(st, slot)
+    return _format_slot(st, slot, scheme)
 
 # ── Smart name generation ────────────────────────────────────────────────
 
@@ -503,13 +729,13 @@ def _level_label(level_name):
         return (f"LEVEL {prefix}{sig['digit']}{suffix}", "normal")
     return (str(level_name).upper(), "normal")
 
-def generate_smart_name(sheet_type, sheet_number=None, level_name=None):
+def generate_smart_name(sheet_type, sheet_number=None, level_name=None, scheme=None):
     """Default sheet name for a category + slot + (optional) level.
 
     A1/A5 use the level: 'LEVEL 1 FLOOR PLAN', 'LEVEL B1 CEILING PLAN', etc.
     Roof drops 'FLOOR' on A1 → 'LEVEL ROOF PLAN'. Site is rejected on A5.
-    Other categories look up the slot in DEFAULT_SHEET_NAMES, then fall back
-    to CATEGORY_DEFAULT_NAME (for A2/A3/A4/A9/X0), then to 'CUSTOM SHEET'.
+    Other categories look up the slot in the active scheme's `named_slots`,
+    then fall back to CATEGORY_DEFAULT_NAME (A2/A3/A4/A9/X0), then 'CUSTOM SHEET'.
     """
     st = (sheet_type or "").upper()
 
@@ -525,18 +751,21 @@ def generate_smart_name(sheet_type, sheet_number=None, level_name=None):
         if kind == "site": return "SITE CEILING PLAN"  # rejected upstream
         return f"{label} CEILING PLAN"
 
-    # Sequence-based naming — index into DEFAULT_SHEET_NAMES by slot/10
-    slot, _ = _parse_slot(sheet_number) if sheet_number else (None, None)
-    names = DEFAULT_SHEET_NAMES.get(st, [])
+    # Sequence-based naming — index into the scheme's named_slots by primary
+    # slot position (slot offset from base, divided by the category's primary_increment).
+    slot, _ = _parse_slot(sheet_number, scheme) if sheet_number else (None, None)
+    cat = _cat_cfg(st, scheme) or {}
+    names = cat.get("named_slots", [])
     fallback = CATEGORY_DEFAULT_NAME.get(st, "CUSTOM SHEET")
 
     if slot is None:
         return fallback
 
-    # Slot offset within category. A0 starts at 0, others at 10. X0 has no base.
-    base = _series_base(st)
+    base = _series_base(st, scheme)
+    primary_inc = cat.get("primary_increment", 10)
+
     offset = slot if st == "X0" else slot - (base or 0)
-    idx = offset // 10
+    idx = offset // primary_inc
     if 0 <= idx < len(names) and names[idx]:
         return names[idx]
     return fallback
@@ -547,13 +776,17 @@ def make_standard_sheet(sheet_type, sheet_number, sheet_name, stage):
 def make_custom_sheet(sheet_type, sheet_number, sheet_name):
     return {"sheet_number": sheet_number, "sheet_name": sheet_name, "sheet_type": sheet_type, "project_phase": None, "sheet_set": None, "discipline": None}
 
-def build_sheets_payload(request_data, existing_sheet_numbers):
+def build_sheets_payload(request_data, existing_sheet_numbers, scheme=None):
     """Generate the list of sheet payloads for a create_sheet command.
 
     Reads request_data['project_levels'] (cached from Revit) to resolve
     ROOF/TOP slots correctly. Falls back to request_data['levels'] if the
     project inventory wasn't passed in (degraded — ROOF will land at
-    max(levels)+10 instead of project max+10)."""
+    max(levels)+10 instead of project max+10).
+
+    `scheme` selects the active numbering scheme (defaults to v1_small via
+    `get_active_scheme()`)."""
+    scheme = scheme or get_active_scheme()
     stage = request_data.get("stage", "CD")
     sheet_type_raw = request_data.get("sheet_category")
     mode = request_data.get("mode", "STANDARD")
@@ -588,6 +821,10 @@ def build_sheets_payload(request_data, existing_sheet_numbers):
         if clean_name in generic_terms:
             user_name = None
 
+    # Cover-slot string for this scheme — used for both the auto-titleblock
+    # check below and the force_cover allocation. v1: "0000", v2: "00000".
+    cover_slot_str = _format_slot("A0", 0, scheme)
+
     sheets = []
 
     def create_payload(num, name):
@@ -596,7 +833,7 @@ def build_sheets_payload(request_data, existing_sheet_numbers):
         else:
             fam, t_type = determine_titleblock(num, override_family=raw_tb, mode="STANDARD")
         # Cover slot always uses the cover titleblock
-        if num == "0000":
+        if num == cover_slot_str:
             fam, t_type = "A49_TB_A1_Horizontal_Cover", "Cover"
         if mode == "CUSTOM" or sheet_type.startswith("X"):
             p = make_custom_sheet(sheet_type, num, name)
@@ -606,7 +843,7 @@ def build_sheets_payload(request_data, existing_sheet_numbers):
         p["titleblock_type"] = t_type
         return p
 
-    # A0 + cover keyword in user input → force the 0000 cover slot
+    # A0 + cover keyword in user input → force the cover slot
     force_cover = False
     if sheet_type == "A0":
         view_type = request_data.get("view_type")
@@ -614,19 +851,22 @@ def build_sheets_payload(request_data, existing_sheet_numbers):
            (view_type and "cover" in view_type.lower()):
             force_cover = True
 
-    if levels and sheet_type in _LEVEL_BASED_CATEGORIES:
+    level_based = _level_based_categories(scheme)
+
+    if levels and sheet_type in level_based:
         for lvl in levels:
             num = get_next_sheet_number(sheet_type, existing_sheet_numbers,
                                         level_name=lvl,
                                         project_levels=project_levels,
-                                        request_levels=levels)
+                                        request_levels=levels,
+                                        scheme=scheme)
             if not num:
                 # Invalid combo (e.g. A5+SITE) — skip silently; caller decides
                 # whether to surface "no sheets created" message.
                 continue
             existing_sheet_numbers.append(num)
             final_name = user_name if user_name else generate_smart_name(
-                sheet_type, sheet_number=num, level_name=lvl)
+                sheet_type, sheet_number=num, level_name=lvl, scheme=scheme)
             sheets.append(create_payload(num, final_name.upper()))
     else:
         try:
@@ -636,15 +876,15 @@ def build_sheets_payload(request_data, existing_sheet_numbers):
         total = len(levels) if levels else total_count
 
         for i in range(total):
-            if force_cover and i == 0 and "0000" not in existing_sheet_numbers:
-                num = "0000"
+            if force_cover and i == 0 and cover_slot_str not in existing_sheet_numbers:
+                num = cover_slot_str
             else:
-                num = get_next_sheet_number(sheet_type, existing_sheet_numbers)
+                num = get_next_sheet_number(sheet_type, existing_sheet_numbers, scheme=scheme)
             if not num:
                 continue
             existing_sheet_numbers.append(num)
             final_name = user_name if user_name else generate_smart_name(
-                sheet_type, sheet_number=num)
+                sheet_type, sheet_number=num, scheme=scheme)
             sheets.append(create_payload(num, final_name.upper()))
 
     # Sort by sheet number ascending so downstream (Revit creation order
@@ -656,7 +896,16 @@ def build_sheets_payload(request_data, existing_sheet_numbers):
 # MAIN ENTRY POINT (RESTORED)
 # =====================================================================
 
-def apply(request_data, existing_view_names, existing_sheet_numbers, force_suffix=False, forced_suffix_number=None, forced_suffix_base=None):
+def apply(request_data, existing_view_names, existing_sheet_numbers,
+          force_suffix=False, forced_suffix_number=None, forced_suffix_base=None,
+          scheme=None):
+    """Main naming-engine entry point.
+
+    `scheme` selects the active numbering scheme (defaults to v1_small via
+    `get_active_scheme()`). Callers in the request flow should resolve via
+    `resolve_scheme_for_request(request)` and pass the result here so each
+    project uses its detected scheme.
+    """
     command = request_data.get("command")
     mode = request_data.get("mode", "STANDARD")
     existing_view_names = existing_view_names or []
@@ -684,7 +933,7 @@ def apply(request_data, existing_view_names, existing_sheet_numbers, force_suffi
         return {"views": views_out, "sheets": [], "category": None, "stage": stage, "final_template": final_template}
 
     if command in ("create_sheet", "create_sheets"):
-        sheets_out = build_sheets_payload(request_data, existing_sheet_numbers)
+        sheets_out = build_sheets_payload(request_data, existing_sheet_numbers, scheme=scheme)
         return {
             "views": [], "sheets": sheets_out,
             "sheet_type": request_data.get("sheet_category"),

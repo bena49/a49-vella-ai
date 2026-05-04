@@ -146,8 +146,9 @@ def determine_titleblock(sheet_number, override_family=None, override_type=None,
     if mode.upper() == "NONE":
         return None, None
 
-    # COVER SHEET HANDLING — slot 0000 under the post-2026-05 numbering scheme.
-    if sheet_number == "0000":
+    # COVER SHEET HANDLING — A0 cover slot is "0000" (v1_small) or "00000"
+    # (v2_large). Both round to the same A0 cover titleblock.
+    if sheet_number in ("0000", "00000"):
         return get_cover_titleblock()
 
     # 1. OVERRIDE (user explicitly selected)

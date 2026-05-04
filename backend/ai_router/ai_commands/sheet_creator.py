@@ -2,7 +2,7 @@ import re
 from rest_framework.response import Response
 from ..ai_core.session_manager import debug_session, reset_pending
 from ..ai_utils.envelope_builder import send_envelope, envelope_create_sheets
-from ..ai_engines.naming_engine import apply
+from ..ai_engines.naming_engine import apply, resolve_scheme_for_request
 from ..ai_engines.titleblock_engine import parse_titleblock_from_user_text, get_standard_titleblocks
 from ..ai_engines.level_engine import parse_levels
 
@@ -251,6 +251,10 @@ def execute_sheet_creation(request):
 
     all_created_sheets = []
 
+    # Resolve the active numbering scheme for this project (auto-detect from
+    # cached sheets first, falls back to session override / v1_small default).
+    scheme = resolve_scheme_for_request(request)
+
     try:
         for idx, cat in enumerate(categories):
             current_count = counts[idx] if idx < len(counts) else "1"
@@ -272,7 +276,7 @@ def execute_sheet_creation(request):
                 "project_levels": project_levels,
                 "sheet_name": final_name
             }
-            naming = apply(req, existing_views, existing_sheets)
+            naming = apply(req, existing_views, existing_sheets, scheme=scheme)
             if naming.get("sheets"):
                 new_sheets = naming["sheets"]
                 all_created_sheets.extend(new_sheets)

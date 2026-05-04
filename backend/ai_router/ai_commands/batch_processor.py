@@ -5,7 +5,7 @@ from ..ai_core.session_manager import debug_session, reset_pending
 from ..ai_utils.envelope_builder import (
     send_envelope, envelope_create_views, envelope_create_sheets, envelope_place_view_on_sheet
 )
-from ..ai_engines.naming_engine import apply, build_sheets_payload, sort_key_sheet_number
+from ..ai_engines.naming_engine import apply, build_sheets_payload, sort_key_sheet_number, resolve_scheme_for_request
 from ..ai_engines.titleblock_engine import parse_titleblock_from_user_text
 from .sheet_creator import request_titleblock_choice
 
@@ -96,6 +96,8 @@ def finalize_create_and_place(request):
         return message("Error: View naming failed.")
 
     # 3) EXECUTION - Sheet Naming
+    # Resolve numbering scheme for this project before building sheets.
+    scheme = resolve_scheme_for_request(request)
     sheet_req = {
         "command": "create_sheet",
         "sheet_category": request.session.get("ai_pending_sheet_category"),
@@ -109,7 +111,7 @@ def finalize_create_and_place(request):
         "project_levels": request.session.get("ai_last_known_levels", []),
     }
 
-    created_sheets = build_sheets_payload(sheet_req, sheets_cache)
+    created_sheets = build_sheets_payload(sheet_req, sheets_cache, scheme=scheme)
     
     if not created_sheets:
         reset_pending(request)

@@ -55,7 +55,11 @@ from ai_router.ai_engines.naming_engine import (
     get_next_sheet_number,
     generate_smart_name,
     build_sheets_payload,
+    get_active_scheme,
+    resolve_scheme_for_request,
+    _detect_scheme_from_sheets,
     SHEET_SET_MAP,
+    SCHEMES,
 )
 
 
@@ -224,9 +228,10 @@ NAME_CASES = [
     ("A3[3010] = BUILDING SECTIONS",     "A3", "3010", None,           "BUILDING SECTIONS"),
     ("A4[4010] = WALL SECTIONS",         "A4", "4010", None,           "WALL SECTIONS"),
 
-    # A6 — first three slots have specific names, rest CUSTOM SHEET
-    ("A6[6010] = ENLARGED TOILET PLAN",  "A6", "6010", None,           "ENLARGED TOILET PLAN"),
-    ("A6[6020] = FLOOR PATTERN PLAN",    "A6", "6020", None,           "FLOOR PATTERN PLAN"),
+    # A6 — first three slots have specific names, rest CUSTOM SHEET.
+    # Reordered per the post-V2 spec: FLOOR PATTERN PLAN at 6010, then TOILET.
+    ("A6[6010] = FLOOR PATTERN PLAN",    "A6", "6010", None,           "FLOOR PATTERN PLAN"),
+    ("A6[6020] = ENLARGED TOILET PLAN",  "A6", "6020", None,           "ENLARGED TOILET PLAN"),
     ("A6[6030] = CANOPY PLAN",           "A6", "6030", None,           "CANOPY PLAN"),
     ("A6[6040] = CUSTOM SHEET",          "A6", "6040", None,           "CUSTOM SHEET"),
 
@@ -489,13 +494,413 @@ PAYLOAD_CASES = [
 ]
 
 
+# ============================================================================
+# V2 (5-digit) FIXTURES
+#
+# Mirror the V1 cases above with V2-scaled slot values:
+#   - All sheet numbers gain a digit (e.g. 1010 → 10100, X010 → X0100)
+#   - Primary increment ×10 (10 → 100)
+#   - Sub-level increment ×10 (1 → 10), so L1M = base+L*100+10 = 10110
+#   - Basements: B<n> = base + (10-n) * 10 (B1=10090, B9=10010)
+#   - SITE has 10 reserved slots in A1 (10000-10009)
+#   - A6 reordered: FLOOR PATTERN PLAN (60100) before TOILET (60200)
+# ============================================================================
+
+V2 = SCHEMES["v2_large"]
+
+SEQUENCE_CASES_V2 = [
+    ("V2 A0 first sheet",                "A0", [],                                       "00000"),
+    ("V2 A0 second sheet",               "A0", ["00000"],                                "00100"),
+    ("V2 A0 third sheet",                "A0", ["00000", "00100"],                       "00200"),
+    ("V2 A0 after gap (skips, no fill)", "A0", ["00000", "00100", "00300"],              "00400"),
+    ("V2 A0 with insert",                "A0", ["00000", "00100", "00110", "00200"],    "00300"),
+    ("V2 A0 ignores other categories",   "A0", ["00000", "10100", "20200"],              "00100"),
+
+    ("V2 A2 first",                      "A2", [],                                       "20100"),
+    ("V2 A2 second",                     "A2", ["20100"],                                "20200"),
+    ("V2 A2 fifth",                      "A2", ["20100", "20200", "20300", "20400"],    "20500"),
+    ("V2 A3 first",                      "A3", [],                                       "30100"),
+    ("V2 A4 first",                      "A4", [],                                       "40100"),
+
+    ("V2 A6 first",                      "A6", [],                                       "60100"),
+    ("V2 A6 third",                      "A6", ["60100", "60200"],                       "60300"),
+    ("V2 A7 first",                      "A7", [],                                       "70100"),
+    ("V2 A8 first",                      "A8", [],                                       "80100"),
+    ("V2 A8 second",                     "A8", ["80100"],                                "80200"),
+
+    ("V2 X0 first",                      "X0", [],                                       "X0000"),
+    ("V2 X0 second",                     "X0", ["X0000"],                                "X0100"),
+    ("V2 X0 ignores numeric sheets",     "X0", ["X0000", "10100", "20200"],              "X0100"),
+
+    ("V2 A3 isolated from A2",           "A3", ["20100", "20200", "20300"],              "30100"),
+]
+
+LEVEL_CASES_V2 = [
+    # A1 — Above grade
+    ("V2 A1 + L1",                  "A1", "LEVEL 1",  PROJECT_L8, [], "10100"),
+    ("V2 A1 + L2",                  "A1", "LEVEL 2",  PROJECT_L8, [], "10200"),
+    ("V2 A1 + L5",                  "A1", "LEVEL 5",  PROJECT_L8, [], "10500"),
+    ("V2 A1 + L8",                  "A1", "LEVEL 8",  PROJECT_L8, [], "10800"),
+    ("V2 A1 + L1 (Thai)",           "A1", "+0.50 ระดับพื้นชั้น 1", PROJECT_L7_TH, [], "10100"),
+    ("V2 A1 + L7 (Thai)",           "A1", "+28.10 ระดับพื้นชั้น 7", PROJECT_L7_TH, [], "10700"),
+
+    # A1 — Mezzanine / Transfer (suffix → +sub_inc=10, FCFS)
+    ("V2 A1 + L1M",                 "A1", "LEVEL 1M", PROJECT_L8, ["10100"],            "10110"),
+    ("V2 A1 + L6M",                 "A1", "LEVEL 6M", PROJECT_L8, ["10600"],            "10610"),
+    ("V2 A1 + L7T",                 "A1", "LEVEL 7T", PROJECT_L8, ["10700"],            "10710"),
+    ("V2 A1 + L1T after L1M",       "A1", "LEVEL 1T", PROJECT_L8, ["10100", "10110"],   "10120"),
+
+    # A1 — Below grade (B<n> = base + (10-n)*10)
+    ("V2 A1 + B1",                  "A1", "LEVEL B1", PROJECT_L8, [], "10090"),
+    ("V2 A1 + B2",                  "A1", "LEVEL B2", PROJECT_L8, [], "10080"),
+    ("V2 A1 + B3",                  "A1", "LEVEL B3", PROJECT_L8, [], "10070"),
+    ("V2 A1 + B9 (cap)",            "A1", "LEVEL B9", PROJECT_L8, [], "10010"),
+
+    # A1 — Site
+    ("V2 A1 + SITE",                "A1", "SITE",     PROJECT_L8, [], "10000"),
+    ("V2 A1 + SITE (Thai)",         "A1", "+0.00 ระดับพื้นดิน", PROJECT_L7_TH, [], "10000"),
+
+    # A1 — Roof: max above-grade L * level_inc + level_inc.
+    # Project max L8 → base + 9*100 = 10900.
+    ("V2 A1 + ROOF (max L8)",       "A1", "ROOF LEVEL", PROJECT_L8, [], "10900"),
+    ("V2 A1 + ROOF (max L5)",       "A1", "ROOF LEVEL", PROJECT_L5, [], "10600"),
+    ("V2 A1 + ดาดฟ้า (max L7)",      "A1", "+32.30 ระดับพื้นชั้นดาดฟ้า", PROJECT_L7_TH, [], "10800"),
+
+    # A1 — TOP collides with RF, FCFS pushes +sub_inc=10
+    ("V2 A1 + TOP after RF taken",  "A1", "+37.30 ระดับสูงสุดของอาคาร", PROJECT_L7_TH,
+                                                                   ["10800"],         "10810"),
+
+    # A5 — same pattern, base 50000
+    ("V2 A5 + L1",                  "A5", "LEVEL 1",   PROJECT_L8, [], "50100"),
+    ("V2 A5 + L2",                  "A5", "LEVEL 2",   PROJECT_L8, [], "50200"),
+    ("V2 A5 + L5",                  "A5", "LEVEL 5",   PROJECT_L8, [], "50500"),
+    ("V2 A5 + B1",                  "A5", "LEVEL B1",  PROJECT_L8, [], "50090"),
+    ("V2 A5 + L1M",                 "A5", "LEVEL 1M",  PROJECT_L8, ["50100"],           "50110"),
+    ("V2 A5 + ROOF (max L8)",       "A5", "ROOF LEVEL", PROJECT_L8, [], "50900"),
+
+    # A5 + SITE — REJECTED
+    ("V2 A5 + SITE rejected",       "A5", "SITE",      PROJECT_L8, [], None),
+    ("V2 A5 + SITE (Thai) rejected","A5", "+0.00 ระดับพื้นดิน", PROJECT_L7_TH, [], None),
+
+    # Collision: requested slot already taken → keep +sub_inc until free
+    ("V2 A1 + L1 when 10100 taken",  "A1", "LEVEL 1",   PROJECT_L8, ["10100"],          "10110"),
+    ("V2 A1 + L1 when 10100+10110 taken", "A1", "LEVEL 1", PROJECT_L8, ["10100", "10110"], "10120"),
+
+    # Basement collision: pushes DOWN (deeper) by sub_inc=10
+    ("V2 A1 + B1 when 10090 taken (down)",  "A1", "LEVEL B1", PROJECT_L8, ["10090"],           "10080"),
+    ("V2 A1 + B1 when 10080+10090 taken",   "A1", "LEVEL B1", PROJECT_L8, ["10080", "10090"],  "10070"),
+    ("V2 A1 + B1 user-reported case",       "A1", "LEVEL B1", PROJECT_L8,
+                                            ["10000", "10080", "10090", "10100", "10200"],     "10070"),
+    ("V2 A5 + B1 when 50090 taken (down)",  "A5", "LEVEL B1", PROJECT_L8, ["50090"],           "50080"),
+]
+
+NAME_CASES_V2 = [
+    # A0 — name keyed to slot (5-digit)
+    ("V2 A0[00000] = COVER",                  "A0", "00000", None,      "COVER"),
+    ("V2 A0[00100] = DRAWING INDEX",          "A0", "00100", None,      "DRAWING INDEX"),
+    ("V2 A0[00200] = SITE AND VICINITY PLAN", "A0", "00200", None,      "SITE AND VICINITY PLAN"),
+    ("V2 A0[00300] = STANDARD SYMBOLS",       "A0", "00300", None,      "STANDARD SYMBOLS"),
+    ("V2 A0[00400] = SAFETY PLAN",            "A0", "00400", None,      "SAFETY PLAN"),
+    ("V2 A0[00500] = WALL TYPES",             "A0", "00500", None,      "WALL TYPES"),
+    ("V2 A0[00600] = CUSTOM SHEET (overflow)","A0", "00600", None,      "CUSTOM SHEET"),
+
+    # A1 — level-based
+    ("V2 A1 + L1 = LEVEL 1 FLOOR PLAN",   "A1", "10100", "LEVEL 1",     "LEVEL 1 FLOOR PLAN"),
+    ("V2 A1 + L5 = LEVEL 5 FLOOR PLAN",   "A1", "10500", "LEVEL 5",     "LEVEL 5 FLOOR PLAN"),
+    ("V2 A1 + L1M = LEVEL 1M FLOOR PLAN", "A1", "10110", "LEVEL 1M",    "LEVEL 1M FLOOR PLAN"),
+    ("V2 A1 + B1 = LEVEL B1 FLOOR PLAN",  "A1", "10090", "LEVEL B1",    "LEVEL B1 FLOOR PLAN"),
+    ("V2 A1 + SITE = SITE PLAN",          "A1", "10000", "SITE",        "SITE PLAN"),
+    ("V2 A1 + ROOF = LEVEL ROOF PLAN",    "A1", "10900", "ROOF LEVEL",  "LEVEL ROOF PLAN"),
+
+    # A5 — same shape, "CEILING PLAN" suffix
+    ("V2 A5 + L1 = LEVEL 1 CEILING PLAN",   "A5", "50100", "LEVEL 1",   "LEVEL 1 CEILING PLAN"),
+    ("V2 A5 + B1 = LEVEL B1 CEILING PLAN",  "A5", "50090", "LEVEL B1",  "LEVEL B1 CEILING PLAN"),
+    ("V2 A5 + ROOF = LEVEL ROOF CEILING PLAN","A5","50900","ROOF LEVEL","LEVEL ROOF CEILING PLAN"),
+
+    # A2/A3/A4 — fixed names
+    ("V2 A2[20100] = ELEVATIONS",         "A2", "20100", None,          "ELEVATIONS"),
+    ("V2 A2[20300] = ELEVATIONS",         "A2", "20300", None,          "ELEVATIONS"),
+    ("V2 A3[30100] = BUILDING SECTIONS",  "A3", "30100", None,          "BUILDING SECTIONS"),
+    ("V2 A4[40100] = WALL SECTIONS",      "A4", "40100", None,          "WALL SECTIONS"),
+
+    # A6 — REORDERED in V2 spec: FLOOR PATTERN PLAN first, TOILET second
+    ("V2 A6[60100] = FLOOR PATTERN PLAN", "A6", "60100", None,          "FLOOR PATTERN PLAN"),
+    ("V2 A6[60200] = ENLARGED TOILET PLAN","A6","60200", None,          "ENLARGED TOILET PLAN"),
+    ("V2 A6[60300] = CANOPY PLAN",        "A6", "60300", None,          "CANOPY PLAN"),
+    ("V2 A6[60400] = CUSTOM SHEET",       "A6", "60400", None,          "CUSTOM SHEET"),
+
+    # A7 — same names, just 5-digit slots
+    ("V2 A7[70100] = ENLARGED STAIR PLAN",   "A7", "70100", None,       "ENLARGED STAIR PLAN"),
+    ("V2 A7[70200] = ENLARGED STAIR SECTION","A7", "70200", None,       "ENLARGED STAIR SECTION"),
+    ("V2 A7[70300] = ENLARGED RAMP PLAN",    "A7", "70300", None,       "ENLARGED RAMP PLAN"),
+    ("V2 A7[70400] = ENLARGED LIFT PLAN",    "A7", "70400", None,       "ENLARGED LIFT PLAN"),
+    ("V2 A7[70500] = CUSTOM SHEET",          "A7", "70500", None,       "CUSTOM SHEET"),
+
+    # A8 — same names, 5-digit slots
+    ("V2 A8[80100] = DOOR SCHEDULE",      "A8", "80100", None,          "DOOR SCHEDULE"),
+    ("V2 A8[80200] = WINDOW SCHEDULE",    "A8", "80200", None,          "WINDOW SCHEDULE"),
+    ("V2 A8[80300] = CUSTOM SHEET",       "A8", "80300", None,          "CUSTOM SHEET"),
+
+    # X0
+    ("V2 X0[X0000] = CUSTOM SHEET",       "X0", "X0000", None,          "CUSTOM SHEET"),
+    ("V2 X0[X0300] = CUSTOM SHEET",       "X0", "X0300", None,          "CUSTOM SHEET"),
+]
+
+PAYLOAD_CASES_V2 = [
+    # TH project: A1 [SITE, L1, L2, L3, TOP] → ROOF lands at 10400
+    {
+        "desc": "V2 TH project: A1 [SITE, L1, L2, L3, TOP] → TOP=10400",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": [
+                "+0.00 ระดับพื้นดิน",
+                "+0.50 ระดับพื้นชั้น 1",
+                "+4.00 ระดับพื้นชั้น 2",
+                "+7.50 ระดับพื้นชั้น 3",
+                "+11.00 ระดับสูงสุดของอาคาร",
+            ],
+            "project_levels": USER_REPORTED_TH_PROJECT,
+        },
+        "expected_numbers": ["10000", "10100", "10200", "10300", "10400"],
+    },
+    {
+        "desc": "V2 TH project: A5 [L1, L2, L3, TOP] → TOP=50400",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A5",
+            "stage": "CD",
+            "levels": [
+                "+0.50 ระดับพื้นชั้น 1",
+                "+4.00 ระดับพื้นชั้น 2",
+                "+7.50 ระดับพื้นชั้น 3",
+                "+11.00 ระดับสูงสุดของอาคาร",
+            ],
+            "project_levels": USER_REPORTED_TH_PROJECT,
+        },
+        "expected_numbers": ["50100", "50200", "50300", "50400"],
+    },
+    # Stale-cache regression
+    {
+        "desc": "V2 stale cache (L45 in cache) shouldn't push ROOF past request max",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": ["LEVEL 1", "LEVEL 2", "LEVEL 3", "ROOF LEVEL"],
+            "project_levels": PROJECT_STALE_HAS_L45,
+        },
+        "expected_numbers": ["10100", "10200", "10300", "10400"],
+    },
+    # Roof-only request falls back to project cache
+    {
+        "desc": "V2 ROOF-only request falls back to project cache (max L5) → 10600",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": ["ROOF LEVEL"],
+            "project_levels": PROJECT_L5,
+        },
+        "expected_numbers": ["10600"],
+    },
+
+    # ── Basement shift cases (sub_inc=10) ───────────────────────────────
+    # B1 + B1M → B1M takes 10090 (B1's natural slot), B1 shifts down by sub_inc=10 → 10080
+    {
+        "desc": "V2 B1 + B1M → B1M=10090, B1=10080",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": ["LEVEL B1", "LEVEL B1M"],
+            "project_levels": PROJECT_L5,
+        },
+        "expected_numbers": ["10080", "10090"],
+    },
+    {
+        "desc": "V2 B2 alone → 10080 (natural slot)",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": ["LEVEL B2"],
+            "project_levels": PROJECT_L5,
+        },
+        "expected_numbers": ["10080"],
+    },
+    {
+        "desc": "V2 B2 + B2M (no B1) → B2M=10080, B2=10070",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": ["LEVEL B2", "LEVEL B2M"],
+            "project_levels": PROJECT_L5,
+        },
+        "expected_numbers": ["10070", "10080"],
+    },
+    {
+        "desc": "V2 B1 + B2 + B2M → B1=10090, B2M=10080, B2=10070",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": ["LEVEL B1", "LEVEL B2", "LEVEL B2M"],
+            "project_levels": PROJECT_L5,
+        },
+        "expected_numbers": ["10070", "10080", "10090"],
+    },
+    {
+        "desc": "V2 full cascade: B1 + B1M + B2 + B2M → 10060,10070,10080,10090",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": ["LEVEL B1", "LEVEL B1M", "LEVEL B2", "LEVEL B2M"],
+            "project_levels": PROJECT_L5,
+        },
+        "expected_numbers": ["10060", "10070", "10080", "10090"],
+    },
+    # User's exact reported case at V2 scale
+    {
+        "desc": "V2 user-reported full case: TH project [SITE,B1,B1M,L1,L2,L3,TOP]",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A1",
+            "stage": "CD",
+            "levels": [
+                "+0.00 ระดับพื้นดิน",
+                "-6.00 ระดับชั้นใต้ดิน B1",
+                "-3.00 ระดับชั้นใต้ดิน B1M",
+                "+0.50 ระดับพื้นชั้น 1",
+                "+4.00 ระดับพื้นชั้น 2",
+                "+7.50 ระดับพื้นชั้น 3",
+                "+11.00 ระดับสูงสุดของอาคาร",
+            ],
+            "project_levels": USER_REPORTED_TH_PROJECT,
+        },
+        "expected_numbers": ["10000", "10080", "10090", "10100", "10200", "10300", "10400"],
+    },
+    {
+        "desc": "V2 A5 mirror: [B1,B1M,L1,L2,L3,TOP] → 50080,50090,50100-50300,50400",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": "A5",
+            "stage": "CD",
+            "levels": [
+                "-6.00 ระดับชั้นใต้ดิน B1",
+                "-3.00 ระดับชั้นใต้ดิน B1M",
+                "+0.50 ระดับพื้นชั้น 1",
+                "+4.00 ระดับพื้นชั้น 2",
+                "+7.50 ระดับพื้นชั้น 3",
+                "+11.00 ระดับสูงสุดของอาคาร",
+            ],
+            "project_levels": USER_REPORTED_TH_PROJECT,
+        },
+        "expected_numbers": ["50080", "50090", "50100", "50200", "50300", "50400"],
+    },
+
+    # view_type → sheet_category inference (V2)
+    {
+        "desc": "V2 Ceiling Plan view + no sheet_category → A5 inferred → 50100",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": None,
+            "view_type": "Ceiling Plan",
+            "stage": "CD",
+            "levels": ["LEVEL 1"],
+            "project_levels": PROJECT_L5,
+        },
+        "expected_numbers": ["50100"],
+    },
+    {
+        "desc": "V2 Floor Plan view + no sheet_category → A1 inferred → 10100",
+        "request": {
+            "command": "create_sheet",
+            "sheet_category": None,
+            "view_type": "Floor Plan",
+            "stage": "CD",
+            "levels": ["LEVEL 1"],
+            "project_levels": PROJECT_L5,
+        },
+        "expected_numbers": ["10100"],
+    },
+]
+
+
+# ============================================================================
+# SCHEME-DETECTION TESTS
+#
+# Exercises _detect_scheme_from_sheets directly + resolve_scheme_for_request
+# against a fake request object so the priority order (auto-detect → override
+# → default) is verified.
+# ============================================================================
+
+DETECT_CASES = [
+    # (description, sheets list, expected scheme name or None)
+    ("Empty list → None (caller falls back)",         [],                                  None),
+    ("All-V1 4-digit numbers → v1_small",              ["1010", "1020", "5010"],            "v1_small"),
+    ("All-V2 5-digit numbers → v2_large",              ["10100", "10200", "50100"],         "v2_large"),
+    ("Mixed (V1 + V2) → v2_large (decisive)",          ["1010", "10100"],                   "v2_large"),
+    ("V1 with 'NUM - NAME' shape → v1_small",          ["1010 - LEVEL 1", "1020 - LEVEL 2"], "v1_small"),
+    ("V2 with 'NUM - NAME' shape → v2_large",          ["10100 - LEVEL 1"],                 "v2_large"),
+    ("X-series V1 (X010) → v1_small",                  ["X010", "X020"],                    "v1_small"),
+    ("X-series V2 (X0100) → v2_large",                 ["X0100", "X0200"],                  "v2_large"),
+    ("Only non-A49 names → None (cache uninformative)",["My Sheet", "Untitled"],            None),
+    ("Mix of A49 + garbage → ignores garbage",         ["My Sheet", "1010"],                "v1_small"),
+    ("V2 shape mixed with garbage → v2_large",         ["My Sheet", "10100"],               "v2_large"),
+    ("Cover slot V1 (4-digit '0000') → v1_small",      ["0000"],                            "v1_small"),
+    ("Cover slot V2 (5-digit '00000') → v2_large",     ["00000"],                           "v2_large"),
+]
+
+
+class _FakeSession(dict):
+    """Stand-in for Django session — supports .get() (already a dict) and the
+    attribute-like access pattern used by resolve_scheme_for_request."""
+    pass
+
+
+class _FakeRequest:
+    def __init__(self, session_dict=None):
+        self.session = _FakeSession(session_dict or {})
+
+
+RESOLVE_CASES = [
+    # (description, session dict, expected scheme name)
+    ("No request → default v1_small",
+        None, "v1_small"),
+    ("Empty session, no override → v1_small",
+        {}, "v1_small"),
+    ("Empty session + override v2_large → v2_large (override wins for empty)",
+        {"ai_numbering_scheme": "v2_large"}, "v2_large"),
+    ("Empty session + override v1_small → v1_small",
+        {"ai_numbering_scheme": "v1_small"}, "v1_small"),
+    ("V1 sheets cached, no override → v1_small",
+        {"ai_last_known_sheets": ["1010", "1020"]}, "v1_small"),
+    ("V2 sheets cached, no override → v2_large",
+        {"ai_last_known_sheets": ["10100", "10200"]}, "v2_large"),
+    ("V2 sheets cached + override v1_small → v2_large (auto-detect wins)",
+        {"ai_last_known_sheets": ["10100"], "ai_numbering_scheme": "v1_small"}, "v2_large"),
+    ("V1 sheets cached + override v2_large → v1_small (auto-detect wins)",
+        {"ai_last_known_sheets": ["1010"], "ai_numbering_scheme": "v2_large"}, "v1_small"),
+    ("Garbage-only cached + override v2_large → v2_large (cache uninformative)",
+        {"ai_last_known_sheets": ["My Sheet"], "ai_numbering_scheme": "v2_large"}, "v2_large"),
+    ("Invalid override value → falls back to default v1_small",
+        {"ai_numbering_scheme": "v3_unknown"}, "v1_small"),
+]
+
+
 # ── HARNESS ───────────────────────────────────────────────────────────────
 
 def _run():
     passed, failed = 0, 0
     failures = []
 
-    # Sequence cases
+    # ─── V1 (default scheme) cases ─────────────────────────────────────
+    # Don't pass scheme= so we exercise the get_active_scheme() default path.
+
     for desc, st, existing, expected in SEQUENCE_CASES:
         actual = get_next_sheet_number(st, existing)
         if actual == expected:
@@ -505,7 +910,6 @@ def _run():
             failures.append({"case": f"[seq]  {desc}", "input": (st, existing),
                              "actual": actual, "expected": expected})
 
-    # Level cases
     for desc, st, lvl, project_levels, existing, expected in LEVEL_CASES:
         actual = get_next_sheet_number(st, existing, level_name=lvl,
                                        project_levels=project_levels)
@@ -517,7 +921,6 @@ def _run():
                              "input": (st, lvl, project_levels, existing),
                              "actual": actual, "expected": expected})
 
-    # Smart name cases
     for desc, st, num, lvl, expected in NAME_CASES:
         actual = generate_smart_name(st, sheet_number=num, level_name=lvl)
         if actual == expected:
@@ -527,7 +930,6 @@ def _run():
             failures.append({"case": f"[name] {desc}", "input": (st, num, lvl),
                              "actual": actual, "expected": expected})
 
-    # Sheet-set name cases
     for st, expected in SHEET_SET_CASES:
         actual = SHEET_SET_MAP.get(st)
         if actual == expected:
@@ -537,7 +939,6 @@ def _run():
             failures.append({"case": f"[set]  {st}", "input": st,
                              "actual": actual, "expected": expected})
 
-    # Build-payload integration cases
     for case in PAYLOAD_CASES:
         existing = []
         sheets = build_sheets_payload(case["request"], existing)
@@ -551,10 +952,89 @@ def _run():
                              "actual": actual_numbers,
                              "expected": case["expected_numbers"]})
 
+    # ─── V2 (large) cases ───────────────────────────────────────────────
+    # Pass scheme=V2 explicitly to exercise the v2_large path while keeping
+    # the active scheme default unchanged for the rest of the codebase.
+
+    for desc, st, existing, expected in SEQUENCE_CASES_V2:
+        actual = get_next_sheet_number(st, existing, scheme=V2)
+        if actual == expected:
+            passed += 1
+        else:
+            failed += 1
+            failures.append({"case": f"[seq]  {desc}", "input": (st, existing),
+                             "actual": actual, "expected": expected})
+
+    for desc, st, lvl, project_levels, existing, expected in LEVEL_CASES_V2:
+        actual = get_next_sheet_number(st, existing, level_name=lvl,
+                                       project_levels=project_levels, scheme=V2)
+        if actual == expected:
+            passed += 1
+        else:
+            failed += 1
+            failures.append({"case": f"[lvl]  {desc}",
+                             "input": (st, lvl, project_levels, existing),
+                             "actual": actual, "expected": expected})
+
+    for desc, st, num, lvl, expected in NAME_CASES_V2:
+        actual = generate_smart_name(st, sheet_number=num, level_name=lvl, scheme=V2)
+        if actual == expected:
+            passed += 1
+        else:
+            failed += 1
+            failures.append({"case": f"[name] {desc}", "input": (st, num, lvl),
+                             "actual": actual, "expected": expected})
+
+    for case in PAYLOAD_CASES_V2:
+        existing = []
+        sheets = build_sheets_payload(case["request"], existing, scheme=V2)
+        actual_numbers = [s.get("sheet_number") for s in sheets]
+        if actual_numbers == case["expected_numbers"]:
+            passed += 1
+        else:
+            failed += 1
+            failures.append({"case": f"[bld]  {case['desc']}",
+                             "input": case["request"]["levels"],
+                             "actual": actual_numbers,
+                             "expected": case["expected_numbers"]})
+
+    # ─── Scheme-detection unit cases ────────────────────────────────────
+    for desc, sheets, expected in DETECT_CASES:
+        actual = _detect_scheme_from_sheets(sheets)
+        if actual == expected:
+            passed += 1
+        else:
+            failed += 1
+            failures.append({"case": f"[detect] {desc}", "input": sheets,
+                             "actual": actual, "expected": expected})
+
+    # ─── Per-request scheme resolution ──────────────────────────────────
+    for desc, sess, expected_name in RESOLVE_CASES:
+        req = _FakeRequest(sess) if sess is not None else None
+        actual_scheme = resolve_scheme_for_request(req)
+        # Map the returned scheme dict back to its name for assertion clarity.
+        actual_name = next(
+            (name for name, cfg in SCHEMES.items() if cfg is actual_scheme),
+            "UNKNOWN")
+        if actual_name == expected_name:
+            passed += 1
+        else:
+            failed += 1
+            failures.append({"case": f"[resolve] {desc}", "input": sess,
+                             "actual": actual_name, "expected": expected_name})
+
     total = (len(SEQUENCE_CASES) + len(LEVEL_CASES) +
-             len(NAME_CASES) + len(SHEET_SET_CASES) + len(PAYLOAD_CASES))
+             len(NAME_CASES) + len(SHEET_SET_CASES) + len(PAYLOAD_CASES) +
+             len(SEQUENCE_CASES_V2) + len(LEVEL_CASES_V2) +
+             len(NAME_CASES_V2) + len(PAYLOAD_CASES_V2) +
+             len(DETECT_CASES) + len(RESOLVE_CASES))
     print("=" * 70)
     print(f"sheet_numbering tests: {passed} passed, {failed} failed  (of {total})")
+    print("  V1: {} cases, V2: {} cases, scheme-detect: {} cases".format(
+        len(SEQUENCE_CASES) + len(LEVEL_CASES) + len(NAME_CASES) + len(SHEET_SET_CASES) + len(PAYLOAD_CASES),
+        len(SEQUENCE_CASES_V2) + len(LEVEL_CASES_V2) + len(NAME_CASES_V2) + len(PAYLOAD_CASES_V2),
+        len(DETECT_CASES) + len(RESOLVE_CASES),
+    ))
     print("=" * 70)
 
     if failures:

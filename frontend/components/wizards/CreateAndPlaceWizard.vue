@@ -248,14 +248,20 @@
 
           <div v-if="form.placement === 'MATCH'" class="animate-fade-in-up transition-colors p-4 border rounded-xl"
                :class="isValidReference ? 'border-[#00BCD4]/50 bg-[#00BCD4]/5' : 'border-red-500/50 bg-red-500/10'">
-            
-            <label class="text-[10px] uppercase tracking-wider font-bold mb-1.5 block"
-                   :class="isValidReference ? 'text-[#00BCD4]' : 'text-red-400'">
-              {{ isValidReference ? 'Reference Sheet Number' : 'Reference Sheet Not Found' }}
-            </label>
-            
+
+            <div class="flex justify-between items-end mb-1.5">
+              <label class="text-[10px] uppercase tracking-wider font-bold block"
+                     :class="isValidReference ? 'text-[#00BCD4]' : 'text-red-400'">
+                {{ isValidReference ? 'Reference Sheet Number' : 'Reference Sheet Not Found' }}
+              </label>
+              <span class="text-[10px] text-white/40">
+                {{ availableReferenceCount }} sheet{{ availableReferenceCount === 1 ? '' : 's' }} available
+              </span>
+            </div>
+
             <div class="relative" ref="refSheetDropdownWrapper">
                 <input v-model="form.referenceSheet"
+                       ref="refSheetInput"
                        type="text"
                        placeholder="Type to search (e.g. 1010)"
                        class="w-full bg-[#0A1D4A]/50 border rounded-lg px-3 py-2 text-sm text-white outline-none font-mono focus:bg-[#0A1D4A]/80 transition"
@@ -263,10 +269,20 @@
                        @focus="isRefSheetOpen = true"
                 />
 
-                <div v-if="isRefSheetOpen && filteredReferenceSheets.length > 0" 
+                <div v-if="isRefSheetOpen"
                      class="absolute z-50 w-full bottom-full mb-1 bg-[#0A1D4A]/95 backdrop-blur-xl border border-white/25 rounded-xl overflow-hidden shadow-2xl animate-fade-in max-h-40 overflow-y-auto custom-scrollbar">
-                     
-                     <div v-for="s in filteredReferenceSheets" :key="s" 
+
+                     <div v-if="filteredReferenceSheets.length === 0"
+                          class="px-3 py-2.5 text-xs text-white/50 text-center italic">
+                       <template v-if="availableReferenceCount === 0">
+                         No A1, A5, or X-series sheets in this project yet.
+                       </template>
+                       <template v-else>
+                         No sheets match "{{ form.referenceSheet }}".
+                       </template>
+                     </div>
+
+                     <div v-for="s in filteredReferenceSheets" :key="s"
                           @mousedown.prevent="selectReferenceSheet(s)"
                           class="px-3 py-2 text-xs text-white hover:bg-white/15 cursor-pointer border-b border-white/10 last:border-b-0 font-mono">
                        {{ s }}
@@ -278,8 +294,8 @@
                  :class="isValidReference ? 'text-white/50' : 'text-red-300'">
               <Icon :name="isValidReference ? 'material-symbols:magic-button-outline' : 'lucide:circle-x'" class="text-sm" />
               <span>
-                {{ isValidReference 
-                   ? 'Sheet found! Vella will copy viewport location.' 
+                {{ isValidReference
+                   ? 'Sheet found! Vella will copy viewport location.'
                    : 'Please select a valid existing sheet from the list.' }}
               </span>
             </div>
@@ -317,7 +333,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { getFilteredTemplates, getFilteredScopeBoxes } from '~/utils/a49Standards';
 
 const props = defineProps({
@@ -352,6 +368,7 @@ const isTitleblockOpen = ref(false);
 const isRefSheetOpen = ref(false);
 
 const refSheetDropdownWrapper = ref(null);
+const refSheetInput = ref(null);
 
 const form = reactive({
   viewType: 'Floor Plan',
@@ -499,16 +516,35 @@ const cleanSheetNumber = (str) => str.split(' - ')[0].trim();
 // so anything the wizard accepts will also be accepted server-side.
 const REF_SHEET_FORMAT = /^(?:[15]\d{3}|X\d{3})$/i;
 
+const conformantSheets = computed(() =>
+    props.existingSheets.filter(s => REF_SHEET_FORMAT.test(cleanSheetNumber(s)))
+);
+
+// Total count of A1/A5/X-series sheets in the project — surfaced in the UI
+// so the user can tell at a glance whether the data has loaded and whether
+// any conformant sheets exist to match against.
+const availableReferenceCount = computed(() => conformantSheets.value.length);
+
 const filteredReferenceSheets = computed(() => {
-    const categoryFiltered = props.existingSheets.filter(s =>
-        REF_SHEET_FORMAT.test(cleanSheetNumber(s))
-    );
+    if (!form.referenceSheet) return conformantSheets.value;
 
-    if (!form.referenceSheet) return categoryFiltered;
-
-    return categoryFiltered.filter(s =>
+    return conformantSheets.value.filter(s =>
         s.toUpperCase().includes(form.referenceSheet.toUpperCase())
     );
+});
+
+// When the user picks "Match Reference", auto-focus the input and open the
+// dropdown so they immediately see what's available without needing to click
+// into the field. Same trick for "Center" → close the dropdown.
+watch(() => form.placement, (mode) => {
+    if (mode === 'MATCH') {
+        nextTick(() => {
+            refSheetInput.value?.focus?.();
+            isRefSheetOpen.value = true;
+        });
+    } else {
+        isRefSheetOpen.value = false;
+    }
 });
 
 const isValidReference = computed(() => {

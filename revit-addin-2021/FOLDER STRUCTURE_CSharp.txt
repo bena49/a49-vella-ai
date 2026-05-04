@@ -1,0 +1,76 @@
+Project: Vella-AI (Csharp)
+
+C:\DEV Projects\Vella-AI\revit-addin-2021
+
+ROOT 
+├── addin/
+├── bin/
+├── Executor/
+│   │   ├── Commands 
+│   │   │		├── Sheets
+│   │   │		│		├── CreateSheetsCommand.cs
+│   │   │		│		└── RenumberSheetsCommand.cs  
+│   │   │		├── TagStrategies
+│   │   │		│		├── ITagStrategy.cs   		<--Interface all strategies implement
+│   │   │		│		├── TagContext.cs			<--Shared TagRequest and TagResult models
+│   │   │		│		└── DoorTagStrategy.cs  	<--Door-specific logic: Plan view (same 350/700mm...)
+│   │   │		├── ApplyTemplateCommand.cs
+│   │   │		├── AutoDimCommand.cs			<--Auto-dimensioning of walls/openings/grids in floor plans
+│   │   │		├── AutoTagCommand.cs			<--Tag symbol resolution + Spot Elevation (rooms/sections)
+│   │   │		├── BatchRenameViewsCommand.cs
+│   │   │		├── CreateViewCommand.cs
+│   │   │		├── DuplicateViewCommand.cs
+│   │   │		├── ExecuteBatchCommand.cs
+│   │   │		├── ExecuteBatchUpdateCommand.cs
+│   │   │		├── FetchProjectInventoryCommand.cs
+│   │   │		├── GetLevelsCommand.cs
+│   │   │		├── GetProjectInfoCommand.cs    <--Levels/templates/sheets/rooms/tags/views/dim_types payload
+│   │   │		├── GetProjectStats.cs
+│   │   │		├── InsertStandardDetailsCommand.cs   <--Standard/EIA detail picker → Revit's ID_INSERT_VIEWS_FROM_FILE
+│   │   │		├── InteractiveRoomPackageCommand.cs   <--Room Elevations
+│   │   │		├── ListScopeBoxesCommand.cs
+│   │   │		├── ListSheetsCommand.cs
+│   │   │		├── ListViewsCommand.cs
+│   │   │		├── ListViewsOnSheetCommand.cs
+│   │   │		├── PlaceViewOnSheetCommand.cs
+│   │   │		├── PreflightCheckCommand.cs    <--Pre-run validation of project state
+│   │   │		├── PreflightRepairCommand.cs   <--Auto-fix issues flagged by PreflightCheck
+│   │   │		├── RemoveViewFromSheetCommand.cs
+│   │   │		├── RenameSheetCommand.cs
+│   │   │		└── RenameViewCommand.cs
+│   │   └── Contracts 
+│   │   		├── ApplyTemplateRequest.cs (place holder)
+│   │   		├── CreateSheetRequest.cs (place holder)
+│   │   		├── CreateViewRequest.cs (place holder)
+│   │   		├── DuplicateViewRequest.cs (place holder)
+│   │   		├── ListRequest.cs (place holder)
+│   │   		├── PlaceViewRequest.cs (place holder)
+│   │   		├── RemoveViewRequest.cs (place holder)
+│   │   		├── RenameSheetRequest.cs (place holder)
+│   │   		└── RenameViewRequest.cs (place holder)
+│   ├── A49Logger.cs
+│   ├── CommandEventHandler.cs
+│   ├── DjangoBridge.cs
+│   ├── DraftingCommandExecutor.cs
+│   └── WebViewResultSender.cs
+│
+├── Models/
+│   └── RevitCommandEnvelope.cs  
+│
+├── obj/
+├── packages/
+├── obj/
+├── Properties/
+│   └── AssemblyInfo.cs
+├── Resources/
+├── UI/
+│   ├── A49PaneProvider.cs
+│   ├── DockablePaneViewer.xaml
+│   └── DockablePaneViewer.xaml.cs
+│
+├── A49AIRevitAssistant.csproj
+├── A49AIRevitAssistant.sln
+├── GA_Tracking.cs
+├── MainClass.cs
+├── UIApplicationHolder.cs
+└── packages.config

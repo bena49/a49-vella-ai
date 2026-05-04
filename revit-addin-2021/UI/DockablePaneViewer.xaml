@@ -1,0 +1,28 @@
+﻿<!--DockablePaneViewer.xaml-->
+<Page x:Class="A49AIRevitAssistant.UI.DockablePaneViewer"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="A49 AI Revit Assistant">
+
+    <Grid Background="#1E1E1E">
+        <Grid x:Name="webViewerContainer"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch"
+              Background="Black"/>
+    </Grid>
+
+</Page>
+
+
+
+
+
+
+
+
+
+
+
+
+
+

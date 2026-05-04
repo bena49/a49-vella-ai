@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<!--
+	  Revit 2021 single-target build.
+	  Forked from revit-addin/A49AIRevitAssistant.csproj (which targets 2024 + 2025).
+
+	  Goal: prove Revit 2021 works in isolation BEFORE deciding whether to merge
+	  back into the multi-version project as a third configuration.
+	  Until merged, treat this as a separate build that occasionally pulls fixes
+	  from the main 2024/2025 project.
+	-->
+	<PropertyGroup>
+		<TargetFramework>net48</TargetFramework>
+		<Configurations>RR2021</Configurations>
+		<Platforms>x64</Platforms>
+		<PlatformTarget>x64</PlatformTarget>
+
+		<LangVersion>latest</LangVersion>
+		<UseWPF>true</UseWPF>
+		<UseWindowsForms>true</UseWindowsForms>
+		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+		<AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+		<RootNamespace>A49AIRevitAssistant</RootNamespace>
+		<AssemblyName>A49AIRevitAssistant</AssemblyName>
+
+		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Platform)' == 'x64'">
+		<PlatformTarget>x64</PlatformTarget>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)' == 'RR2021'">
+		<OutputPath>bin\RR2021\</OutputPath>
+		<DefineConstants>REVIT2021</DefineConstants>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+		<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2792.45" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Revit_All_Main_Versions_API_x64" Version="2021.*" />
+		<Reference Include="A49LicenseManager">
+		  <HintPath>..\..\..\Users\Ben Pongprot\OneDrive\00_REVIT API\00_A49 License Manager\A49LicenseManager.dll</HintPath>
+		</Reference>
+		<Reference Include="System.Net.Http" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Include="Resources\icon_STD_Vella_COLOR_48x48.png" />
+	</ItemGroup>
+
+	<Target Name="CopyWebView2Loader" AfterTargets="Build">
+		<Copy
+			SourceFiles="$(OutDir)runtimes\win-x64\native\WebView2Loader.dll"
+			DestinationFolder="$(OutDir)"
+			SkipUnchangedFiles="true"
+			ContinueOnError="true" />
+	</Target>
+</Project>

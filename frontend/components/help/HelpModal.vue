@@ -138,6 +138,7 @@ import HelpDimensionsTab from './HelpDimensionsTab.vue';
 import HelpInsertStandardDetailsTab from './HelpInsertStandardDetailsTab.vue';
 import HelpPreflightTab from './HelpPreflightTab.vue';
 import HelpStandardsTab from './HelpStandardsTab.vue';
+import HelpSheetNumberingTab from './HelpSheetNumberingTab.vue';
 import HelpMathCalculationTab from './HelpMathCalculationTab.vue';
 import HelpCommentTab from './HelpCommentTab.vue';
 
@@ -199,6 +200,7 @@ const groups = [
     items: [
       { id: 'isd',         label: 'Insert Standard Details', comp: HelpInsertStandardDetailsTab, icon: 'material-symbols:library-add-outline-rounded', activeIconClass: 'text-[#388E3C]', activeBgClass: 'bg-[#388E3C]/20' },
       { id: 'preflight',   label: 'Preflight Check', comp: HelpPreflightTab,        icon: 'lucide:shield-check',   activeIconClass: 'text-[#FBBF24]', activeBgClass: 'bg-[#FBBF24]/20' },
+      { id: 'numbering',   label: 'Sheet Numbering Format', comp: HelpSheetNumberingTab, icon: 'lucide:hash',     activeIconClass: 'text-[#A78BFA]', activeBgClass: 'bg-[#A78BFA]/20' },
       { id: 'stds',        label: 'Standards Reference', comp: HelpStandardsTab,    icon: 'lucide:bookmark',       activeIconClass: 'text-[#EEFF41]', activeBgClass: 'bg-[#EEFF41]/20' },
     ],
   },

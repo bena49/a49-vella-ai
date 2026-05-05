@@ -80,6 +80,49 @@ def expand_ranges_in_text(text):
 # MAIN ENTRY POINT
 # ----------------------------------------------------------------------
 
+def sort_levels_for_sheet_creation(level_tokens):
+    """Reorder levels per the a49_dotted sheet-allocation spec.
+
+    Final order (top → bottom):
+      1. SITE                       — anchored to A1.00 by site_slots logic.
+      2. Basements, deepest first    — B2 before B1 (digit DESCENDING).
+      3. Numbered floors, lowest up  — L1 before L2 (digit ASCENDING).
+                                       Mezzanine (M-suffix) sorts immediately
+                                       after its parent floor so the build-
+                                       sheets-payload mezz router can attach
+                                       it as a sub-part.
+      4. ROOF / TOP                  — always last among recognised levels.
+      5. Other named specials (MZ, PD, AT, …) — after ROOF.
+      6. Unrecognised tokens         — at the very end, original order kept.
+
+    Works on both parsed tokens (`SITE`, `B1`, `L2M`, `TOP`) and fully-
+    resolved Revit level names (`+11.00 ระดับสูงสุดของอาคาร`,
+    `-3.00 ระดับชั้นใต้ดิน B1M`, …) because extract_level_signature
+    normalises both shapes through the same code path.
+    """
+    from .level_matcher import extract_level_signature
+
+    def _key(lvl_token):
+        sig = extract_level_signature(lvl_token)
+        special = sig.get("special")
+        digit = sig.get("digit") if sig.get("digit") is not None else 0
+        suffix_rank = 1 if (sig.get("suffix") or "").upper() == "M" else 0
+
+        if special == "SITE":
+            return (0, 0, 0)
+        if (sig.get("prefix") or "").upper() == "B":
+            return (1, -digit, suffix_rank)
+        if special in ("RF", "TOP"):
+            return (3, 0, 0)
+        if sig.get("digit") is not None:
+            return (2, digit, suffix_rank)
+        if special:
+            return (4, special, 0)
+        return (5, str(lvl_token), 0)
+
+    return sorted(level_tokens or [], key=_key)
+
+
 def parse_levels(raw_text: str):
     """
     Convert raw level text into normalized A49 tokens.

@@ -34,7 +34,7 @@ if sys.platform == "win32":
 if __name__ == "__main__" and __package__ is None:
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from ai_router.ai_engines.level_engine import parse_levels
+from ai_router.ai_engines.level_engine import parse_levels, sort_levels_for_sheet_creation
 from ai_router.ai_engines.level_matcher import (
     extract_level_signature,
     resolve_tokens_to_project_levels,
@@ -188,6 +188,62 @@ CODE_CASES = [
 ]
 
 
+# ── SORT CASES ────────────────────────────────────────────────────────
+# sort_levels_for_sheet_creation must produce a stable, predictable order
+# regardless of whether tokens are raw (parse_levels output) or fully
+# resolved Revit names. The expected order, top → bottom:
+#   SITE → basements (deepest first) → numbered floors (lowest first,
+#   parent before mezz) → ROOF/TOP → other specials → unrecognised.
+SORT_CASES = [
+    (
+        "Real-world TH project: parsed tokens (post parse_levels)",
+        ["TOP", "SITE", "L1", "L2", "L2M", "B1", "B1M"],
+        ["SITE", "B1", "B1M", "L1", "L2", "L2M", "TOP"],
+    ),
+    (
+        "Real-world TH project: resolved Revit names",
+        [
+            "+11.00 ระดับสูงสุดของอาคาร",
+            "+0.00 ระดับพื้นดิน",
+            "+0.50 ระดับพื้นชั้น 1",
+            "+4.00 ระดับพื้นชั้น 2",
+            "+7.50 ระดับพื้นชั้น 2M",
+            "-6.00 ระดับชั้นใต้ดิน B1",
+            "-3.00 ระดับชั้นใต้ดิน B1M",
+        ],
+        [
+            "+0.00 ระดับพื้นดิน",                  # SITE → first
+            "-6.00 ระดับชั้นใต้ดิน B1",            # basement (only one digit)
+            "-3.00 ระดับชั้นใต้ดิน B1M",           # mezz of B1
+            "+0.50 ระดับพื้นชั้น 1",               # L1
+            "+4.00 ระดับพื้นชั้น 2",               # L2
+            "+7.50 ระดับพื้นชั้น 2M",              # L2M
+            "+11.00 ระดับสูงสุดของอาคาร",          # ROOF/TOP last
+        ],
+    ),
+    (
+        "Multiple basements: deepest first (B2 before B1)",
+        ["B1", "B2", "L1", "L2"],
+        ["B2", "B1", "L1", "L2"],
+    ),
+    (
+        "Basements interleaved with mezz: B2, B1M, B1, L1",
+        ["B1", "B1M", "B2", "L1"],
+        ["B2", "B1", "B1M", "L1"],
+    ),
+    (
+        "English ROOF token sorts last",
+        ["L3", "L1", "L2", "ROOF"],
+        ["L1", "L2", "L3", "ROOF"],
+    ),
+    (
+        "Empty input handled",
+        [],
+        [],
+    ),
+]
+
+
 # ── HARNESS ───────────────────────────────────────────────────────────
 
 def _run():
@@ -225,9 +281,24 @@ def _run():
                 "expected": expected_code,
             })
 
-    total = len(CASES) + len(CODE_CASES)
+    # ── sort_levels_for_sheet_creation tests ────────────────────────
+    for desc, input_levels, expected in SORT_CASES:
+        actual = sort_levels_for_sheet_creation(input_levels)
+        if actual == expected:
+            passed += 1
+        else:
+            failed += 1
+            failures.append({
+                "case":     f"[sort] {desc}",
+                "input":    input_levels,
+                "tokens":   "—",
+                "resolved": actual,
+                "expected": expected,
+            })
+
+    total = len(CASES) + len(CODE_CASES) + len(SORT_CASES)
     print("=" * 70)
-    print(f"level_matcher + level_to_code tests:  {passed} passed, {failed} failed  (of {total})")
+    print(f"level_matcher + level_to_code + sort tests:  {passed} passed, {failed} failed  (of {total})")
     print("=" * 70)
 
     if failures:

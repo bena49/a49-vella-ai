@@ -14,6 +14,11 @@
             <Icon name="lucide:pencil-line" class="text-xl" />
           </div>
           <h2 class="text-sm font-bold tracking-wide">RENUMBER &amp; RENAME — SHEETS</h2>
+          <span v-if="detectedScheme"
+            class="ml-2 px-2 py-0.5 rounded-md bg-white/10 border border-white/15 text-[10px] font-bold tracking-wide text-white/70"
+            :title="`Auto-detected from existing sheet numbers — operations will treat numbers using the ${SCHEME_LABELS[detectedScheme]} layout.`">
+            {{ SCHEME_LABELS[detectedScheme] }}
+          </span>
         </div>
         <button @click="$emit('close')" class="text-white/40 hover:text-white transition">
           <Icon name="lucide:x" class="text-xl" />
@@ -489,6 +494,12 @@ const SCHEME_OPTIONS = [
   { value: 'a49_dotted',      label: 'A49 dotted' },
 ];
 
+const SCHEME_LABELS = {
+  iso19650_4digit: 'ISO19650 · 4-digit',
+  iso19650_5digit: 'ISO19650 · 5-digit',
+  a49_dotted:      'A49 dotted',
+};
+
 const OPERATIONS = [
   { value: 'find_replace',       label: 'Find & Replace',       icon: 'lucide:replace',
     hint: 'Substring or regex replacement on number or name.' },
@@ -533,6 +544,65 @@ const previewError = ref(null);
 // ─────────────────────────────────────────────────────────────────────────
 const allSheets = computed(() => props.inventoryData?.sheets || []);
 
+// Derive an A0–A9 / X0 category from a sheet's number, in this order:
+//   1. Trust the C# `category` field if it's a real value (not "Uncategorized").
+//      C# only populates this for letter-prefixed numbers (A1.05, X010), not
+//      pure numerics like 10100, so we have to compute the rest ourselves.
+//   2. Dotted format `A1.05` / `X0.05` → prefix before the dot.
+//   3. X-prefixed `X010` / `X0100` → 'X0'.
+//   4. Pure numeric → first digit determines series:
+//        1xxxx / 1xxx → A1, 2xxxx / 2xxx → A2, …, 0xxxx → A0
+//      This works for both ISO19650 4-digit (1010) and 5-digit (10100)
+//      because the leading digit is the category index in both layouts.
+function deriveCategory(sheet) {
+  const explicit = (sheet.category || '').toUpperCase();
+  if (explicit && explicit !== 'UNCATEGORIZED') return explicit;
+
+  const num = (sheet.number || '').toUpperCase().trim();
+  if (!num) return '';
+
+  const dotted = num.match(/^([AX]\d)\./);
+  if (dotted) return dotted[1];
+
+  if (num.startsWith('X')) return 'X0';
+
+  const firstDigit = num.match(/^(\d)/);
+  if (firstDigit) return 'A' + firstDigit[1];
+
+  const letterPrefix = num.match(/^([A-Z]\d)/);
+  if (letterPrefix) return letterPrefix[1];
+
+  return '';
+}
+
+// Detect the active numbering scheme from the inventory using the same rules
+// as the backend's _detect_scheme_from_sheets(). Mirrors the auto-detect that
+// drives Create Sheet — surfaced in the header so the user knows which layout
+// is active without having to run a Create command first.
+const detectedScheme = computed(() => {
+  const sheets = allSheets.value;
+  if (!sheets.length) return null;
+
+  // Mirrors backend _DOTTED_SHEET_RE = ^([AX]\d)\.(\d{1,3})$ — strict on both
+  // ends so a "template" sheet like 'A1.xx' (with letters after the dot)
+  // doesn't falsely trip dotted detection on an otherwise-numeric project.
+  let hasDotted = false;
+  let max5digitish = false;
+  let sawIso = false;
+  for (const s of sheets) {
+    const num = (s.number || '').toUpperCase().trim();
+    if (!num) continue;
+    if (/^[AX]\d\.\d{1,3}$/.test(num)) { hasDotted = true; break; }
+    const isIso = /^\d+$/.test(num) || /^X\d+$/.test(num);
+    if (!isIso) continue;
+    sawIso = true;
+    if (num.length >= 5) max5digitish = true;
+  }
+  if (hasDotted)    return 'a49_dotted';
+  if (max5digitish) return 'iso19650_5digit';
+  return sawIso ? 'iso19650_4digit' : null;
+});
+
 const filteredSheets = computed(() => {
   let items = allSheets.value;
   const cats = filterCategories.value;
@@ -543,12 +613,7 @@ const filteredSheets = computed(() => {
   }
 
   if (!cats.has('*') && cats.size > 0) {
-    items = items.filter(s => {
-      const cat = (s.category || '').toUpperCase();
-      // Fallback: derive category from sheet number's first non-digit prefix.
-      const numCat = (s.number || '').toUpperCase().match(/^[AX]\d/)?.[0] || '';
-      return cats.has(cat) || cats.has(numCat);
-    });
+    items = items.filter(s => cats.has(deriveCategory(s)));
   }
 
   if (q) {

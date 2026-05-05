@@ -75,7 +75,7 @@ export function useWizards(
       sendToRevit({ command: "fetch_project_inventory" });
     }
     else if (action === "wizard:room_elevations") {
-      roomWizardProps.value = { levels: [], templates: [], titleblocks: [], rooms: [] };
+      roomWizardProps.value = { levels: [], templates: [], titleblocks: [], rooms: [], existingSheets: [] };
       showRoomWizard.value = true;
       sendToRevit({ command: "fetch_project_info", args: { types: ["levels", "templates", "titleblocks", "rooms"] } });
     }
@@ -256,7 +256,8 @@ export function useWizards(
     };
     roomWizardProps.value = {
       levels: projectInfo.levels || [], templates: projectInfo.templates || [],
-      titleblocks: projectInfo.titleblocks || [], rooms: projectInfo.rooms || [], initialStage: "CD",
+      titleblocks: projectInfo.titleblocks || [], rooms: projectInfo.rooms || [],
+      existingSheets: projectInfo.sheets || [], initialStage: "CD",
     };
 
     // Automate tag wizard

@@ -230,6 +230,10 @@ import { ref, reactive, computed, onMounted } from 'vue';
 
 const props = defineProps({
   titleblocks: { type: Array, default: () => [] },
+  // existingSheets is the list the parent already passes to other wizards
+  // (CreateAndPlace etc.) — surfaces here so we can detect the active
+  // numbering scheme and tell the C# command which format to emit.
+  existingSheets: { type: Array, default: () => [] },
   initialStage: { type: String, default: 'CD' }
 });
 
@@ -262,6 +266,31 @@ function setLang(lang) {
 // Resolves the correct template strings based on the current stage
 const getPlanTemplate = (stage) => stage === 'DD' ? "A49_DD_INTERIOR ENLARGED PLAN" : "A49_CD_A6_INTERIOR ENLARGED PLAN";
 const getElevTemplate = (stage) => stage === 'DD' ? "A49_DD_INTERIOR ELEVATION" : "A49_CD_A6_INTERIOR ELEVATION";
+
+// Active numbering scheme — derived from existing sheet numbers using the
+// same heuristic as RenameWizard.detectedScheme. Surfaced into the payload
+// so the C# command can emit the right format (A6.01 vs 6010 vs 60100)
+// even on projects with zero A6 sheets yet (where C#-side auto-detection
+// alone could miss the dotted hint).
+const detectedScheme = computed(() => {
+  const sheets = props.existingSheets || [];
+  if (!sheets.length) return null;
+  let hasDotted = false;
+  let max5digitish = false;
+  let sawIso = false;
+  for (const s of sheets) {
+    const num = (typeof s === 'string' ? s.split(' - ')[0] : '').toUpperCase().trim();
+    if (!num) continue;
+    if (/^[AX]\d\.\d{1,3}(?:\.\d+)?$/.test(num)) { hasDotted = true; break; }
+    const isIso = /^\d+$/.test(num) || /^X\d+$/.test(num);
+    if (!isIso) continue;
+    sawIso = true;
+    if (num.length >= 5) max5digitish = true;
+  }
+  if (hasDotted)    return 'a49_dotted';
+  if (max5digitish) return 'iso19650_5digit';
+  return sawIso ? 'iso19650_4digit' : null;
+});
 
 // --- STATE ---
 const step = ref(1);
@@ -309,11 +338,15 @@ function startInteractiveWorkflow() {
     stage: form.stage,
     plan_template: form.planTemplate,
     elev_template: form.elevTemplate,
-    create_sheets: form.createSheets, 
-    titleblock: form.titleblock
+    create_sheets: form.createSheets,
+    titleblock: form.titleblock,
+    // Numbering scheme override — frontend tells C# which format to emit
+    // when allocating the new A6 sheet number. Falls through to C#'s
+    // existing auto-detect if null/missing.
+    scheme: detectedScheme.value,
   };
 
-  emit('executeRaw', payload); 
+  emit('executeRaw', payload);
   emit('close'); // Closes Vella so user can click the screen
 }
 </script>

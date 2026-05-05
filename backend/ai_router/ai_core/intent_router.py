@@ -224,7 +224,7 @@ def finalize_router(request):
         if align_mode == "MATCH" and not ref_sheet:
             request.session["ai_expecting_reference_sheet"] = True 
             request.session.modified = True
-            return Response({"message": "Please provide a reference Sheet Number (e.g. 1010)."})
+            return Response({"message": "Please provide a reference Sheet Number (e.g. 1010 or A1.05)."})
 
         if align_mode == "MATCH" and ref_sheet:
             cached_sheets = request.session.get("ai_last_known_sheets") or []

@@ -699,23 +699,29 @@ def route_gpt_fields(request, g):
             has_changes = True
 
     # 💥 FALLBACK: reference sheet number when alignment is MATCH.
-    # Catches "match sheet 1010", "matching reference 10XX", "to X010",
-    # "matching sheet 1010XX" (project-specific master/placeholder sheet).
-    # Accepts 4-8 character sheet numbers under the post-2026-05 spec:
-    #   - First char: digit 1-9 (A1=1xxx, A5=5xxx ... A9=9xxx) or "X"
-    #     (custom X-series). A0 (0xxx) is excluded — covers/index/symbols
-    #     don't have alignment to copy.
-    #   - Remaining 3-7 chars: digits or letters, so the regex captures
-    #     both standard 4-digit numbers AND project-specific extensions
-    #     like "1010XX", "1010M", "X0MASTER".
-    # Existence is validated downstream against the cached sheet list, so
-    # the regex only needs to be permissive enough to extract the token.
-    # Legacy A<digit>.<digits|xx> input remains deprecated.
+    # Captures the reference token from phrases like:
+    #   "match sheet 1010"               → iso19650 4-digit
+    #   "matching reference 10XX"        → 4-digit placeholder
+    #   "matching sheet 10100"           → iso19650 5-digit
+    #   "to X010"                        → X-series numeric
+    #   "matching sheet A1.05"           → a49_dotted
+    #   "matching sheet A1.xx"           → a49_dotted placeholder/template
+    #   "matching sheet X0.02.1"         → a49_dotted with sub-part
+    #
+    # Two alternation branches in the captured group:
+    #   • Dotted:  [AX]<digit>.<1-3 alnum>(.<digits>)?
+    #     (allows letters after the dot so "A1.xx" template names parse)
+    #   • Numeric: [1-9X][\dA-Za-z]{3,7}
+    #     (4-8 char numeric / X-prefix, same as before)
+    #
+    # Existence is validated downstream against the cached sheet list, so the
+    # regex only needs to be permissive enough to extract the token.
     if (request.session.get("ai_pending_alignment_mode") == "MATCH"
         and not request.session.get("ai_pending_reference_sheet")):
         ref_match = re.search(
             r'(?:match(?:ing)?|reference|to)\s+(?:sheet\s+)?'
-            r'([1-9X][\dA-Za-z]{3,7})\b',
+            r'([AX]\d\.[\dA-Za-z]{1,3}(?:\.\d+)?'
+            r'|[1-9X][\dA-Za-z]{3,7})\b',
             raw_msg, re.IGNORECASE
         )
         if ref_match:

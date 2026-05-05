@@ -64,4 +64,42 @@
 	    <HintPath Condition="!Exists('C:\Users\Bunda.A49local\OneDrive\00_REVIT API\00_A49 License Manager\A49LicenseManager.dll') And Exists('C:\Users\Ben Pongprot\OneDrive\00_REVIT API\00_A49 License Manager\A49LicenseManager.dll')">C:\Users\Ben Pongprot\OneDrive\00_REVIT API\00_A49 License Manager\A49LicenseManager.dll</HintPath>
 	  </Reference>
 	</ItemGroup>
+
+	<!--
+	  Auto-deploy after every build so the DLL Revit loads at startup is always
+	  the freshest one. Maps configurations → Revit add-in folders:
+	    RR2024 → C:\ProgramData\Autodesk\Revit\Addins\2024\A49AIRevitAssistantAddin\
+	    RR2025 → C:\ProgramData\Autodesk\Revit\Addins\2025\A49AIRevitAssistantAddin\
+	  Without this, "I built and the change still isn't live" is a recurring
+	  trap — we'd copied manually one time and forgot to re-copy on every
+	  subsequent build. Uses xcopy off $(TargetDir) (the absolute output
+	  path) so the source scope is always the bin output, never the project
+	  root. Skips silently if the destination doesn't exist (e.g. on a
+	  machine without that Revit version installed). ContinueOnError so a
+	  Revit lock on a single DLL doesn't fail the build.
+	-->
+	<Target Name="DeployToRevitAddins" AfterTargets="Build">
+		<PropertyGroup>
+			<!--
+			  Each Configuration cross-builds BOTH target frameworks; only one
+			  is the live runtime per Revit version, so we filter:
+			    RR2024 → deploy net48          (Revit 2024 = .NET Framework 4.8)
+			    RR2025 → deploy net8.0-windows (Revit 2025 = .NET 8)
+			  Without this filter the second build would clobber the first
+			  (last write wins) and Revit would load the wrong runtime's DLL.
+			-->
+			<RevitVersion Condition="'$(Configuration)' == 'RR2024' And '$(TargetFramework)' == 'net48'">2024</RevitVersion>
+			<RevitVersion Condition="'$(Configuration)' == 'RR2025' And '$(TargetFramework)' == 'net8.0-windows'">2025</RevitVersion>
+			<RevitAddinDir>C:\ProgramData\Autodesk\Revit\Addins\$(RevitVersion)\A49AIRevitAssistantAddin</RevitAddinDir>
+		</PropertyGroup>
+		<Exec
+			Command='xcopy /Y /I /E /Q "$(TargetDir)*" "$(RevitAddinDir)\"'
+			Condition="'$(RevitVersion)' != '' And Exists('C:\ProgramData\Autodesk\Revit\Addins\$(RevitVersion)\')"
+			ContinueOnError="true"
+			IgnoreExitCode="true" />
+		<Message
+			Condition="'$(RevitVersion)' != '' And Exists('C:\ProgramData\Autodesk\Revit\Addins\$(RevitVersion)\')"
+			Text="Vella → deployed $(TargetFramework) build to $(RevitAddinDir)\"
+			Importance="high" />
+	</Target>
 </Project>

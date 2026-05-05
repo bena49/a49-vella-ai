@@ -286,10 +286,13 @@ namespace A49AIRevitAssistant.Executor.Commands
                     if (titleblock != null)
                     {
                         // 💥 1. Calculate the safe number BEFORE creating the sheet!
-                        // A6 series — auto-detects the project's active numbering
-                        // scheme from existing sheets and emits the matching format
-                        // (a49_dotted "A6.01" / iso19650_5digit "60100" / iso19650_4digit "6010").
-                        string safeSheetNum = GetSafeSheetNumber(doc, 6000, "A6");
+                        // A6 series — emits the format matching the project's
+                        // active numbering scheme. Frontend passes the scheme
+                        // hint (`payload.scheme`) so we honor session-override
+                        // even when no A6 sheets exist yet to auto-detect from.
+                        // Falls through to local auto-detect if hint is missing.
+                        string schemeHint = _rawPayload["scheme"]?.ToString();
+                        string safeSheetNum = GetSafeSheetNumber(doc, 6000, "A6", schemeHint);
 
                         // 2. Create the sheet (Revit will auto-assign a temporary number here)
                         newSheet = ViewSheet.Create(doc, titleblock.Id);
@@ -452,13 +455,17 @@ namespace A49AIRevitAssistant.Executor.Commands
         // HELPER 2: ROBUST SHEET NUMBERING — scheme-aware
         //
         // Mirrors backend naming_engine.get_next_sheet_number for the three
-        // schemes Vella supports, picking which one to use by auto-detecting
-        // from sheets already in the project (same heuristic as the frontend
-        // RenameWizard.detectedScheme):
+        // schemes Vella supports. Picks which one by, in priority order:
         //
-        //   1. Any sheet matches "A1.NN" / "X0.NN"      → a49_dotted
-        //   2. Else any pure-numeric sheet has length≥5  → iso19650_5digit
-        //   3. Else                                       → iso19650_4digit
+        //   1. `schemeHint` argument (frontend RoomElevationWizard passes the
+        //      detected/active scheme via payload — handles the case where a
+        //      session override is set but no A6 sheets exist yet to anchor
+        //      auto-detect on).
+        //   2. Auto-detect from existing sheets (same heuristic as the frontend
+        //      RenameWizard.detectedScheme):
+        //         · any "A1.NN" / "X0.NN"  → a49_dotted
+        //         · any 5+ digit numeric    → iso19650_5digit
+        //         · else                    → iso19650_4digit
         //
         // a49_dotted gap-fills (lowest free slot wins). The iso19650 schemes
         // advance from max+increment with collision bump-up, no gap-fill.
@@ -466,9 +473,13 @@ namespace A49AIRevitAssistant.Executor.Commands
         // seriesBase4: 4-digit thousand-base for this series (6000 for A6).
         //              Multiplied ×10 for 5-digit (→ 60000-band).
         // seriesPrefix: the dotted category code, e.g. "A6". Used only when
-        //               the project is detected as a49_dotted.
+        //               the project is detected/declared as a49_dotted.
+        // schemeHint:  optional explicit scheme name ("a49_dotted",
+        //              "iso19650_5digit", "iso19650_4digit"). null/empty
+        //              triggers auto-detect.
         // ============================================================================
-        private string GetSafeSheetNumber(Document doc, int seriesBase4, string seriesPrefix)
+        private string GetSafeSheetNumber(Document doc, int seriesBase4,
+                                          string seriesPrefix, string schemeHint = null)
         {
             var allSheetNumbers = new FilteredElementCollector(doc)
                 .OfClass(typeof(ViewSheet))
@@ -476,11 +487,23 @@ namespace A49AIRevitAssistant.Executor.Commands
                 .Select(s => s.SheetNumber ?? "")
                 .ToList();
 
-            // Scheme detection — first match wins.
-            bool hasDotted = allSheetNumbers.Any(n =>
-                Regex.IsMatch(n, @"^[AX]\d\.\d{1,3}(\.\d+)?$"));
-            bool has5Digit = !hasDotted && allSheetNumbers.Any(n =>
-                Regex.IsMatch(n, @"^\d{5,}$"));
+            // Resolve scheme from hint first; fall back to auto-detect.
+            bool hasDotted, has5Digit;
+            if (!string.IsNullOrWhiteSpace(schemeHint))
+            {
+                string h = schemeHint.Trim().ToLowerInvariant();
+                hasDotted  = h == "a49_dotted";
+                has5Digit  = h == "iso19650_5digit";
+                // Anything else (including "iso19650_4digit") falls through
+                // to the 4-digit branch below.
+            }
+            else
+            {
+                hasDotted = allSheetNumbers.Any(n =>
+                    Regex.IsMatch(n, @"^[AX]\d\.\d{1,3}(\.\d+)?$"));
+                has5Digit = !hasDotted && allSheetNumbers.Any(n =>
+                    Regex.IsMatch(n, @"^\d{5,}$"));
+            }
 
             if (hasDotted)
                 return NextDottedSlot(allSheetNumbers, seriesPrefix);

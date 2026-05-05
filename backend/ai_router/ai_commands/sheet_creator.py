@@ -265,6 +265,29 @@ def execute_sheet_creation(request):
     duplicate_choice = request.session.get("ai_duplicate_choice")
     duplicate_info = request.session.get("ai_pending_duplicate_info") or []
 
+    # 🛡️ DEFENSIVE FALLBACK — if we have stored duplicate_info from a previous
+    # prompt but no resolved choice in session, the user IS replying to that
+    # prompt; extract the choice from their raw message text directly. This
+    # catches edge cases where ai_expecting_duplicate_choice gets cleared
+    # earlier in the request pipeline (e.g. by GPT slot extraction running
+    # before the views-level interceptor on certain inputs). Idempotent:
+    # has no effect when there's no pending duplicate info OR a choice is
+    # already set.
+    if duplicate_info and not duplicate_choice:
+        raw_msg_l = (request.data.get("message", "") or "").strip().lower()
+        if re.search(r'\b(cancel|abort|stop|nevermind|never\s*mind)\b', raw_msg_l):
+            duplicate_choice = "cancel"
+        elif re.search(r'\b(sub[\s\-]?parts?)\b', raw_msg_l) or "create as sub" in raw_msg_l:
+            duplicate_choice = "subparts"
+        elif re.search(r'\bskip(\s+dup\w*)?\b', raw_msg_l):
+            duplicate_choice = "skip"
+        if duplicate_choice:
+            debug_session(request,
+                f"🛡️ execute_sheet_creation fallback resolved duplicate-choice='{duplicate_choice}' from raw msg")
+            request.session["ai_duplicate_choice"] = duplicate_choice
+            request.session["ai_expecting_duplicate_choice"] = False
+            request.session.modified = True
+
     if levels and not duplicate_choice:
         # Use the parallel "NUMBER - NAME" cache populated by formatters.update_last_known_sheets.
         existing_inventory = request.session.get("ai_last_known_sheets_full") or []
@@ -280,6 +303,12 @@ def execute_sheet_creation(request):
             request.session["ai_pending_duplicate_info"] = duplicates
             request.session["ai_expecting_duplicate_choice"] = True
             request.session.modified = True
+            # Force-save now so the flag is durably stored before the prompt
+            # response goes back to the client. Defensive against edge cases
+            # in DRF/Django middleware ordering that could otherwise let the
+            # flag drop between this request and the user's reply.
+            try: request.session.save()
+            except Exception: pass
             lines = ["⚠ Sheets already exist for these levels:"]
             for d in duplicates:
                 lines.append(f"  • {d['existing_number']} — {d['existing_name']}")

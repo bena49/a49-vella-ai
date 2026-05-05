@@ -103,6 +103,26 @@ def finalize_create_and_place(request):
     duplicate_info = request.session.get("ai_pending_duplicate_info") or []
     primary_cat = request.session.get("ai_pending_sheet_category")
 
+    # 🛡️ DEFENSIVE FALLBACK — same as sheet_creator. If we have stored
+    # duplicate_info but no resolved choice, treat the user's raw message
+    # text as the choice. Catches cases where the views-level interceptor
+    # was bypassed (e.g. GPT misclassified the short reply).
+    if duplicate_info and not duplicate_choice:
+        import re as _re
+        raw_msg_l = (request.data.get("message", "") or "").strip().lower()
+        if _re.search(r'\b(cancel|abort|stop|nevermind|never\s*mind)\b', raw_msg_l):
+            duplicate_choice = "cancel"
+        elif _re.search(r'\b(sub[\s\-]?parts?)\b', raw_msg_l) or "create as sub" in raw_msg_l:
+            duplicate_choice = "subparts"
+        elif _re.search(r'\bskip(\s+dup\w*)?\b', raw_msg_l):
+            duplicate_choice = "skip"
+        if duplicate_choice:
+            debug_session(request,
+                f"🛡️ finalize_create_and_place fallback resolved duplicate-choice='{duplicate_choice}' from raw msg")
+            request.session["ai_duplicate_choice"] = duplicate_choice
+            request.session["ai_expecting_duplicate_choice"] = False
+            request.session.modified = True
+
     if pending_levels and primary_cat and not duplicate_choice:
         existing_inventory = request.session.get("ai_last_known_sheets_full") or []
         # First category only — same scoping rule as sheet_creator.
@@ -112,6 +132,11 @@ def finalize_create_and_place(request):
             request.session["ai_pending_duplicate_info"] = duplicates
             request.session["ai_expecting_duplicate_choice"] = True
             request.session.modified = True
+            # Force-save now so the flag is durably stored before the prompt
+            # response goes back to the client (defensive — see same comment
+            # in sheet_creator.execute_sheet_creation).
+            try: request.session.save()
+            except Exception: pass
             lines = ["⚠ Sheets already exist for these levels:"]
             for d in duplicates:
                 lines.append(f"  • {d['existing_number']} — {d['existing_name']}")

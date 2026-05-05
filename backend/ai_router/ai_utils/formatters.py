@@ -89,8 +89,21 @@ def update_last_known_views(request, list_result):
     debug_session(request, f"UPDATED cache: {len(views_list)} views stored.")
 
 def update_last_known_sheets(request, list_result):
+    # Two parallel caches:
+    #   ai_last_known_sheets       — list of numbers only ("A1.01", "1010", …).
+    #     Backward-compatible shape used by every existing caller.
+    #   ai_last_known_sheets_full  — list of "NUMBER - NAME" strings.
+    #     Required by detect_duplicate_levels (added in the duplicate-handling
+    #     rollout) which needs to match a proposed sheet name against
+    #     existing names. Storing both keeps the new feature decoupled from
+    #     the older numbers-only consumers.
     sheets_list = [x.get("number") for x in list_result]
+    sheets_full = [
+        f"{x.get('number') or ''} - {x.get('name') or ''}".strip(" -")
+        for x in list_result
+    ]
     request.session["ai_last_known_sheets"] = sheets_list
+    request.session["ai_last_known_sheets_full"] = sheets_full
     request.session.modified = True
     try: request.session.save()
     except: pass

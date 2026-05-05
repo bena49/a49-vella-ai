@@ -55,10 +55,13 @@ from ai_router.ai_engines.naming_engine import (
     get_next_sheet_number,
     generate_smart_name,
     build_sheets_payload,
+    build_subpart_sheets,
     get_active_scheme,
     resolve_scheme_for_request,
     _detect_scheme_from_sheets,
     _parse_slot,
+    detect_duplicate_levels,
+    _next_iso_sub_slot,
     SHEET_SET_MAP,
     SCHEMES,
 )
@@ -1027,6 +1030,259 @@ PAYLOAD_CASES_V3 = [
     },
 ]
 
+# ============================================================================
+# DUPLICATE-DETECTION FIXTURES — Phase 1 of duplicate-handling rollout
+#
+# Each case: (description, scheme, category, levels, existing_inventory,
+#             expected_duplicate_levels)
+#
+# expected_duplicate_levels is the list of level tokens we expect to be
+# flagged as duplicates, in input order. The inventory mirrors the cache
+# format the chat handlers actually pass: "NUMBER - NAME" strings.
+# ============================================================================
+
+V1 = SCHEMES["iso19650_4digit"]
+
+DUPLICATE_DETECTION_CASES = [
+    # ── a49_dotted (V3) ──────────────────────────────────────────────
+    ("V3: B1 already exists, B1M is new → only B1 flagged",
+     V3, "A1",
+     ["B1", "B1M"],
+     ["A1.00 - SITE PLAN", "A1.01 - B1 FLOOR PLAN"],
+     ["B1"]),
+
+    ("V3: full re-run hits every level except SITE only when SITE absent",
+     V3, "A1",
+     ["B1", "B1M", "SITE", "L1", "L2", "L2M", "ROOF"],
+     ["A1.00 - SITE PLAN", "A1.01 - B1 FLOOR PLAN", "A1.01.1 - B1M FLOOR PLAN",
+      "A1.02 - 1ST FLOOR PLAN", "A1.03 - 2ND FLOOR PLAN",
+      "A1.03.1 - 2M FLOOR PLAN", "A1.04 - ROOF PLAN"],
+     ["B1", "B1M", "SITE", "L1", "L2", "L2M", "ROOF"]),
+
+    ("V3: SITE flagged in dotted (only A1.00 slot)",
+     V3, "A1",
+     ["SITE"],
+     ["A1.00 - SITE PLAN"],
+     ["SITE"]),
+
+    ("V3: empty inventory → no duplicates",
+     V3, "A1",
+     ["B1", "L1", "ROOF"],
+     [],
+     []),
+
+    ("V3: existing sheets in DIFFERENT category don't false-match",
+     V3, "A1",
+     ["L1"],
+     ["A5.01 - 1ST CEILING PLAN"],   # A5, not A1 — must not match
+     []),
+
+    # ── iso19650_4digit (V1) ─────────────────────────────────────────
+    ("V1: L1 exists → flagged with LEVEL N FLOOR PLAN naming",
+     V1, "A1",
+     ["L1"],
+     ["1010 - LEVEL 1 FLOOR PLAN"],
+     ["L1"]),
+
+    ("V1: SITE NOT flagged (multiple primary SITE slots by design)",
+     V1, "A1",
+     ["SITE"],
+     ["1000 - SITE PLAN"],
+     []),
+
+    ("V1: B1 exists → flagged",
+     V1, "A1",
+     ["B1"],
+     ["1009 - LEVEL B1 FLOOR PLAN"],
+     ["B1"]),
+
+    # ── iso19650_5digit (V2) ─────────────────────────────────────────
+    ("V2: L1 + B1 exist → both flagged",
+     V2, "A1",
+     ["B1", "L1", "L2"],
+     ["10090 - LEVEL B1 FLOOR PLAN", "10100 - LEVEL 1 FLOOR PLAN"],
+     ["B1", "L1"]),
+
+    ("V2: SITE NOT flagged (10000-10009 multiple primary slots)",
+     V2, "A1",
+     ["SITE"],
+     ["10000 - SITE PLAN"],
+     []),
+
+    ("V2: A5 ceiling category isolated from A1",
+     V2, "A5",
+     ["L1"],
+     ["10100 - LEVEL 1 FLOOR PLAN"],   # A1, not A5
+     []),
+
+    # ── Edge cases ────────────────────────────────────────────────────
+    ("Repeat tokens deduped — same level passed twice flagged once",
+     V3, "A1",
+     ["L1", "L1"],
+     ["A1.02 - 1ST FLOOR PLAN"],
+     ["L1"]),
+
+    ("Existing sheet with no name (number only) safely ignored",
+     V3, "A1",
+     ["L1"],
+     ["A1.02 - ", "A1.03"],
+     []),
+
+    ("Renamed existing sheet doesn't match (intentional separation)",
+     V3, "A1",
+     ["L1"],
+     ["A1.02 - CUSTOM RENAMED SHEET"],
+     []),
+]
+
+
+# ============================================================================
+# ISO19650 SUB-SLOT FIXTURES — Phase 2 of duplicate-handling rollout
+#
+# Each case: (description, scheme, category, parent_slot, existing_numbers, expected_slot)
+# expected_slot is the integer the helper should return, or None when the
+# parent has no sub-slot room (basement) or all 9 sub-slots are taken.
+# ============================================================================
+
+ISO_SUB_SLOT_CASES = [
+    # ── 4-digit (V1) ─────────────────────────────────────────────────
+    ("V1 L1 first sub-part",          V1, "A1", 1010, [],                              1011),
+    ("V1 L1 sub-part gap-fill",       V1, "A1", 1010, ["1011"],                        1012),
+    ("V1 L1 jumps over taken .2",     V1, "A1", 1010, ["1011", "1012"],                1013),
+    ("V1 L1 fills hole",              V1, "A1", 1010, ["1011", "1013"],                1012),
+    ("V1 L1 all 9 sub-parts taken → None",
+                                      V1, "A1", 1010,
+                                      [f"101{n}" for n in range(1, 10)],
+                                      None),
+    ("V1 L5 sub-part",                V1, "A1", 1050, [],                              1051),
+    ("V1 B1 (basement) → None — no sub-slot room",
+                                      V1, "A1", 1009, [],                              None),
+
+    # ── 5-digit (V2) ─────────────────────────────────────────────────
+    ("V2 L1 first sub-part",          V2, "A1", 10100, [],                             10110),
+    ("V2 L1 sub-part gap-fill",       V2, "A1", 10100, ["10110"],                      10120),
+    ("V2 L1 fills hole",              V2, "A1", 10100, ["10110", "10130"],             10120),
+    ("V2 L1 all 9 taken → None",
+                                      V2, "A1", 10100,
+                                      [str(10100 + i*10) for i in range(1, 10)],
+                                      None),
+    ("V2 L5 sub-part",                V2, "A1", 10500, [],                             10510),
+    ("V2 B1 (basement) → None — no sub-slot room (B1 borders L1)",
+                                      V2, "A1", 10090, [],                             None),
+
+    # ── A5 ceiling — same shape as A1 ────────────────────────────────
+    ("V1 A5 L1 sub-part",             V1, "A5", 5010, [],                              5011),
+    ("V2 A5 L1 sub-part",             V2, "A5", 50100, [],                             50110),
+
+    # ── a49_dotted (V3) — caller should use _next_sub_slot, not this ─
+    # but verify defensive behavior: dotted has no level_increment so the
+    # function returns None.
+    ("V3 dotted → None (use _next_sub_slot for dotted)",
+                                      V3, "A1", 1, [],                                 None),
+]
+
+
+# ============================================================================
+# build_subpart_sheets FIXTURES — Phase 3b of duplicate-handling rollout
+#
+# Each case: (description, scheme, category, duplicates, existing,
+#             expected_numbers, expected_skipped_levels)
+#
+# duplicates uses the shape returned by detect_duplicate_levels:
+#   {level, proposed_name, existing_number, existing_name}
+# ============================================================================
+
+SUBPART_BUILD_CASES = [
+    # ── a49_dotted (V3) ──────────────────────────────────────────────
+    ("V3 single duplicate B1 → A1.01.1",
+     V3, "A1",
+     [{"level": "B1", "proposed_name": "B1 FLOOR PLAN",
+       "existing_number": "A1.01", "existing_name": "B1 FLOOR PLAN"}],
+     ["A1.00", "A1.01"],
+     ["A1.01.1"], []),
+
+    ("V3 mezz already at .1 → new sub-part lands at .2",
+     V3, "A1",
+     [{"level": "B1", "proposed_name": "B1 FLOOR PLAN",
+       "existing_number": "A1.01", "existing_name": "B1 FLOOR PLAN"}],
+     ["A1.00", "A1.01", "A1.01.1"],   # .1 is occupied (mezz)
+     ["A1.01.2"], []),
+
+    ("V3 multiple duplicates → all get sub-parts under their parents",
+     V3, "A1",
+     [
+       {"level": "B1", "proposed_name": "B1 FLOOR PLAN",
+        "existing_number": "A1.01", "existing_name": "B1 FLOOR PLAN"},
+       {"level": "L1", "proposed_name": "1ST FLOOR PLAN",
+        "existing_number": "A1.02", "existing_name": "1ST FLOOR PLAN"},
+     ],
+     ["A1.00", "A1.01", "A1.02"],
+     ["A1.01.1", "A1.02.1"], []),
+
+    # ── iso19650_4digit (V1) ─────────────────────────────────────────
+    ("V1 L1 duplicate → 1011 (last digit = sub-part)",
+     V1, "A1",
+     [{"level": "L1", "proposed_name": "LEVEL 1 FLOOR PLAN",
+       "existing_number": "1010", "existing_name": "LEVEL 1 FLOOR PLAN"}],
+     ["1010"],
+     ["1011"], []),
+
+    ("V1 L1 with existing 1011 → next sub at 1012",
+     V1, "A1",
+     [{"level": "L1", "proposed_name": "LEVEL 1 FLOOR PLAN",
+       "existing_number": "1010", "existing_name": "LEVEL 1 FLOOR PLAN"}],
+     ["1010", "1011"],
+     ["1012"], []),
+
+    ("V1 B1 duplicate (basement) → SKIPPED with reason",
+     V1, "A1",
+     [{"level": "B1", "proposed_name": "LEVEL B1 FLOOR PLAN",
+       "existing_number": "1009", "existing_name": "LEVEL B1 FLOOR PLAN"}],
+     ["1009"],
+     [], ["B1"]),
+
+    ("V1 mixed: L1 sub-part + B1 skipped",
+     V1, "A1",
+     [
+       {"level": "L1", "proposed_name": "LEVEL 1 FLOOR PLAN",
+        "existing_number": "1010", "existing_name": "LEVEL 1 FLOOR PLAN"},
+       {"level": "B1", "proposed_name": "LEVEL B1 FLOOR PLAN",
+        "existing_number": "1009", "existing_name": "LEVEL B1 FLOOR PLAN"},
+     ],
+     ["1009", "1010"],
+     ["1011"], ["B1"]),
+
+    # ── iso19650_5digit (V2) ─────────────────────────────────────────
+    ("V2 L1 duplicate → 10110 (tens digit = sub-part)",
+     V2, "A1",
+     [{"level": "L1", "proposed_name": "LEVEL 1 FLOOR PLAN",
+       "existing_number": "10100", "existing_name": "LEVEL 1 FLOOR PLAN"}],
+     ["10100"],
+     ["10110"], []),
+
+    ("V2 L1 with 10110 + 10120 already → 10130",
+     V2, "A1",
+     [{"level": "L1", "proposed_name": "LEVEL 1 FLOOR PLAN",
+       "existing_number": "10100", "existing_name": "LEVEL 1 FLOOR PLAN"}],
+     ["10100", "10110", "10120"],
+     ["10130"], []),
+
+    ("V2 B1 (basement) → SKIPPED",
+     V2, "A1",
+     [{"level": "B1", "proposed_name": "LEVEL B1 FLOOR PLAN",
+       "existing_number": "10090", "existing_name": "LEVEL B1 FLOOR PLAN"}],
+     ["10090"],
+     [], ["B1"]),
+
+    # ── Empty input ──────────────────────────────────────────────────
+    ("Empty duplicate list → empty payloads + empty skipped",
+     V3, "A1",
+     [],
+     [],
+     [], []),
+]
+
+
 PARSE_CASES_V3 = [
     # _parse_slot recognises the dotted format up front, returns (slot_int, category)
     ("V3 parse A0.00",  "A0.00",  (0, "A0")),
@@ -1306,6 +1562,48 @@ def _run():
                              "actual": actual_numbers,
                              "expected": case["expected_numbers"]})
 
+    # detect_duplicate_levels — exercises the name-match detection across
+    # all three schemes (a49_dotted / iso19650_4digit / iso19650_5digit).
+    for desc, scheme, category, levels, inventory, expected_levels in DUPLICATE_DETECTION_CASES:
+        result = detect_duplicate_levels(category, levels, inventory, scheme=scheme)
+        actual_levels = [d["level"] for d in result]
+        if actual_levels == expected_levels:
+            passed += 1
+        else:
+            failed += 1
+            failures.append({"case": f"[dup]   {desc}",
+                             "input": (category, levels, inventory),
+                             "actual": actual_levels,
+                             "expected": expected_levels})
+
+    # _next_iso_sub_slot — sub-slot allocation for iso19650 numeric schemes.
+    for desc, scheme, category, parent_slot, existing, expected in ISO_SUB_SLOT_CASES:
+        actual = _next_iso_sub_slot(parent_slot, scheme, category, existing)
+        if actual == expected:
+            passed += 1
+        else:
+            failed += 1
+            failures.append({"case": f"[iso-sub] {desc}",
+                             "input": (category, parent_slot, existing),
+                             "actual": actual, "expected": expected})
+
+    # build_subpart_sheets — full sheet payload construction for the
+    # "Create as sub-parts" branch of the duplicate-handling flow.
+    for desc, scheme, category, duplicates, existing, exp_numbers, exp_skipped in SUBPART_BUILD_CASES:
+        existing_copy = list(existing)  # function mutates in place
+        payloads, skipped = build_subpart_sheets(category, duplicates, existing_copy,
+                                                  scheme=scheme, stage="CD")
+        actual_numbers = [p.get("sheet_number") for p in payloads]
+        actual_skipped_levels = [s.get("level") for s in skipped]
+        if actual_numbers == exp_numbers and actual_skipped_levels == exp_skipped:
+            passed += 1
+        else:
+            failed += 1
+            failures.append({"case": f"[sub-build] {desc}",
+                             "input": (category, [d.get("level") for d in duplicates], existing),
+                             "actual": (actual_numbers, actual_skipped_levels),
+                             "expected": (exp_numbers, exp_skipped)})
+
     # ─── Scheme-detection unit cases ────────────────────────────────────
     for desc, sheets, expected in DETECT_CASES:
         actual = _detect_scheme_from_sheets(sheets)
@@ -1337,13 +1635,16 @@ def _run():
              len(NAME_CASES_V2) + len(PAYLOAD_CASES_V2) +
              len(SEQUENCE_CASES_V3) + len(LEVEL_SEQUENCE_CASES_V3) +
              len(NAME_CASES_V3) + len(PARSE_CASES_V3) + len(PAYLOAD_CASES_V3) +
+             len(DUPLICATE_DETECTION_CASES) + len(ISO_SUB_SLOT_CASES) +
+             len(SUBPART_BUILD_CASES) +
              len(DETECT_CASES) + len(RESOLVE_CASES))
     print("=" * 70)
     print(f"sheet_numbering tests: {passed} passed, {failed} failed  (of {total})")
-    print("  V1: {} cases, V2: {} cases, V3: {} cases, scheme-detect: {} cases".format(
+    print("  V1: {} cases, V2: {} cases, V3: {} cases, dup+sub: {} cases, scheme-detect: {} cases".format(
         len(SEQUENCE_CASES) + len(LEVEL_CASES) + len(NAME_CASES) + len(SHEET_SET_CASES) + len(PAYLOAD_CASES),
         len(SEQUENCE_CASES_V2) + len(LEVEL_CASES_V2) + len(NAME_CASES_V2) + len(PAYLOAD_CASES_V2),
         len(SEQUENCE_CASES_V3) + len(LEVEL_SEQUENCE_CASES_V3) + len(NAME_CASES_V3) + len(PARSE_CASES_V3) + len(PAYLOAD_CASES_V3),
+        len(DUPLICATE_DETECTION_CASES) + len(ISO_SUB_SLOT_CASES) + len(SUBPART_BUILD_CASES),
         len(DETECT_CASES) + len(RESOLVE_CASES),
     ))
     print("=" * 70)

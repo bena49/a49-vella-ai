@@ -5,7 +5,14 @@ from ..ai_core.session_manager import debug_session, reset_pending
 from ..ai_utils.envelope_builder import (
     send_envelope, envelope_create_views, envelope_create_sheets, envelope_place_view_on_sheet
 )
-from ..ai_engines.naming_engine import apply, build_sheets_payload, sort_key_sheet_number, resolve_scheme_for_request
+from ..ai_engines.naming_engine import (
+    apply,
+    build_sheets_payload,
+    build_subpart_sheets,
+    sort_key_sheet_number,
+    resolve_scheme_for_request,
+    detect_duplicate_levels,
+)
 from ..ai_engines.level_engine import sort_levels_for_sheet_creation
 from ..ai_engines.titleblock_engine import parse_titleblock_from_user_text
 from .sheet_creator import request_titleblock_choice
@@ -85,21 +92,79 @@ def finalize_create_and_place(request):
         save_pending_state(request, "fetching_sheets")
         return send_envelope(request, {"command": "list_sheets"})
 
+    # ────────────────────────────────────────────────────────────
+    # DUPLICATE DETECTION — same 3-option contract as sheet_creator's
+    # standalone Create Sheets flow. Detection runs against the project
+    # inventory cache (NUMBER + NAME). If duplicates are found and we
+    # haven't already resolved a choice in this session, prompt the user.
+    # ────────────────────────────────────────────────────────────
+    scheme = resolve_scheme_for_request(request)
+    duplicate_choice = request.session.get("ai_duplicate_choice")
+    duplicate_info = request.session.get("ai_pending_duplicate_info") or []
+    primary_cat = request.session.get("ai_pending_sheet_category")
+
+    if pending_levels and primary_cat and not duplicate_choice:
+        existing_inventory = request.session.get("ai_last_known_sheets_full") or []
+        # First category only — same scoping rule as sheet_creator.
+        cat0 = primary_cat.split(",")[0].strip() if "," in primary_cat else primary_cat
+        duplicates = detect_duplicate_levels(cat0, pending_levels, existing_inventory, scheme=scheme)
+        if duplicates:
+            request.session["ai_pending_duplicate_info"] = duplicates
+            request.session["ai_expecting_duplicate_choice"] = True
+            request.session.modified = True
+            lines = ["⚠ Sheets already exist for these levels:"]
+            for d in duplicates:
+                lines.append(f"  • {d['existing_number']} — {d['existing_name']}")
+            lines.append("")
+            lines.append("What would you like to do? Reply with one of:")
+            lines.append("  • **cancel** — abort, no sheets created")
+            lines.append("  • **skip** — only create new (non-duplicate) levels")
+            lines.append("  • **sub-parts** — attach duplicates as sub-parts of existing sheets")
+            return Response({
+                "message": "\n".join(lines),
+                "options": ["Cancel", "Skip duplicates", "Create as sub-parts"],
+            })
+
+    duplicate_levels_set = {d["level"] for d in duplicate_info}
+
+    if duplicate_choice == "cancel":
+        request.session["ai_duplicate_choice"] = None
+        request.session["ai_pending_duplicate_info"] = None
+        request.session["ai_expecting_duplicate_choice"] = False
+        request.session.modified = True
+        reset_pending(request)
+        return message("✋ Cancelled. No sheets or views were created.")
+
     # 2) EXECUTION - View Naming
-    scope_box = request.session.get("ai_pending_scope_box_id") 
+    scope_box = request.session.get("ai_pending_scope_box_id")
 
     # TRANSLATOR LINE:
     final_scope_box = None if scope_box == "SKIP" else scope_box
-    
+
+    # For Skip: drop duplicate levels entirely. For Sub-parts: keep all
+    # levels because we still need a NEW VIEW per duplicate level (Revit
+    # auto-suffixes duplicate view names with " Copy 1"). The DIFFERENCE
+    # between primary and sub-part is the SHEET, not the view.
+    view_levels = pending_levels
+    if duplicate_choice == "skip" and duplicate_levels_set:
+        view_levels = [l for l in pending_levels if l not in duplicate_levels_set]
+        if not view_levels:
+            request.session["ai_duplicate_choice"] = None
+            request.session["ai_pending_duplicate_info"] = None
+            request.session["ai_expecting_duplicate_choice"] = False
+            request.session.modified = True
+            reset_pending(request)
+            return message("ℹ All requested levels already have sheets — nothing new to create.")
+
     view_req = {
-        "command": "create_view", 
+        "command": "create_view",
         "view_type": request.session.get("ai_pending_view_type"),
-        "levels": request.session.get("ai_pending_levels_parsed"),
+        "levels": view_levels,
         "stage": request.session.get("ai_pending_stage"),
         "template": request.session.get("ai_pending_template"),
-        "scope_box_id": final_scope_box 
+        "scope_box_id": final_scope_box
     }
-    
+
     view_naming = apply(view_req, views_cache, sheets_cache)
     created_views = view_naming.get("views", [])
 
@@ -108,8 +173,6 @@ def finalize_create_and_place(request):
         return message("Error: View naming failed.")
 
     # 3) EXECUTION - Sheet Naming
-    # Resolve numbering scheme for this project before building sheets.
-    scheme = resolve_scheme_for_request(request)
     sheet_req = {
         "command": "create_sheet",
         "sheet_category": request.session.get("ai_pending_sheet_category"),
@@ -118,13 +181,46 @@ def finalize_create_and_place(request):
         "titleblock_family": request.session.get("titleblock_family"),
         "titleblock_type": request.session.get("titleblock_type"),
         "view_type": request.session.get("ai_pending_view_type"),
-        "levels": request.session.get("ai_pending_levels_parsed"),
+        "levels": view_levels,
         # Project-wide level inventory for ROOF/TOP slot computation.
         "project_levels": request.session.get("ai_last_known_levels", []),
     }
 
-    created_sheets = build_sheets_payload(sheet_req, sheets_cache, scheme=scheme)
-    
+    skipped_subpart_levels = []
+
+    if duplicate_choice == "subparts" and duplicate_levels_set:
+        # Allocate sub-parts for the duplicate levels and primaries for
+        # the rest. Both lists are merged below; pairing with views uses
+        # the _level tag on each sheet payload (added in naming_engine).
+        cat0 = primary_cat.split(",")[0].strip() if "," in primary_cat else primary_cat
+        sub_payloads, sub_skipped = build_subpart_sheets(
+            cat0,
+            [d for d in duplicate_info if d["level"] in duplicate_levels_set],
+            list(sheets_cache),  # pass a copy so the helper mutates it locally
+            scheme=scheme,
+            stage=request.session.get("ai_pending_stage"),
+            titleblock_family=request.session.get("titleblock_family"),
+            titleblock_type=request.session.get("titleblock_type"),
+        )
+        skipped_subpart_levels.extend(sub_skipped)
+        # Add the sub-part numbers to sheets_cache so build_sheets_payload
+        # treats them as taken when allocating primaries.
+        for p in sub_payloads:
+            sheets_cache.append(p.get("sheet_number"))
+
+        # Non-duplicate levels go through the regular allocator.
+        non_dup_levels = [l for l in pending_levels if l not in duplicate_levels_set]
+        sheet_req["levels"] = non_dup_levels
+        primary_sheets = build_sheets_payload(sheet_req, sheets_cache, scheme=scheme)
+        created_sheets = sub_payloads + primary_sheets
+        # Filter views down to the levels we actually emitted sheets for —
+        # build_subpart_sheets may have skipped basements; their views
+        # would have nothing to pair with.
+        emitted_levels = {p.get("_level") for p in created_sheets}
+        created_views = [v for v in created_views if v.get("level") in emitted_levels]
+    else:
+        created_sheets = build_sheets_payload(sheet_req, sheets_cache, scheme=scheme)
+
     if not created_sheets:
         reset_pending(request)
         return message("Error: Sheet naming failed.")
@@ -136,13 +232,19 @@ def finalize_create_and_place(request):
     align_mode = request.session.get("ai_pending_alignment_mode", "CENTER")
     ref_sheet = request.session.get("ai_pending_reference_sheet")
 
-    # Pair views with sheets and sort the pair list by sheet number ascending
-    # so both the create-order (in Revit) and the success-report (in chat)
-    # read low → high.
+    # Pair views with sheets BY LEVEL IDENTITY using the `_level` tag both
+    # build_sheets_payload and build_subpart_sheets attach to every payload.
+    # Falling back to index alignment was the source of the SITE-with-TOP-
+    # view mismatch in the duplicate-handling rollout, so we avoid it here.
+    sheets_by_level = {s.get("_level"): s for s in created_sheets if s.get("_level")}
+    fallback_pool = [s for s in created_sheets if not s.get("_level")]
     pairs = []
-    for i, view_item in enumerate(created_views):
-        sheet_item = created_sheets[i] if i < len(created_sheets) else created_sheets[0]
-        pairs.append((view_item, sheet_item))
+    for view_item in created_views:
+        sheet_item = sheets_by_level.pop(view_item.get("level"), None)
+        if sheet_item is None and fallback_pool:
+            sheet_item = fallback_pool.pop(0)
+        if sheet_item is not None:
+            pairs.append((view_item, sheet_item))
     pairs.sort(key=lambda p: sort_key_sheet_number(p[1].get("sheet_number")))
 
     for view_item, sheet_item in pairs:
@@ -173,6 +275,18 @@ def finalize_create_and_place(request):
     # Append Alignment Note
     if align_mode == "MATCH":
         final_msg += f"\n(Aligned to reference sheet: {ref_sheet})"
+
+    # Append a note for any duplicate levels that couldn't be allocated as
+    # sub-parts (basements in iso19650 schemes have no sub-slot room).
+    if skipped_subpart_levels:
+        final_msg += "\n\nℹ Skipped these levels (no sub-slot room in this scheme — try Manual Edit):"
+        for s in skipped_subpart_levels:
+            final_msg += f"\n  • {s.get('level')}: {s.get('reason')}"
+
+    # Clear duplicate-handling pending state now that the choice is applied.
+    request.session["ai_duplicate_choice"] = None
+    request.session["ai_pending_duplicate_info"] = None
+    request.session["ai_expecting_duplicate_choice"] = False
 
     multi_command_env = {
         "command": "execute_batch", 

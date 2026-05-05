@@ -524,6 +524,225 @@ def _format_slot(sheet_type, slot, scheme=None):
     scheme = scheme or get_active_scheme()
     return f"{int(slot):0{scheme['digit_count']}d}"
 
+def detect_duplicate_levels(category, levels, existing_inventory, scheme=None):
+    """Find levels in `levels` that already have a sheet in this project.
+
+    A level is flagged as a duplicate when its proposed sheet name (computed
+    via generate_smart_name) matches an existing sheet whose number parses
+    to the same `category`. Catches the common "user re-runs the wizard for
+    levels they've already created" mistake before the allocator silently
+    appends a parallel sequence at the end of the category.
+
+    Args:
+        category: A1 / A5 / A6 / etc. — the target sheet category.
+        levels:   list of level tokens (raw or resolved Revit names; both
+                  shapes round-trip through generate_smart_name).
+        existing_inventory: list of "NUMBER - NAME" strings from the cached
+                  project inventory (sheet_creator + batch_processor read
+                  this from `ai_last_known_sheets` after list_sheets fires).
+        scheme:   active scheme dict (a49_dotted / iso19650_4digit / 5digit).
+
+    Returns:
+        List of dicts, one per duplicate, in the order levels were given:
+            { "level": original token,
+              "proposed_name": str,
+              "existing_number": str,
+              "existing_name": str }
+        Empty list means no duplicates — caller proceeds normally.
+
+    Special-case: iso19650 SITE has multiple primary slots by design
+    (1000-1009, 10000-10009 — all named "SITE PLAN"), so we never flag a
+    SITE level as a duplicate in iso19650. a49_dotted SITE is flagged
+    because A1.00 is the only site slot and the spec calls for sub-parts
+    (A1.00.1, A1.00.2) for additional site drawings.
+    """
+    if not levels or not existing_inventory:
+        return []
+    is_dotted = scheme is not None and scheme.get("digit_count") is None
+
+    # Index existing sheets by upper-cased name → (number, original_name)
+    # for one O(N) name lookup instead of N×M scanning.
+    existing_by_name = {}
+    for entry in existing_inventory:
+        s = str(entry or "").strip()
+        if not s:
+            continue
+        num, sep, name = s.partition(" - ")
+        num = num.strip().upper()
+        name = name.strip()
+        if not name:
+            continue
+        slot, cat = _parse_slot(num, scheme)
+        if slot is None or cat != category:
+            continue
+        existing_by_name.setdefault(name.upper(), (num, name))
+
+    out = []
+    seen_levels = set()  # dedupe per call so repeated tokens don't get re-flagged
+    for lvl in levels:
+        if not lvl or lvl in seen_levels:
+            continue
+        seen_levels.add(lvl)
+
+        # iso19650 SITE intentionally has multiple primary slots — skip.
+        if not is_dotted:
+            try:
+                from .level_matcher import extract_level_signature
+                sig = extract_level_signature(lvl)
+                if sig.get("special") == "SITE":
+                    continue
+            except Exception:
+                pass
+
+        proposed = generate_smart_name(category, level_name=lvl, scheme=scheme)
+        if not proposed:
+            continue
+        match = existing_by_name.get(proposed.upper())
+        if match:
+            out.append({
+                "level": lvl,
+                "proposed_name": proposed,
+                "existing_number": match[0],
+                "existing_name": match[1],
+            })
+    return out
+
+
+def _next_iso_sub_slot(parent_slot, scheme, category, existing_sheet_numbers):
+    """Next free sub-slot in iso19650 numeric format. Mirrors a49_dotted's
+    _next_sub_slot but encodes the sub-part in the trailing digit(s) per the
+    spec rather than via a ".N" suffix.
+
+    iso19650_4digit: parent=1010 (LEVEL 1), sub-parts 1011-1019 (sub_inc=1).
+    iso19650_5digit: parent=10100 (LEVEL 1), sub-parts 10110-10190 (sub_inc=10).
+
+    Basement primary slots (e.g. 4-digit B1=1009, 5-digit B1=10090) sit
+    immediately below the next level's primary, so they have ZERO sub-slot
+    room — return None and let the caller fall back to skip-with-warning.
+
+    Args:
+        parent_slot: integer slot of the existing sheet, e.g. 1010 or 10100.
+        scheme:      active scheme dict.
+        category:    A1 / A5 (level-based categories with sub_level_increment).
+        existing_sheet_numbers: full list of sheet numbers in the project.
+
+    Returns:
+        Integer slot for the next free sub-part, or None if the parent has
+        no sub-slot room (basement, or all 9 sub-slots already used).
+    """
+    if scheme is None:
+        return None
+    cat_def = scheme.get("categories", {}).get(category, {})
+    sub_inc = cat_def.get("sub_level_increment") or 0
+    level_inc = cat_def.get("level_increment") or 0
+    if sub_inc <= 0 or level_inc <= 0 or sub_inc >= level_inc:
+        return None
+
+    # Primary slots align to multiples of level_increment from the category
+    # base. A basement slot doesn't align (e.g. 1009 - 1000 = 9, not divisible
+    # by level_increment 10) — sub-slots between basements would collide
+    # with the next-deeper basement's primary, so refuse.
+    base = cat_def.get("base", 0) or 0
+    if (parent_slot - base) % level_inc != 0:
+        return None
+
+    # Sub-slots live in the open interval (parent_slot, parent_slot+level_inc),
+    # stepping by sub_inc. e.g. 4-digit L1: 1011, 1012 ... 1019 (9 slots).
+    used = set()
+    for num in existing_sheet_numbers or ():
+        slot, cat = _parse_slot(num, scheme)
+        if slot is not None and cat == category:
+            used.add(slot)
+
+    candidate = parent_slot + sub_inc
+    while candidate < parent_slot + level_inc:
+        if candidate not in used:
+            return candidate
+        candidate += sub_inc
+    return None  # All sub-slots taken
+
+
+def build_subpart_sheets(category, duplicates, existing_sheet_numbers,
+                         scheme, stage, titleblock_family=None, titleblock_type=None):
+    """Build sheet payload entries that attach as sub-parts of existing parent
+    sheets — used when the user picks "Create as sub-parts" in response to
+    the duplicate-detection prompt.
+
+    For each duplicate dict (from detect_duplicate_levels), allocates the
+    next free sub-slot under that level's existing parent and constructs a
+    standard sheet payload entry matching make_standard_sheet's shape.
+
+    Naming convention: parent's proposed name + " (Part N)" where N is the
+    sub-slot ordinal. Users can rename later via the Manual Edit wizard if
+    they want a specific variant (M/T) per the iso19650 spec.
+
+    Mutates `existing_sheet_numbers` in place — appends each newly
+    allocated sub-slot number so the next iteration sees it.
+
+    Returns:
+        (payloads, skipped) where:
+          payloads — list of sheet dicts (sheet_number, sheet_name, etc.)
+          skipped  — list of {level, reason} for duplicates that couldn't
+                     be allocated as sub-parts (iso19650 basements bordered
+                     by the next level have no sub-slot room).
+    """
+    payloads = []
+    skipped = []
+    if not duplicates:
+        return payloads, skipped
+
+    is_dotted = scheme is not None and scheme.get("digit_count") is None
+    cat_def = (scheme or {}).get("categories", {}).get(category, {})
+
+    for d in duplicates:
+        parent_num = d.get("existing_number")
+        proposed = d.get("proposed_name") or ""
+        level = d.get("level")
+        if not parent_num or not proposed:
+            skipped.append({"level": level, "reason": "missing parent or proposed name"})
+            continue
+
+        if is_dotted:
+            sub_n = _next_sub_slot(parent_num, existing_sheet_numbers)
+            if sub_n is None:
+                skipped.append({"level": level,
+                                "reason": f"could not parse parent {parent_num!r}"})
+                continue
+            new_num = f"{parent_num}.{sub_n}"
+            ordinal = sub_n
+        else:
+            parent_slot, _ = _parse_slot(parent_num, scheme)
+            if parent_slot is None:
+                skipped.append({"level": level,
+                                "reason": f"could not parse parent {parent_num!r}"})
+                continue
+            sub_slot = _next_iso_sub_slot(parent_slot, scheme, category, existing_sheet_numbers)
+            if sub_slot is None:
+                # Most common cause: basement primaries (1009, 10090) sit
+                # immediately below the next level's primary, so there's no
+                # numeric room for sub-parts in iso19650. Caller should
+                # surface this in the success message so the user knows.
+                skipped.append({"level": level,
+                                "reason": "basement has no sub-slot room in this scheme"})
+                continue
+            new_num = _format_slot(category, sub_slot, scheme)
+            sub_inc = cat_def.get("sub_level_increment") or 1
+            ordinal = (sub_slot - parent_slot) // sub_inc
+
+        new_name = f"{proposed} (Part {ordinal})"
+        sheet = make_standard_sheet(category, new_num, new_name.upper(), stage)
+        if titleblock_family and titleblock_type:
+            sheet["titleblock_family"] = titleblock_family
+            sheet["titleblock_type"] = titleblock_type
+        # Same level-tag convention as build_sheets_payload's primary path
+        # so callers can pair sheets ↔ views by level identity.
+        sheet["_level"] = level
+        payloads.append(sheet)
+        existing_sheet_numbers.append(new_num)
+
+    return payloads, skipped
+
+
 def _next_sub_slot(parent_sheet_number, existing_sheet_numbers):
     """Return the next free integer sub-slot under a dotted parent number.
 
@@ -1178,7 +1397,12 @@ def build_sheets_payload(request_data, existing_sheet_numbers, scheme=None):
 
             final_name = user_name if user_name else generate_smart_name(
                 sheet_type, sheet_number=num, level_name=lvl, scheme=scheme)
-            sheets.append(create_payload(num, final_name.upper()))
+            payload = create_payload(num, final_name.upper())
+            # Tag the source level on each payload so callers that need to
+            # pair sheets with views (batch_processor) can match by level
+            # identity instead of fragile index alignment.
+            payload["_level"] = lvl
+            sheets.append(payload)
     else:
         try:
             total_count = int(count) if count else 1

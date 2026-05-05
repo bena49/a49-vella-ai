@@ -60,6 +60,38 @@ def finalize_router(request):
             request.session["ai_expecting_alignment_selection"] = False
             request.session.modified = True
 
+    # 💥 DUPLICATE-CHOICE HANDLER — surfaces when sheet_creator or
+    # batch_processor returned an "⚠ Sheets already exist" prompt and is
+    # waiting on the user to pick how to proceed.
+    #
+    # Recognised replies (case-insensitive):
+    #   "cancel", "abort", "stop", "nevermind"        → cancel
+    #   "skip", "skip duplicates", "skip dup"         → skip
+    #   "sub-parts", "subparts", "sub parts", "parts" → subparts
+    #
+    # The same `options` array on the original prompt also matches the
+    # exact button labels users would have typed if they clicked them
+    # (Cancel / Skip duplicates / Create as sub-parts).
+    if request.session.get("ai_expecting_duplicate_choice"):
+        msg_lower = raw_msg.strip().lower()
+        choice = None
+        if re.search(r'\b(cancel|abort|stop|nevermind|never\s*mind)\b', msg_lower):
+            choice = "cancel"
+        elif re.search(r'\b(sub[\s\-]?parts?)\b', msg_lower):
+            choice = "subparts"
+        elif "create as sub" in msg_lower:
+            choice = "subparts"
+        elif re.search(r'\bskip(\s+dup\w*)?\b', msg_lower):
+            choice = "skip"
+
+        if choice:
+            debug_session(request, f"🔀 Duplicate-choice resolved: {choice}")
+            request.session["ai_duplicate_choice"] = choice
+            request.session["ai_expecting_duplicate_choice"] = False
+            request.session.modified = True
+            # Fall through to the normal intent dispatch below — sheet_creator
+            # / batch_processor will read ai_duplicate_choice and branch.
+
     # WIZARD FLOW
     if intent == "create_view_and_sheet_wizard":
         if not request.session.get("ai_pending_view_type"):

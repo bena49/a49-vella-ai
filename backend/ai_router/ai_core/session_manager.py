@@ -41,6 +41,12 @@ def initialize_session(request):
             "ai_pending_target_sheet": None,
             "ai_pending_alignment_mode": None, # "CENTER" or "MATCH"
             "ai_pending_reference_sheet": None,
+            # Duplicate-detection prompt state — used when sheet_creator /
+            # batch_processor finds existing sheets matching the proposed
+            # names and asks the user to choose Cancel / Skip / Sub-parts.
+            "ai_duplicate_choice": None,            # "cancel" | "skip" | "subparts"
+            "ai_pending_duplicate_info": None,      # detect_duplicate_levels output
+            "ai_expecting_duplicate_choice": False,
             "ai_last_known_sheets": [],
             "ai_last_known_views": [],
             "ai_pending_scope_box_id": None,
@@ -88,6 +94,12 @@ def reset_pending(request):
         "ai_expecting_template_selection",
         "ai_pending_template_options",
         "ai_pending_titleblock_options",
+
+        # Duplicate-detection prompt state — cleared once the choice is
+        # applied OR when a fresh top-level command starts.
+        "ai_duplicate_choice",
+        "ai_pending_duplicate_info",
+        "ai_expecting_duplicate_choice",
     ]
     
     for k in keys:

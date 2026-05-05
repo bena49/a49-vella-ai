@@ -6,3 +6,5 @@ See `.claude-docs/` for detailed feature and project notes:
 - `next_release_*.md` — deferred features still in the pipeline
 
 User-facing terminology and internal keys are aligned: **ISO19650 4-digit** (`iso19650_4digit`) / **ISO19650 5-digit** (`iso19650_5digit`). Sessions stored under the earlier `v1_small` / `v2_large` keys are auto-migrated by `resolve_scheme_for_request()`.
+
+**Commit workflow:** For Phase 2 (Renumber/Rename wizard pipeline) work, the user creates and names all commits personally — do not run `git commit` unless they explicitly ask.

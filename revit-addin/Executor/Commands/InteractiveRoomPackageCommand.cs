@@ -7,6 +7,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Architecture;
 using Autodesk.Revit.UI;
@@ -285,8 +286,10 @@ namespace A49AIRevitAssistant.Executor.Commands
                     if (titleblock != null)
                     {
                         // 💥 1. Calculate the safe number BEFORE creating the sheet!
-                        // A6 series = 6000-band (new 4-digit format: 6010, 6020, …).
-                        string safeSheetNum = GetSafeSheetNumber(doc, 6000);
+                        // A6 series — auto-detects the project's active numbering
+                        // scheme from existing sheets and emits the matching format
+                        // (a49_dotted "A6.01" / iso19650_5digit "60100" / iso19650_4digit "6010").
+                        string safeSheetNum = GetSafeSheetNumber(doc, 6000, "A6");
 
                         // 2. Create the sheet (Revit will auto-assign a temporary number here)
                         newSheet = ViewSheet.Create(doc, titleblock.Id);
@@ -446,45 +449,93 @@ namespace A49AIRevitAssistant.Executor.Commands
         }
 
         // ============================================================================
-        // HELPER 2: ROBUST SHEET NUMBERING
+        // HELPER 2: ROBUST SHEET NUMBERING — scheme-aware
         //
-        // Mirrors the Python naming_engine.get_next_sheet_number sequence-based
-        // path: pick max(existing sheets in this series's 1000-band) + 10, then
-        // bump on collision. Format: 4-digit zero-padded (6010, 6020, …).
+        // Mirrors backend naming_engine.get_next_sheet_number for the three
+        // schemes Vella supports, picking which one to use by auto-detecting
+        // from sheets already in the project (same heuristic as the frontend
+        // RenameWizard.detectedScheme):
         //
-        // seriesBase: the thousand-base for this series (6000 for A6, 7000 for A7).
-        // Only 4-digit numeric sheets in the band [seriesBase, seriesBase+1000)
-        // are considered — legacy "A6.01" sheets are ignored (they coexist but
-        // don't influence the new sequence).
+        //   1. Any sheet matches "A1.NN" / "X0.NN"      → a49_dotted
+        //   2. Else any pure-numeric sheet has length≥5  → iso19650_5digit
+        //   3. Else                                       → iso19650_4digit
+        //
+        // a49_dotted gap-fills (lowest free slot wins). The iso19650 schemes
+        // advance from max+increment with collision bump-up, no gap-fill.
+        //
+        // seriesBase4: 4-digit thousand-base for this series (6000 for A6).
+        //              Multiplied ×10 for 5-digit (→ 60000-band).
+        // seriesPrefix: the dotted category code, e.g. "A6". Used only when
+        //               the project is detected as a49_dotted.
         // ============================================================================
-        private string GetSafeSheetNumber(Document doc, int seriesBase)
+        private string GetSafeSheetNumber(Document doc, int seriesBase4, string seriesPrefix)
         {
             var allSheetNumbers = new FilteredElementCollector(doc)
                 .OfClass(typeof(ViewSheet))
                 .Cast<ViewSheet>()
-                .Select(s => s.SheetNumber)
+                .Select(s => s.SheetNumber ?? "")
                 .ToList();
 
+            // Scheme detection — first match wins.
+            bool hasDotted = allSheetNumbers.Any(n =>
+                Regex.IsMatch(n, @"^[AX]\d\.\d{1,3}(\.\d+)?$"));
+            bool has5Digit = !hasDotted && allSheetNumbers.Any(n =>
+                Regex.IsMatch(n, @"^\d{5,}$"));
+
+            if (hasDotted)
+                return NextDottedSlot(allSheetNumbers, seriesPrefix);
+            if (has5Digit)
+                return NextNumericSlot(allSheetNumbers, seriesBase4 * 10, increment: 100, width: 5);
+            return NextNumericSlot(allSheetNumbers, seriesBase4, increment: 10, width: 4);
+        }
+
+        // Lowest free positive sub-slot under a category (gap-fill semantics).
+        // Sub-parts (A6.05.1) are ignored — they share their parent's primary
+        // slot for allocation purposes, just like the Python side does.
+        private string NextDottedSlot(List<string> allSheetNumbers, string seriesPrefix)
+        {
+            var dottedRe = new Regex($@"^{Regex.Escape(seriesPrefix)}\.(\d{{1,3}})(?:\.\d+)?$",
+                                     RegexOptions.IgnoreCase);
+            var used = new HashSet<int>();
+            foreach (string n in allSheetNumbers)
+            {
+                var m = dottedRe.Match(n);
+                if (m.Success && int.TryParse(m.Groups[1].Value, out int slot))
+                    used.Add(slot);
+            }
+            // a49_dotted A6 starts at .01 (no .00 slot per spec). Walk upward
+            // from 1 until we find a free slot — covers gap-fill after a delete.
+            int next = 1;
+            while (used.Contains(next) && next < 100) next++;
+            return $"{seriesPrefix}.{next:D2}";
+        }
+
+        // Existing behavior, parameterised over digit-width / increment so the
+        // same routine handles iso19650_4digit (6010 increments of 10) and
+        // iso19650_5digit (60100 increments of 100).
+        private string NextNumericSlot(List<string> allSheetNumbers,
+                                       int seriesBase, int increment, int width)
+        {
+            int bandMax = seriesBase + (int)Math.Pow(10, width - 1);
             int maxVal = 0;
             foreach (string num in allSheetNumbers)
             {
-                if (int.TryParse(num, out int val)
-                    && val >= seriesBase && val < seriesBase + 1000)
+                if (int.TryParse(num, out int val) && val >= seriesBase && val < bandMax)
                 {
                     if (val > maxVal) maxVal = val;
                 }
             }
+            int nextVal = (maxVal == 0)
+                ? (seriesBase + increment)
+                : (((maxVal / increment) + 1) * increment);
 
-            // First sheet in the series → seriesBase + 10. Otherwise round up
-            // from the highest existing slot to the next +10 boundary (no gap-fill).
-            int nextVal = (maxVal == 0) ? (seriesBase + 10) : (((maxVal / 10) + 1) * 10);
-
-            string nextNum = nextVal.ToString("D4");
+            string fmt = "D" + width;
+            string nextNum = nextVal.ToString(fmt);
             while (allSheetNumbers.Contains(nextNum))
             {
-                nextVal += 10;
-                nextNum = nextVal.ToString("D4");
-                if (nextVal >= seriesBase + 1000) break;  // Safety: don't overflow band
+                nextVal += increment;
+                nextNum = nextVal.ToString(fmt);
+                if (nextVal >= bandMax) break;  // Safety: don't overflow band
             }
             return nextNum;
         }

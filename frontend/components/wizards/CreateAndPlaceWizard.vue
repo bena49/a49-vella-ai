@@ -275,7 +275,7 @@
                      <div v-if="filteredReferenceSheets.length === 0"
                           class="px-3 py-2.5 text-xs text-white/50 text-center italic">
                        <template v-if="availableReferenceCount === 0">
-                         No A1, A5, or X-series sheets in this project yet.
+                         No {{ form.sheetCategory }} sheets in this project yet.
                        </template>
                        <template v-else>
                          No sheets match "{{ form.referenceSheet }}".
@@ -412,11 +412,14 @@ watch(() => form.viewType, (newType) => {
   form.levels = [];
   form.template = null;
   form.scopeBox = null;
-  
+  // Reference sheet was filtered by the previous viewType's sheet category;
+  // clear it so an A1 pick doesn't linger after switching to Ceiling Plan.
+  form.referenceSheet = '';
+
   if (newType === "Ceiling Plan") {
       form.sheetCategory = "A5";
   } else {
-      form.sheetCategory = "A1"; 
+      form.sheetCategory = "A1";
   }
 });
 
@@ -510,21 +513,39 @@ const filteredTitleblocks = computed(() => {
 // --- STEP 3 LOGIC (VALIDATION + FILTER) ---
 const cleanSheetNumber = (str) => str.split(' - ')[0].trim();
 
-// Category-based filter: surface every sheet whose number starts with the
-// A1 (1xxx), A5 (5xxx), or X-series prefix. We deliberately accept any
-// suffix shape — including placeholders like "10XX - LEVEL 1 (MASTER)" —
-// because validation below requires the picked value to actually exist in
-// the project, which is a stronger guarantee than a format regex.
-const isReferenceCategory = (s) => {
-    const num = cleanSheetNumber(s).toUpperCase();
-    return num.startsWith('1') || num.startsWith('5') || num.startsWith('X');
+// Whether a sheet number string belongs to a given category, across all
+// three numbering schemes Vella supports:
+//   - a49_dotted:        "A1.01", "A5.03", "X0.05"
+//   - iso19650_4digit:   "1010" (A1 = 1xxx), "5010" (A5 = 5xxx)
+//   - iso19650_5digit:   "10100" (A1 = 1xxxx), "50100" (A5 = 5xxxx)
+// Placeholders like "10XX - LEVEL 1 (MASTER)" still pass via the numeric
+// match — validation below requires the picked value to actually exist
+// in the project, which is a stronger guarantee than a format regex.
+const sheetMatchesCategory = (sheetStr, category) => {
+    if (!category) return false;
+    const num = cleanSheetNumber(sheetStr).toUpperCase();
+    const cat = category.toUpperCase();
+    // Dotted: "A1.01" / "A5.03" / "X0.05"
+    if (num.startsWith(cat + '.')) return true;
+    // X-series numeric: "X010" / "X0100" — only relevant when category is X0.
+    if (cat === 'X0' && num.startsWith('X')) return true;
+    // ISO19650 numeric: leading digit matches the category number.
+    // A1 → "1xxx" / "1xxxx",  A5 → "5xxx" / "5xxxx", etc.
+    const digit = cat.charAt(1);
+    if (/^\d/.test(num) && num.charAt(0) === digit) return true;
+    return false;
 };
 
+// Reference dropdown: filter to the same category the wizard is creating
+// (Floor Plan → A1, Ceiling Plan → A5). Reference sheets need to share the
+// target's layout to make the "match viewport location" feature meaningful;
+// mixing categories (e.g. picking an A8 schedule sheet as a reference for
+// an A1 floor plan) wouldn't produce a useful template.
 const conformantSheets = computed(() =>
-    props.existingSheets.filter(isReferenceCategory)
+    props.existingSheets.filter(s => sheetMatchesCategory(s, form.sheetCategory))
 );
 
-// Total count of A1/A5/X-series sheets in the project — surfaced in the UI
+// Total count of in-category sheets in the project — surfaced in the UI
 // so the user can tell at a glance whether the data has loaded.
 const availableReferenceCount = computed(() => conformantSheets.value.length);
 

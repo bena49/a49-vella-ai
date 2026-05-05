@@ -4,7 +4,7 @@ from ..ai_core.session_manager import debug_session, reset_pending
 from ..ai_utils.envelope_builder import send_envelope, envelope_create_views
 from ..ai_engines.naming_engine import apply, get_view_abbrev
 from ..ai_engines.template_engine import validate_template, get_templates
-from ..ai_engines.level_engine import parse_levels
+from ..ai_engines.level_engine import parse_levels, sort_levels_for_sheet_creation
 
 def message(text): return Response({"message": text})
 
@@ -70,6 +70,17 @@ def finalize_create_views(request):
         }
         request.session.modified = True
         return send_envelope(request, {"command": "get_levels"})
+
+    # Sort levels per the a49_dotted spec so view names follow the same
+    # canonical order that sheet allocation uses. Without this, a chat-only
+    # "create views for B1, L1, L2, ROOF" command would produce views whose
+    # creation order matches parse_levels output (which groups specials
+    # before basements) rather than the elevation-based order shown in the
+    # project browser.
+    if levels:
+        levels = sort_levels_for_sheet_creation(levels)
+        request.session["ai_pending_levels_parsed"] = levels
+        request.session.modified = True
 
     # 1) CACHE CHECK
     if not request.session.get("ai_last_known_views"):

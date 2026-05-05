@@ -6,6 +6,7 @@ from ..ai_utils.envelope_builder import (
     send_envelope, envelope_create_views, envelope_create_sheets, envelope_place_view_on_sheet
 )
 from ..ai_engines.naming_engine import apply, build_sheets_payload, sort_key_sheet_number, resolve_scheme_for_request
+from ..ai_engines.level_engine import sort_levels_for_sheet_creation
 from ..ai_engines.titleblock_engine import parse_titleblock_from_user_text
 from .sheet_creator import request_titleblock_choice
 
@@ -56,6 +57,17 @@ def finalize_create_and_place(request):
         request.session["ai_levels_fetch_attempted"] = True
         save_pending_state(request, "fetching_levels")
         return send_envelope(request, {"command": "get_levels"})
+
+    # Sort levels per the a49_dotted spec (SITE → basements deepest-first →
+    # numbered floors → ROOF). Critical here: views are created in level
+    # order and sheets are allocated in level order, then paired by index
+    # below. If the two orders differ, view↔sheet pairing is broken
+    # (e.g. SITE_view ends up on the ROOF sheet). Sorting up-front means
+    # both pipelines consume the same canonical order.
+    if pending_levels:
+        pending_levels = sort_levels_for_sheet_creation(pending_levels)
+        request.session["ai_pending_levels_parsed"] = pending_levels
+        request.session.modified = True
 
     # A. Need Views?
     if not has_views:

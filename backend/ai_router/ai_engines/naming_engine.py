@@ -268,6 +268,59 @@ SCHEMES = {
             "X0": {"type": "sequence", "base": 0,    "primary_increment": 10, "sub_increment": 1, "format": "X{:03d}"},
         },
     },
+    "a49_dotted": {
+        # Dotted A49 sheet naming format: A<series>.<NN> (e.g. A1.03).
+        # Brought back per staff feedback after the iso19650 4/5-digit shipped
+        # as the default. KEY DIFFERENCE from 4/5-digit: A1/A5 are NOT
+        # level-based here — they're "level_sequence" type, meaning the user
+        # creates sheets in any order and the engine just hands out the next
+        # free sequential slot. SITE still anchors at .00 in A1 (matching the
+        # other schemes' contract), but L1/L2/B1 etc. land at whichever sequence
+        # slot is next free, not at a deterministic level→slot mapping.
+        #
+        # gap_fill: True on every category — if a sheet is deleted mid-project,
+        # the next created sheet reuses the freed slot (different from 4/5-digit
+        # which always advance from max).
+        #
+        # range_size = 100: each category occupies slots 0-99 (formats as 00-99).
+        #
+        # Sub-parts (A1.03.1, A1.03.2 for splitting drawings) are deferred to
+        # Phase 2 — Phase 1 ships the basic dotted scheme only.
+        "digit_count": None,   # not numeric format; "format" handles per-category
+        "range_size": 100,     # per-category slot capacity (00-99)
+        "categories": {
+            "A0": {"type": "sequence",       "base": 0, "primary_increment": 1, "sub_increment": 0,
+                                             "format": "A0.{:02d}", "gap_fill": True,
+                   "named_slots": ["COVER", "DRAWING INDEX", "SITE AND VICINITY PLAN",
+                                   "STANDARD SYMBOLS", "SAFETY PLAN", "WALL TYPES"]},
+            "A1": {"type": "level_sequence", "base": 0, "primary_increment": 1, "sub_increment": 0,
+                                             "format": "A1.{:02d}", "gap_fill": True,
+                                             "site_slots": 1},
+            "A2": {"type": "sequence",       "base": 0, "primary_increment": 1, "sub_increment": 0,
+                                             "format": "A2.{:02d}", "gap_fill": True},
+            "A3": {"type": "sequence",       "base": 0, "primary_increment": 1, "sub_increment": 0,
+                                             "format": "A3.{:02d}", "gap_fill": True},
+            "A4": {"type": "sequence",       "base": 0, "primary_increment": 1, "sub_increment": 0,
+                                             "format": "A4.{:02d}", "gap_fill": True},
+            "A5": {"type": "level_sequence", "base": 0, "primary_increment": 1, "sub_increment": 0,
+                                             "format": "A5.{:02d}", "gap_fill": True,
+                                             "site_slots": 0},
+            "A6": {"type": "sequence",       "base": 0, "primary_increment": 1, "sub_increment": 0,
+                                             "format": "A6.{:02d}", "gap_fill": True,
+                   "named_slots": [None, "FLOOR PATTERN PLAN", "ENLARGED TOILET PLAN", "CANOPY PLAN"]},
+            "A7": {"type": "sequence",       "base": 0, "primary_increment": 1, "sub_increment": 0,
+                                             "format": "A7.{:02d}", "gap_fill": True,
+                   "named_slots": [None, "ENLARGED STAIR PLAN", "ENLARGED STAIR SECTION",
+                                   "ENLARGED RAMP PLAN", "ENLARGED LIFT PLAN"]},
+            "A8": {"type": "sequence",       "base": 0, "primary_increment": 1, "sub_increment": 0,
+                                             "format": "A8.{:02d}", "gap_fill": True,
+                   "named_slots": [None, "DOOR SCHEDULE", "WINDOW SCHEDULE"]},
+            "A9": {"type": "sequence",       "base": 0, "primary_increment": 1, "sub_increment": 0,
+                                             "format": "A9.{:02d}", "gap_fill": True},
+            "X0": {"type": "sequence",       "base": 0, "primary_increment": 1, "sub_increment": 0,
+                                             "format": "X0.{:02d}", "gap_fill": True},
+        },
+    },
     "iso19650_5digit": {
         # 5-digit format for large projects: every increment is ×10 the 4-digit
         # value (primary 100 vs 10, sub 10 vs 1). Same conceptual shape, more
@@ -345,31 +398,39 @@ _LEGACY_SCHEME_KEYS = {
 def _detect_scheme_from_sheets(sheets):
     """Inspect a list of cached sheet-number strings and return the scheme
     name that matches the dominant numbering shape:
-      - "iso19650_5digit" if any sheet looks like a 5+ char A49 number.
-      - "iso19650_4digit" if at least one sheet looks like a valid A49
-        number but none is 5+ chars (i.e. the project is established on
-        the 4-digit scheme).
+      - "a49_dotted" if any sheet matches the dotted format (A0.05, A1.03, X0.02).
+      - "iso19650_5digit" if any iso19650 sheet is 5+ chars.
+      - "iso19650_4digit" if at least one iso19650 sheet is present but none
+        is 5+ chars.
       - None if the cache is empty or contains no recognisably-A49 sheets
         (caller falls back to override or default).
 
-    Only sheets whose number portion is pure digits or X+digits count
+    Detection is decisive — once a single sheet of either shape exists,
+    the project is locked to that scheme (mixed-scheme projects are
+    explicitly disallowed; auto-detect wins over the session override).
+
+    Only sheets whose number portion matches a known A49 shape count
     toward detection. User-renamed / non-conformant sheets are ignored
     so they can't poison the auto-detect.
     """
     if not sheets:
         return None
-    saw_any_a49 = False
+    saw_iso19650 = False
     for s in sheets:
         num = str(s).split(" - ")[0].strip().upper()
         if not num:
             continue
-        is_a49 = (num.isdigit()) or (num.startswith("X") and num[1:].isdigit())
-        if not is_a49:
+        # a49_dotted shape: A<digit>.<digits> or X0.<digits> — decisive on first hit.
+        if _DOTTED_SHEET_RE.match(num):
+            return "a49_dotted"
+        # iso19650 shape: pure digits, or X + digits (no dot).
+        is_iso = (num.isdigit()) or (num.startswith("X") and num[1:].isdigit())
+        if not is_iso:
             continue
-        saw_any_a49 = True
+        saw_iso19650 = True
         if len(num) >= 5:
             return "iso19650_5digit"
-    return "iso19650_4digit" if saw_any_a49 else None
+    return "iso19650_4digit" if saw_iso19650 else None
 
 
 def resolve_scheme_for_request(request):
@@ -412,11 +473,15 @@ def resolve_scheme_for_request(request):
     return SCHEMES["iso19650_4digit"]
 
 
-# Categories whose slot is determined by a level (not by sequence position).
+# Categories that take a level_name argument when generating a sheet number.
+# Includes both:
+#   - "level"          (iso19650 A1/A5, deterministic level→slot mapping)
+#   - "level_sequence" (a49_dotted A1/A5, SITE anchor + sequence allocation)
 # Derived from the active scheme so swapping schemes can't desync this.
 def _level_based_categories(scheme=None):
     scheme = scheme or get_active_scheme()
-    return {name for name, cfg in scheme["categories"].items() if cfg.get("type") == "level"}
+    return {name for name, cfg in scheme["categories"].items()
+            if cfg.get("type") in ("level", "level_sequence")}
 
 def normalize_sheet_type(name_or_title, view_type_raw=None):
     text = (str(name_or_title or "") + " " + str(view_type_raw or "")).lower()
@@ -456,26 +521,62 @@ def _format_slot(sheet_type, slot, scheme=None):
     scheme = scheme or get_active_scheme()
     return f"{int(slot):0{scheme['digit_count']}d}"
 
+def _range_size(scheme):
+    """Per-category slot capacity for the given scheme.
+    iso19650_4digit: 1000 (A0=0-999, A1=1000-1999, …)
+    iso19650_5digit: 10000 (A0=0-9999, A1=10000-19999, …)
+    a49_dotted: 100 (each category 0-99, prefixed with series letter+digit)"""
+    if scheme.get("range_size") is not None:
+        return scheme["range_size"]
+    return 10 ** (scheme["digit_count"] - 1)
+
+
+# a49_dotted format: A0.05, A1.03, X0.02 — letter+digit prefix + dot + 1-3 digits.
+# Phase 2 will extend this to capture sub-parts (A1.03.1) — for now the pattern
+# accepts only 2 components.
+_DOTTED_SHEET_RE = re.compile(r"^([AX]\d)\.(\d{1,3})$")
+
+
 def _parse_slot(sheet_number, scheme=None):
     """Extract the numeric slot from a sheet-number string.
     Returns (slot_int, category_inferred) or (None, None) if not parseable.
-    Category is inferred by checking which scheme category's range contains
-    the slot (so this works for both 4-digit and 5-digit schemes)."""
+
+    Recognises three formats (in priority order):
+      1. a49_dotted: 'A1.03', 'A0.05', 'X0.02' — series prefix is the
+         category, the post-dot integer is the slot.
+      2. X-prefix numeric: 'X010' (4-digit) / 'X0100' (5-digit) — category
+         is X0, slot is the integer after 'X'.
+      3. Pure numeric: '1010' / '10100' — category inferred by which
+         scheme range owns the integer.
+    """
     if not sheet_number: return None, None
     s = str(sheet_number).strip().upper()
+
+    # 1. a49_dotted (must be checked before bare 'X...' since 'X0.05' starts with X)
+    m = _DOTTED_SHEET_RE.match(s)
+    if m:
+        try:
+            return int(m.group(2)), m.group(1)
+        except (ValueError, TypeError):
+            return None, None
+
+    # 2. X-prefix numeric (iso19650 X-series)
     if s.startswith("X"):
         try: return int(s[1:]), "X0"
         except (ValueError, TypeError): return None, None
+
+    # 3. Pure numeric — find which iso19650 category's range owns it.
     try:
         n = int(s)
     except (ValueError, TypeError):
         return None, None
 
-    # Find which category owns this slot. Each numeric A-category occupies
-    # the range [base, base + range_size), where range_size = 10^(digit_count-1)
-    # — i.e. 1000 for v1 (A0=0-999, A1=1000-1999, …) and 10000 for v2.
     scheme = scheme or get_active_scheme()
-    range_size = 10 ** (scheme["digit_count"] - 1)
+    if scheme.get("digit_count") is None:
+        # Active scheme is dotted; numeric input doesn't belong to any
+        # registered category. Return as A0 fallback.
+        return n, "A0"
+    range_size = _range_size(scheme)
     for cat_name, cat_cfg in scheme["categories"].items():
         if cat_name == "X0": continue
         base = cat_cfg.get("base")
@@ -553,8 +654,26 @@ def compute_sheet_slot(sheet_type, level_name=None, project_levels=None,
     """
     st = (sheet_type or "").upper()
     cat = _cat_cfg(st, scheme)
-    if cat is None or cat.get("type") != "level":
-        return None  # Sequence-based — caller uses _next_sequence_slot
+    if cat is None:
+        return None
+    cat_type = cat.get("type")
+
+    # level_sequence (a49_dotted A1/A5): only SITE has a deterministic slot
+    # (anchored at 0 for A1; rejected for A5). Everything else is sequence-
+    # allocated by the caller via _next_sequence_slot().
+    if cat_type == "level_sequence":
+        if not level_name:
+            return None
+        from .level_matcher import extract_level_signature
+        sig = extract_level_signature(level_name)
+        if sig["special"] == "SITE":
+            if cat.get("site_slots", 0) <= 0:
+                return None  # A5 has no SITE
+            return cat["base"]
+        return None  # All other levels handled as sequence
+
+    if cat_type != "level":
+        return None  # Pure sequence — caller uses _next_sequence_slot
 
     base = cat["base"]
     level_inc = cat["level_increment"]
@@ -640,23 +759,53 @@ def compute_sheet_slot(sheet_type, level_name=None, project_levels=None,
 
 def _next_sequence_slot(sheet_type, existing_numbers, scheme=None):
     """Pick the next primary-increment slot for a sequence-based category.
-    A0 / X0 begin at slot 0 (cover slot). All others begin at the first
-    primary slot above base."""
+
+    Default policy (iso19650_4digit / iso19650_5digit): always advance from
+    the highest existing slot — never gap-fill. Insert-between is a
+    deliberate user action handled by a future wizard.
+
+    a49_dotted policy (`gap_fill: True` on the category): pick the LOWEST
+    free slot (reuses freed-up holes from deleted sheets).
+
+    Starting slot:
+      - A0 / X0:                           slot 0 (cover slot)
+      - level_sequence (a49_dotted A1):    slot 1 (skip slot 0 reserved for SITE)
+      - everything else:                   base + primary_increment
+    """
     st = (sheet_type or "").upper()
-    cat_slots = _existing_in_category(st, existing_numbers)
+    cat_slots = set(_existing_in_category(st, existing_numbers))
     base = _series_base(st, scheme) or 0  # X0 has no numeric base
     cat = _cat_cfg(st, scheme) or {}
     primary_inc = cat.get("primary_increment", 10)
+    gap_fill = cat.get("gap_fill", False)
+    cat_type = cat.get("type")
+
+    # Determine the lowest possible slot for this category.
+    if cat_type == "level_sequence":
+        # A1 reserves slot 0 for SITE; A5 has no slot 0. Either way, the
+        # general sequence allocation skips slot 0.
+        starting = base + primary_inc
+    elif st in ("A0", "X0"):
+        starting = base + 0
+    else:
+        starting = base + primary_inc
 
     if not cat_slots:
-        if st in ("A0", "X0"): return base + 0
-        return base + primary_inc
+        return starting
 
-    # Always advance from the highest existing slot, never gap-fill.
-    # Insert-between is a deliberate user action handled by a future wizard.
+    if gap_fill:
+        # Walk upward from the lowest valid slot until a free one is found.
+        slot = starting
+        while slot in cat_slots:
+            slot += primary_inc
+        return slot
+
+    # Default: advance from the highest existing slot.
     max_slot = max(cat_slots)
     next_slot = ((max_slot // primary_inc) + 1) * primary_inc
-    return next_slot
+    # Defensive: if max < starting (e.g. only A1.00 exists, asking for next),
+    # use starting instead.
+    return max(next_slot, starting)
 
 # ── Public: get next sheet number ────────────────────────────────────────
 
@@ -682,13 +831,13 @@ def get_next_sheet_number(sheet_type, existing_numbers, level_name=None,
     scheme = scheme or get_active_scheme()
     st = (sheet_type or "").upper()
     cat = _cat_cfg(st, scheme) or {}
+    cat_type = cat.get("type")
     existing_set = set(str(n).upper() for n in (existing_numbers or []))
+    range_size = _range_size(scheme)
 
-    # Range size per category (1000 for v1's 4-digit, 10000 for v2's 5-digit).
-    range_size = 10 ** (scheme["digit_count"] - 1)
-
-    # Level-based path (A1, A5) — slot dictated by level
-    if cat.get("type") == "level" and level_name:
+    # 1. Pure level-based (iso19650 A1/A5): slot dictated deterministically
+    #    by the level identity.
+    if cat_type == "level" and level_name:
         slot = compute_sheet_slot(st, level_name=level_name,
                                   project_levels=project_levels,
                                   request_levels=request_levels,
@@ -715,7 +864,24 @@ def get_next_sheet_number(sheet_type, existing_numbers, level_name=None,
                 return None  # Overflowed into the next category
         return _format_slot(st, slot, scheme)
 
-    # Sequence-based path — also covers A1/A5 when no level supplied (rare)
+    # 2. level_sequence (a49_dotted A1/A5): SITE goes to slot 0; everything
+    #    else is sequence-allocated by the user (next free slot).
+    if cat_type == "level_sequence":
+        if level_name:
+            from .level_matcher import extract_level_signature as _extract
+            sig = _extract(level_name)
+            if sig["special"] == "SITE":
+                slot = compute_sheet_slot(st, level_name=level_name, scheme=scheme)
+                if slot is None:
+                    return None  # A5 + SITE rejected
+                # Collision: SITE slot already taken — for now, no second SITE
+                # slot in a49_dotted (Phase 2 will allow A1.00.1, A1.00.2 splits).
+                if _format_slot(st, slot, scheme) in existing_set:
+                    return None
+                return _format_slot(st, slot, scheme)
+        # Non-SITE level (or no level supplied) → fall through to sequence allocation.
+
+    # 3. Sequence (or level_sequence non-SITE fallthrough): allocate next slot.
     primary_inc = cat.get("primary_increment", 10)
     slot = _next_sequence_slot(st, existing_numbers or [], scheme=scheme)
     while _format_slot(st, slot, scheme) in existing_set:

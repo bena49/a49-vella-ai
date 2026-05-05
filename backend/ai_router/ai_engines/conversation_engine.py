@@ -11,10 +11,12 @@ from .naming_engine import (
 def _scheme_label(scheme_name, thai=False):
     """User-facing label for an internal scheme key.
 
-    Internal keys are `iso19650_4digit` / `iso19650_5digit`. Legacy keys
-    (`v1_small`, `v2_large`) from earlier session storage are auto-migrated
-    by `resolve_scheme_for_request()`.
+    Internal keys: `iso19650_4digit`, `iso19650_5digit`, `a49_dotted`.
+    Legacy keys (`v1_small`, `v2_large`) from earlier session storage are
+    auto-migrated by `resolve_scheme_for_request()`.
     """
+    if scheme_name == "a49_dotted":
+        return "a49SheetNaming (A1.03 dotted)" if not thai else "a49SheetNaming (A1.03 แบบจุด)"
     digit_count = SCHEMES.get(scheme_name, {}).get("digit_count", "?")
     if thai:
         return f"ISO19650 {digit_count} หลัก"
@@ -168,15 +170,15 @@ def process_conversational_intent(raw_text_lower, request):
         return Response({"message": msg})
 
     # ==========================================================
-    # 5. NUMBERING SCHEME TOGGLE (ISO19650 4-digit / 5-digit)
+    # 5. NUMBERING SCHEME TOGGLE (ISO19650 4-digit / 5-digit / a49SheetNaming)
     # ==========================================================
-    # Quick chat command for opting a new/empty project into the 5-digit
-    # numbering scheme. Auto-detect (resolve_scheme_for_request) takes over
-    # once the project has its first 5-digit sheet — at that point the
-    # override becomes a no-op. Use these to bootstrap empty projects only.
+    # Quick chat command for opting a new/empty project into a numbering
+    # scheme. Auto-detect (resolve_scheme_for_request) takes over once the
+    # project has its first sheet of any shape — at that point the override
+    # becomes a no-op. Use these to bootstrap empty projects only.
     #
-    # Internal scheme keys are iso19650_4digit / iso19650_5digit. Legacy
-    # keys (v1_small / v2_large) from earlier session storage are
+    # Internal scheme keys: iso19650_4digit / iso19650_5digit / a49_dotted.
+    # Legacy keys (v1_small / v2_large) from earlier session storage are
     # auto-migrated by resolve_scheme_for_request().
 
     set_v2 = {
@@ -209,6 +211,19 @@ def process_conversational_intent(raw_text_lower, request):
         "ใช้เลข 4 หลัก", "เลขแบบ 4 หลัก", "เลข 4 หลัก",
     }
 
+    set_a49_dotted = {
+        # A49 dotted phrasings (the "a49SheetNaming" user-facing label)
+        "use a49 sheet naming", "use a49sheetnaming", "use a49 numbering",
+        "use a49 dotted", "use a49 dotted format", "use a49 dot",
+        "switch to a49", "switch to a49 sheet naming", "switch to a49 dotted",
+        "a49 sheet naming", "a49sheetnaming", "a49 dotted",
+        "use dotted", "switch to dotted", "dotted numbering", "dotted",
+        # Thai
+        "ใช้เลขแบบ a49", "ใช้แบบ a49", "ใช้รูปแบบ a49",
+        "เลขแบบ a49", "แบบ a49",
+        "ใช้เลขแบบจุด", "เลขแบบจุด",
+    }
+
     inquire_scheme = {
         "what numbering scheme", "what scheme", "which numbering scheme",
         "current scheme", "current numbering scheme",
@@ -221,8 +236,13 @@ def process_conversational_intent(raw_text_lower, request):
         "เลข iso แบบไหน", "ใช้เลข iso แบบไหน",
     }
 
-    if clean_text in set_v2 or clean_text in set_v1:
-        target_name = "iso19650_5digit" if clean_text in set_v2 else "iso19650_4digit"
+    if clean_text in set_v2 or clean_text in set_v1 or clean_text in set_a49_dotted:
+        if clean_text in set_v2:
+            target_name = "iso19650_5digit"
+        elif clean_text in set_v1:
+            target_name = "iso19650_4digit"
+        else:
+            target_name = "a49_dotted"
         request.session["ai_numbering_scheme"] = target_name
         request.session.modified = True
 

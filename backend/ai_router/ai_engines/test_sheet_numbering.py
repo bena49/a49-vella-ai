@@ -58,6 +58,7 @@ from ai_router.ai_engines.naming_engine import (
     get_active_scheme,
     resolve_scheme_for_request,
     _detect_scheme_from_sheets,
+    _parse_slot,
     SHEET_SET_MAP,
     SCHEMES,
 )
@@ -831,6 +832,128 @@ PAYLOAD_CASES_V2 = [
 
 
 # ============================================================================
+# a49_dotted (set_v3) FIXTURES — Phase 1
+#
+# Dotted format: A<series>.<NN>. A1/A5 use the new "level_sequence" type:
+#   - A1 reserves slot 0 for SITE (A1.00); user creates floors via wizard
+#     and gets sequential slots A1.01, A1.02 … (no level→slot determinism).
+#   - A5 has no SITE; sequence starts at A5.01.
+#   - Gap-fill is enabled — if A1.03 is deleted, the next sheet reuses .03.
+#
+# Sub-parts (A1.03.1, A1.03.2) deferred to Phase 2.
+# ============================================================================
+
+V3 = SCHEMES["a49_dotted"]
+
+SEQUENCE_CASES_V3 = [
+    # A0 — name-keyed slots, +1 increment, gap-fill on
+    ("V3 A0 first sheet",               "A0", [],                                "A0.00"),
+    ("V3 A0 second sheet",              "A0", ["A0.00"],                         "A0.01"),
+    ("V3 A0 third sheet",               "A0", ["A0.00", "A0.01"],                "A0.02"),
+    ("V3 A0 gap-fill (deleted .01)",    "A0", ["A0.00", "A0.02"],                "A0.01"),
+    ("V3 A0 gap-fill prefers lowest",   "A0", ["A0.00", "A0.02", "A0.04"],       "A0.01"),
+    ("V3 A0 ignores other categories",  "A0", ["A0.00", "A1.05", "X0.02"],       "A0.01"),
+
+    # A2/A3/A4 — start at .01 (no slot 00)
+    ("V3 A2 first",                     "A2", [],                                "A2.01"),
+    ("V3 A2 second",                    "A2", ["A2.01"],                         "A2.02"),
+    ("V3 A2 gap-fill",                  "A2", ["A2.01", "A2.03"],                "A2.02"),
+    ("V3 A3 first",                     "A3", [],                                "A3.01"),
+    ("V3 A4 first",                     "A4", [],                                "A4.01"),
+
+    # A6/A7/A8 — same shape, with named_slots for first few
+    ("V3 A6 first",                     "A6", [],                                "A6.01"),
+    ("V3 A6 third",                     "A6", ["A6.01", "A6.02"],                "A6.03"),
+    ("V3 A7 first",                     "A7", [],                                "A7.01"),
+    ("V3 A8 first",                     "A8", [],                                "A8.01"),
+    ("V3 A8 second",                    "A8", ["A8.01"],                         "A8.02"),
+    ("V3 A9 first",                     "A9", [],                                "A9.01"),
+
+    # X0 — dotted, starts at .00 like A0 (cover-slot semantics)
+    ("V3 X0 first",                     "X0", [],                                "X0.00"),
+    ("V3 X0 second",                    "X0", ["X0.00"],                         "X0.01"),
+
+    # Cross-category isolation
+    ("V3 A3 isolated from A2",          "A3", ["A2.01", "A2.02", "A2.03"],       "A3.01"),
+]
+
+LEVEL_SEQUENCE_CASES_V3 = [
+    # (description, sheet_type, level_name, project_levels, existing, expected)
+
+    # A1 SITE → .00 anchor (level_sequence with site_slots=1)
+    ("V3 A1 + SITE empty",         "A1", "SITE",     PROJECT_L8, [], "A1.00"),
+    ("V3 A1 + SITE (Thai)",        "A1", "+0.00 ระดับพื้นดิน", PROJECT_L7_TH, [], "A1.00"),
+    # A1 SITE collision: A1.00 already taken — return None (Phase 2 will allow A1.00.1 splits)
+    ("V3 A1 + SITE when .00 taken","A1", "SITE",     PROJECT_L8, ["A1.00"], None),
+
+    # A1 floors: sequence-allocated, NOT tied to level number
+    ("V3 A1 + L1 empty (gets .01)","A1", "LEVEL 1",  PROJECT_L8, [],                                  "A1.01"),
+    ("V3 A1 + L1 after SITE",      "A1", "LEVEL 1",  PROJECT_L8, ["A1.00"],                           "A1.01"),
+    ("V3 A1 + L2 after SITE+L1",   "A1", "LEVEL 2",  PROJECT_L8, ["A1.00", "A1.01"],                  "A1.02"),
+    # gap-fill for floors: deleted A1.02, next L4 fills .02 not .04
+    ("V3 A1 floor gap-fill",       "A1", "LEVEL 4",  PROJECT_L8, ["A1.00", "A1.01", "A1.03"],         "A1.02"),
+    # B1 — also just sequence allocation (no special basement math in level_sequence)
+    ("V3 A1 + B1 first non-SITE",  "A1", "LEVEL B1", PROJECT_L8, ["A1.00"],                           "A1.01"),
+    # ROOF — sequence allocation, takes next free slot
+    ("V3 A1 + ROOF after L1+L2",   "A1", "ROOF LEVEL", PROJECT_L8, ["A1.00", "A1.01", "A1.02"],       "A1.03"),
+
+    # A5 — no SITE; sequence starts at .01
+    ("V3 A5 + SITE rejected",      "A5", "SITE",     PROJECT_L8, [], None),
+    ("V3 A5 + SITE (Thai) rej",    "A5", "+0.00 ระดับพื้นดิน", PROJECT_L7_TH, [], None),
+    ("V3 A5 + L1 empty",           "A5", "LEVEL 1",  PROJECT_L8, [],          "A5.01"),
+    ("V3 A5 + L2 after L1",        "A5", "LEVEL 2",  PROJECT_L8, ["A5.01"],   "A5.02"),
+    ("V3 A5 + B1 sequence",        "A5", "LEVEL B1", PROJECT_L8, ["A5.01"],   "A5.02"),
+]
+
+NAME_CASES_V3 = [
+    # A0 named slots — same content as V1/V2, just different format
+    ("V3 A0[A0.00] = COVER",                    "A0", "A0.00", None, "COVER"),
+    ("V3 A0[A0.01] = DRAWING INDEX",            "A0", "A0.01", None, "DRAWING INDEX"),
+    ("V3 A0[A0.02] = SITE AND VICINITY PLAN",   "A0", "A0.02", None, "SITE AND VICINITY PLAN"),
+    ("V3 A0[A0.06] = CUSTOM SHEET (overflow)",  "A0", "A0.06", None, "CUSTOM SHEET"),
+
+    # A1/A5 — level-driven naming (uses sheet_type + level_name regardless of scheme type)
+    ("V3 A1 + L1 = LEVEL 1 FLOOR PLAN",         "A1", "A1.03", "LEVEL 1",     "LEVEL 1 FLOOR PLAN"),
+    ("V3 A1 + B1 = LEVEL B1 FLOOR PLAN",        "A1", "A1.01", "LEVEL B1",    "LEVEL B1 FLOOR PLAN"),
+    ("V3 A1 + SITE = SITE PLAN",                "A1", "A1.00", "SITE",        "SITE PLAN"),
+    ("V3 A1 + ROOF = LEVEL ROOF PLAN",          "A1", "A1.05", "ROOF LEVEL",  "LEVEL ROOF PLAN"),
+    ("V3 A5 + L1 = LEVEL 1 CEILING PLAN",       "A5", "A5.01", "LEVEL 1",     "LEVEL 1 CEILING PLAN"),
+
+    # A6 — uses V2 reorder (FLOOR PATTERN PLAN first, then TOILET)
+    # Note named_slots indexing: idx 0 = slot 0, idx 1 = slot 1, etc.
+    # V3 A6 named_slots = [None, "FLOOR PATTERN PLAN", "ENLARGED TOILET PLAN", "CANOPY PLAN"]
+    ("V3 A6[A6.01] = FLOOR PATTERN PLAN",       "A6", "A6.01", None, "FLOOR PATTERN PLAN"),
+    ("V3 A6[A6.02] = ENLARGED TOILET PLAN",     "A6", "A6.02", None, "ENLARGED TOILET PLAN"),
+    ("V3 A6[A6.03] = CANOPY PLAN",              "A6", "A6.03", None, "CANOPY PLAN"),
+    ("V3 A6[A6.04] = CUSTOM SHEET",             "A6", "A6.04", None, "CUSTOM SHEET"),
+
+    # A7
+    ("V3 A7[A7.01] = ENLARGED STAIR PLAN",      "A7", "A7.01", None, "ENLARGED STAIR PLAN"),
+    ("V3 A7[A7.04] = ENLARGED LIFT PLAN",       "A7", "A7.04", None, "ENLARGED LIFT PLAN"),
+    ("V3 A7[A7.05] = CUSTOM SHEET",             "A7", "A7.05", None, "CUSTOM SHEET"),
+
+    # A8
+    ("V3 A8[A8.01] = DOOR SCHEDULE",            "A8", "A8.01", None, "DOOR SCHEDULE"),
+    ("V3 A8[A8.02] = WINDOW SCHEDULE",          "A8", "A8.02", None, "WINDOW SCHEDULE"),
+]
+
+PARSE_CASES_V3 = [
+    # _parse_slot recognises the dotted format up front, returns (slot_int, category)
+    ("V3 parse A0.00",  "A0.00",  (0, "A0")),
+    ("V3 parse A0.05",  "A0.05",  (5, "A0")),
+    ("V3 parse A1.03",  "A1.03",  (3, "A1")),
+    ("V3 parse A1.99",  "A1.99",  (99, "A1")),
+    ("V3 parse A5.01",  "A5.01",  (1, "A5")),
+    ("V3 parse A9.10",  "A9.10",  (10, "A9")),
+    ("V3 parse X0.02",  "X0.02",  (2, "X0")),
+    # 'NUM - NAME' wrappers aren't part of _parse_slot (caller strips first),
+    # but still useful to confirm raw dotted input round-trips.
+    ("V3 parse rejects bare '1010' as iso, not dotted",
+        "1010", (1010, "A1")),  # falls through to numeric path
+]
+
+
+# ============================================================================
 # SCHEME-DETECTION TESTS
 #
 # Exercises _detect_scheme_from_sheets directly + resolve_scheme_for_request
@@ -853,6 +976,13 @@ DETECT_CASES = [
     ("5-digit shape mixed with garbage",               ["My Sheet", "10100"],               "iso19650_5digit"),
     ("Cover slot 4-digit ('0000')",                    ["0000"],                            "iso19650_4digit"),
     ("Cover slot 5-digit ('00000')",                   ["00000"],                           "iso19650_5digit"),
+    # a49_dotted (set_v3) detection
+    ("Dotted A1.03 → a49_dotted",                      ["A1.03"],                           "a49_dotted"),
+    ("Dotted A0.00 (cover) → a49_dotted",              ["A0.00"],                           "a49_dotted"),
+    ("Dotted with 'NUM - NAME' shape",                 ["A1.03 - 1ST FLOOR PLAN"],          "a49_dotted"),
+    ("Dotted X0.02 → a49_dotted",                      ["X0.02"],                           "a49_dotted"),
+    ("Dotted wins over iso (mixed project, set_v3 first)", ["A1.03", "1010"],               "a49_dotted"),
+    ("Dotted wins over iso (5-digit also present)",    ["A1.03", "10100"],                  "a49_dotted"),
 ]
 
 
@@ -899,6 +1029,16 @@ RESOLVE_CASES = [
         {"ai_numbering_scheme": "v2_large"}, "iso19650_5digit"),
     ("Legacy override + auto-detect: cached 4-digit beats legacy 'v2_large'",
         {"ai_last_known_sheets": ["1010"], "ai_numbering_scheme": "v2_large"}, "iso19650_4digit"),
+
+    # ── a49_dotted (set_v3) resolution ─────────────────────────────────
+    ("Empty session + override a49_dotted → a49_dotted",
+        {"ai_numbering_scheme": "a49_dotted"}, "a49_dotted"),
+    ("Dotted sheets cached, no override → a49_dotted",
+        {"ai_last_known_sheets": ["A1.03"]}, "a49_dotted"),
+    ("Dotted cached + override 5-digit → a49_dotted (auto-detect wins)",
+        {"ai_last_known_sheets": ["A1.03"], "ai_numbering_scheme": "iso19650_5digit"}, "a49_dotted"),
+    ("Mixed cache (dotted + 4-digit) → a49_dotted (decisive)",
+        {"ai_last_known_sheets": ["A1.03", "1010"]}, "a49_dotted"),
 ]
 
 
@@ -1008,6 +1148,48 @@ def _run():
                              "actual": actual_numbers,
                              "expected": case["expected_numbers"]})
 
+    # ─── V3 (a49_dotted) cases ──────────────────────────────────────────
+    # Pass scheme=V3 explicitly to exercise the a49_dotted path.
+
+    for desc, st, existing, expected in SEQUENCE_CASES_V3:
+        actual = get_next_sheet_number(st, existing, scheme=V3)
+        if actual == expected:
+            passed += 1
+        else:
+            failed += 1
+            failures.append({"case": f"[seq]  {desc}", "input": (st, existing),
+                             "actual": actual, "expected": expected})
+
+    for desc, st, lvl, project_levels, existing, expected in LEVEL_SEQUENCE_CASES_V3:
+        actual = get_next_sheet_number(st, existing, level_name=lvl,
+                                       project_levels=project_levels, scheme=V3)
+        if actual == expected:
+            passed += 1
+        else:
+            failed += 1
+            failures.append({"case": f"[lvl]  {desc}",
+                             "input": (st, lvl, project_levels, existing),
+                             "actual": actual, "expected": expected})
+
+    for desc, st, num, lvl, expected in NAME_CASES_V3:
+        actual = generate_smart_name(st, sheet_number=num, level_name=lvl, scheme=V3)
+        if actual == expected:
+            passed += 1
+        else:
+            failed += 1
+            failures.append({"case": f"[name] {desc}", "input": (st, num, lvl),
+                             "actual": actual, "expected": expected})
+
+    # _parse_slot dotted-format recognition
+    for desc, sheet_num, expected in PARSE_CASES_V3:
+        actual = _parse_slot(sheet_num)
+        if actual == expected:
+            passed += 1
+        else:
+            failed += 1
+            failures.append({"case": f"[parse] {desc}", "input": sheet_num,
+                             "actual": actual, "expected": expected})
+
     # ─── Scheme-detection unit cases ────────────────────────────────────
     for desc, sheets, expected in DETECT_CASES:
         actual = _detect_scheme_from_sheets(sheets)
@@ -1037,12 +1219,15 @@ def _run():
              len(NAME_CASES) + len(SHEET_SET_CASES) + len(PAYLOAD_CASES) +
              len(SEQUENCE_CASES_V2) + len(LEVEL_CASES_V2) +
              len(NAME_CASES_V2) + len(PAYLOAD_CASES_V2) +
+             len(SEQUENCE_CASES_V3) + len(LEVEL_SEQUENCE_CASES_V3) +
+             len(NAME_CASES_V3) + len(PARSE_CASES_V3) +
              len(DETECT_CASES) + len(RESOLVE_CASES))
     print("=" * 70)
     print(f"sheet_numbering tests: {passed} passed, {failed} failed  (of {total})")
-    print("  V1: {} cases, V2: {} cases, scheme-detect: {} cases".format(
+    print("  V1: {} cases, V2: {} cases, V3: {} cases, scheme-detect: {} cases".format(
         len(SEQUENCE_CASES) + len(LEVEL_CASES) + len(NAME_CASES) + len(SHEET_SET_CASES) + len(PAYLOAD_CASES),
         len(SEQUENCE_CASES_V2) + len(LEVEL_CASES_V2) + len(NAME_CASES_V2) + len(PAYLOAD_CASES_V2),
+        len(SEQUENCE_CASES_V3) + len(LEVEL_SEQUENCE_CASES_V3) + len(NAME_CASES_V3) + len(PARSE_CASES_V3),
         len(DETECT_CASES) + len(RESOLVE_CASES),
     ))
     print("=" * 70)

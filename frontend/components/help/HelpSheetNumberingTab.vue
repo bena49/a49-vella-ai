@@ -18,19 +18,22 @@
       </div>
       <div class="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 space-y-3">
         <div v-if="!isThai" class="text-[11px] text-white/70 leading-relaxed">
-          Vella supports two ISO19650 numbering schemes. The active scheme is
+          Vella supports three sheet numbering schemes. The active scheme is
           <strong>auto-detected</strong> from your project's existing sheets:
-          sheet numbers with 4 chars → 4-digit scheme; 5+ chars → 5-digit scheme.
-          For new/empty projects, you can opt in with the chat commands below.
-          Once a project has its first real sheet, auto-detect locks the scheme
-          in (mixed 4-digit + 5-digit projects are not allowed).
+          ISO19650 4-digit (e.g. 1010), ISO19650 5-digit (e.g. 10100), or
+          a49SheetNaming dotted format (e.g. A1.03 — the legacy A49 office
+          convention with sub-part splitting). For new/empty projects, you
+          can opt in with the chat commands below. Once a project has its
+          first real sheet, auto-detect locks the scheme in (mixed-scheme
+          projects are not allowed).
         </div>
         <div v-else class="text-[11px] text-white/70 leading-relaxed">
-          Vella รองรับการใช้เลขแบบ ISO19650 สองรูปแบบ ระบบจะ<strong>ตรวจหาอัตโนมัติ</strong>จาก
-          Sheet ที่มีอยู่ในโครงการ: เลข Sheet 4 ตัวอักษร → ใช้รูปแบบ 4 หลัก;
-          5 ตัวอักษรขึ้นไป → ใช้รูปแบบ 5 หลัก สำหรับโครงการใหม่หรือว่างเปล่า
+          Vella รองรับการใช้เลข Sheet สามรูปแบบ ระบบจะ<strong>ตรวจหาอัตโนมัติ</strong>จาก
+          Sheet ที่มีอยู่ในโครงการ: ISO19650 4 หลัก (เช่น 1010), ISO19650 5 หลัก
+          (เช่น 10100), หรือ a49SheetNaming รูปแบบจุด (เช่น A1.03 — รูปแบบเดิมของ
+          สำนักงาน A49 รองรับการแบ่ง Sheet ย่อย) สำหรับโครงการใหม่หรือว่างเปล่า
           สามารถเลือกรูปแบบที่ต้องการผ่านคำสั่งด้านล่างได้ค่ะ เมื่อโครงการมี Sheet
-          แรกแล้ว ระบบจะล็อครูปแบบไว้โดยอัตโนมัติ (ไม่อนุญาตให้ใช้ทั้ง 4 หลักและ 5 หลักผสมกันในโครงการเดียว)
+          แรกแล้ว ระบบจะล็อครูปแบบไว้โดยอัตโนมัติ (ไม่อนุญาตให้ใช้รูปแบบผสมกันในโครงการเดียว)
         </div>
         <HelpItem
           v-if="!isThai"
@@ -66,6 +69,24 @@
             'ใช้เลข iso19650 4 หลัก',
             'ใช้เลข iso 4 หลัก',
             'ใช้เลข 4 หลัก'
+          ]"
+          @pick="$emit('pick', $event)" />
+        <HelpItem
+          v-if="!isThai"
+          label="Switch to a49SheetNaming (A1.03 dotted)"
+          :prompts="[
+            'use a49 sheet naming',
+            'use a49 dotted',
+            'switch to a49'
+          ]"
+          @pick="$emit('pick', $event)" />
+        <HelpItem
+          v-else
+          label="เปลี่ยนเป็น a49SheetNaming (A1.03 แบบจุด)"
+          :prompts="[
+            'ใช้เลขแบบ a49',
+            'ใช้แบบ a49',
+            'ใช้เลขแบบจุด'
           ]"
           @pick="$emit('pick', $event)" />
         <HelpItem
@@ -240,6 +261,38 @@ const numberingSchemes = ref([
         examples: ['X0000, X0100, X0200 …']
       }
     ]
+  },
+  {
+    name: 'a49SheetNaming (A1.03 dotted)',
+    code: 'a49_dotted',
+    description: 'Legacy A49 dotted convention, brought back per staff feedback. Format: A<series>.<NN>. KEY DIFFERENCE: A1/A5 are sequence-based (NOT level-based) — sheets are allocated in creation order. Gap-fill enabled — deleted slots get reused. Sub-parts (A1.03.1, A1.03.2) coming in Phase 2.',
+    formats: [
+      {
+        category: 'A0 - General Information',
+        rule: 'Sequence-based, gap-fill, name-keyed slots',
+        examples: ['A0.00 — COVER', 'A0.01 — DRAWING INDEX', 'A0.02 — SITE AND VICINITY PLAN', 'A0.06 — CUSTOM SHEET']
+      },
+      {
+        category: 'A1 - Floor Plans',
+        rule: 'level_sequence: A1.00 reserved for SITE, then sequential allocation for floors/basements/roof',
+        examples: ['A1.00 — SITE PLAN', 'A1.01 — first floor sheet (e.g. B1)', 'A1.02 — next sheet (e.g. B2)', 'A1.03 — next (e.g. 1ST FLOOR PLAN)']
+      },
+      {
+        category: 'A5 - Ceiling Plans',
+        rule: 'level_sequence: no SITE; starts at A5.01',
+        examples: ['A5.01 — first ceiling sheet', 'A5.02 — next', 'A5.03 — next']
+      },
+      {
+        category: 'A2 / A3 / A4 / A6 / A7 / A8 / A9',
+        rule: 'Sequence-based, gap-fill, +1 per sheet',
+        examples: ['A2.01, A2.02 …', 'A6.01 (FLOOR PATTERN PLAN), A6.02 (TOILET) …']
+      },
+      {
+        category: 'X0 - Custom',
+        rule: 'Dotted X0.00, X0.01 …',
+        examples: ['X0.00, X0.01, X0.02 …']
+      }
+    ]
   }
 ]);
 
@@ -269,12 +322,12 @@ const sheetNumberRules = ref([
     th: 'A5 + SITE จะถูกปฏิเสธ (ไม่มี Ceiling Plan สำหรับระดับ Site — Wizard จะปิดการเลือกอัตโนมัติ)',
   },
   {
-    en: 'Auto-detect picks the scheme from your project\'s existing sheets. Mixed-scheme projects are not allowed — once a project has 5-digit sheets, new ones are also 5-digit.',
-    th: 'ระบบตรวจหาอัตโนมัติจาก Sheet ที่มีในโครงการ ไม่อนุญาตให้ใช้รูปแบบผสมในโครงการเดียว — เมื่อโครงการมี Sheet แบบ 5 หลักแล้ว Sheet ใหม่จะใช้ 5 หลักด้วย',
+    en: 'Auto-detect picks the scheme from your project\'s existing sheets. Mixed-scheme projects are not allowed — once a project has 5-digit sheets new ones are 5-digit; once it has dotted (A1.03) sheets new ones stay dotted.',
+    th: 'ระบบตรวจหาอัตโนมัติจาก Sheet ที่มีในโครงการ ไม่อนุญาตให้ใช้รูปแบบผสมในโครงการเดียว — เมื่อโครงการมี Sheet แบบ 5 หลักแล้ว Sheet ใหม่จะใช้ 5 หลัก เช่นเดียวกันกับรูปแบบจุด (A1.03)',
   },
   {
-    en: 'Legacy "A1.01" / "A1.xx" dotted format is deprecated and no longer accepted as input.',
-    th: 'รูปแบบเดิม "A1.01" / "A1.xx" ที่ใช้จุดคั่น ถูกยกเลิกการใช้งาน และระบบจะไม่รับเป็น Input อีกต่อไป',
+    en: 'a49SheetNaming (A1.03 dotted) note: A1/A5 are sequence-based here, NOT level-based. Creating "Level 5 Floor Plan" lands at the next free A1 slot (e.g. A1.05) regardless of level number. Slots gap-fill — deleted A1.03 gets reused next time.',
+    th: 'หมายเหตุ a49SheetNaming (A1.03 แบบจุด): A1/A5 เป็นแบบลำดับ ไม่ผูกกับระดับ การสร้าง "Level 5 Floor Plan" จะได้ช่องว่างถัดไปของ A1 (เช่น A1.05) โดยไม่สนเลขระดับ ช่องที่ลบไปจะถูกนำกลับมาใช้ใหม่ (gap-fill)',
   },
 ]);
 </script>

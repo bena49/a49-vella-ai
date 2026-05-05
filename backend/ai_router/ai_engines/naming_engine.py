@@ -291,8 +291,11 @@ SCHEMES = {
         "categories": {
             "A0": {"type": "sequence",       "base": 0, "primary_increment": 1, "sub_increment": 0,
                                              "format": "A0.{:02d}", "gap_fill": True,
+                   # A0.06 is the literal slot "CUSTOM"; A0.07+ overflow into the
+                   # generic "CUSTOM SHEET" fallback via CATEGORY_DEFAULT_NAME.
                    "named_slots": ["COVER", "DRAWING INDEX", "SITE AND VICINITY PLAN",
-                                   "STANDARD SYMBOLS", "SAFETY PLAN", "WALL TYPES"]},
+                                   "STANDARD SYMBOLS", "SAFETY PLAN", "WALL TYPES",
+                                   "CUSTOM"]},
             "A1": {"type": "level_sequence", "base": 0, "primary_increment": 1, "sub_increment": 0,
                                              "format": "A1.{:02d}", "gap_fill": True,
                                              "site_slots": 1},
@@ -531,10 +534,13 @@ def _range_size(scheme):
     return 10 ** (scheme["digit_count"] - 1)
 
 
-# a49_dotted format: A0.05, A1.03, X0.02 — letter+digit prefix + dot + 1-3 digits.
-# Phase 2 will extend this to capture sub-parts (A1.03.1) — for now the pattern
-# accepts only 2 components.
-_DOTTED_SHEET_RE = re.compile(r"^([AX]\d)\.(\d{1,3})$")
+# a49_dotted format: A0.05, A1.03, X0.02, plus optional sub-part (A1.03.1,
+# A5.03.3) for splitting drawings or attaching mezzanines to a parent floor.
+# `_parse_slot` reads only group(1) and group(2) — the optional sub-component
+# is captured for any caller that needs it but is treated as a sibling of the
+# parent slot for allocation purposes (auto-allocator never emits sub-parts;
+# users add them manually via the rename wizard's editable cells).
+_DOTTED_SHEET_RE = re.compile(r"^([AX]\d)\.(\d{1,3})(?:\.(\d+))?$")
 
 
 def _parse_slot(sheet_number, scheme=None):
@@ -914,6 +920,47 @@ def _level_label(level_name):
         return (f"LEVEL {prefix}{sig['digit']}{suffix}", "normal")
     return (str(level_name).upper(), "normal")
 
+
+def _ordinal(n):
+    """English ordinal suffix: 1→1ST, 2→2ND, 3→3RD, 4→4TH, 11→11TH, 21→21ST.
+    Used by the a49_dotted scheme; iso19650 schemes keep 'LEVEL N' wording."""
+    if 11 <= (n % 100) <= 13:
+        return f"{n}TH"
+    return f"{n}{ {1: 'ST', 2: 'ND', 3: 'RD'}.get(n % 10, 'TH') }"
+
+
+def _level_label_dotted(level_name):
+    """A49-dotted variant of _level_label.
+
+    Differences from the iso19650 wording:
+      • Above-grade floors use ordinals: L1→1ST, L2→2ND, L3→3RD, L21→21ST.
+      • Basements drop the 'LEVEL ' prefix:  B1→B1, B2→B2.
+      • Mezzanines (suffix 'M') skip the ordinal:  L1M→1M, B1M→B1M.
+      • Roof drops the 'LEVEL ' prefix too: ROOF→ROOF.
+    """
+    if not level_name:
+        return ("", "normal")
+    from .level_matcher import extract_level_signature
+    sig = extract_level_signature(level_name)
+    if sig["special"] == "SITE": return ("SITE", "site")
+    if sig["special"] in ("RF", "TOP"): return ("ROOF", "roof")
+    if sig["special"] == "MZ": return ("MEZZANINE", "normal")
+    if sig["special"]: return (sig["special"], "normal")
+    if sig["digit"] is not None:
+        prefix = sig["prefix"] or "L"
+        suffix = sig["suffix"] or ""
+        if prefix == "L":
+            # Above-grade floors: ordinal unless the level carries a suffix
+            # (mezzanine / transfer floors), in which case the digit+suffix
+            # combo is the readable form (e.g. L1M → "1M").
+            if suffix:
+                return (f"{sig['digit']}{suffix}", "normal")
+            return (_ordinal(sig['digit']), "normal")
+        # Basements (B) and any other letter-prefixed levels keep their
+        # raw form, no 'LEVEL ' prefix.
+        return (f"{prefix}{sig['digit']}{suffix}", "normal")
+    return (str(level_name).upper(), "normal")
+
 def generate_smart_name(sheet_type, sheet_number=None, level_name=None, scheme=None):
     """Default sheet name for a category + slot + (optional) level.
 
@@ -924,15 +971,21 @@ def generate_smart_name(sheet_type, sheet_number=None, level_name=None, scheme=N
     """
     st = (sheet_type or "").upper()
 
+    # a49_dotted uses a different level-label style (ordinals, no 'LEVEL '
+    # prefix on basements/mezzanines). Detect via digit_count=None — that's
+    # the dotted scheme's signature in SCHEMES.
+    is_dotted = scheme is not None and scheme.get("digit_count") is None
+    label_fn = _level_label_dotted if is_dotted else _level_label
+
     # Level-based naming (A1 / A5)
     if st == "A1" and level_name:
-        label, kind = _level_label(level_name)
+        label, kind = label_fn(level_name)
         if kind == "site": return "SITE PLAN"
-        if kind == "roof": return f"{label} PLAN"  # 'LEVEL ROOF PLAN' (no FLOOR)
+        if kind == "roof": return f"{label} PLAN"  # 'LEVEL ROOF PLAN' / 'ROOF PLAN' (no FLOOR)
         return f"{label} FLOOR PLAN"
 
     if st == "A5" and level_name:
-        label, kind = _level_label(level_name)
+        label, kind = label_fn(level_name)
         if kind == "site": return "SITE CEILING PLAN"  # rejected upstream
         return f"{label} CEILING PLAN"
 

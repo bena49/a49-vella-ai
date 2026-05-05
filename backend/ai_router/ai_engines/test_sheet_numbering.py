@@ -910,14 +910,30 @@ NAME_CASES_V3 = [
     ("V3 A0[A0.00] = COVER",                    "A0", "A0.00", None, "COVER"),
     ("V3 A0[A0.01] = DRAWING INDEX",            "A0", "A0.01", None, "DRAWING INDEX"),
     ("V3 A0[A0.02] = SITE AND VICINITY PLAN",   "A0", "A0.02", None, "SITE AND VICINITY PLAN"),
-    ("V3 A0[A0.06] = CUSTOM SHEET (overflow)",  "A0", "A0.06", None, "CUSTOM SHEET"),
+    # A0.06 is the literal slot 'CUSTOM' per spec; A0.07+ overflow to "CUSTOM SHEET".
+    ("V3 A0[A0.06] = CUSTOM",                   "A0", "A0.06", None, "CUSTOM"),
+    ("V3 A0[A0.07] = CUSTOM SHEET (overflow)",  "A0", "A0.07", None, "CUSTOM SHEET"),
+    ("V3 A0[A0.08] = CUSTOM SHEET (overflow)",  "A0", "A0.08", None, "CUSTOM SHEET"),
 
-    # A1/A5 — level-driven naming (uses sheet_type + level_name regardless of scheme type)
-    ("V3 A1 + L1 = LEVEL 1 FLOOR PLAN",         "A1", "A1.03", "LEVEL 1",     "LEVEL 1 FLOOR PLAN"),
-    ("V3 A1 + B1 = LEVEL B1 FLOOR PLAN",        "A1", "A1.01", "LEVEL B1",    "LEVEL B1 FLOOR PLAN"),
+    # A1/A5 — a49_dotted level naming differs from iso19650:
+    #   • Above-grade floors use ordinals (1ST, 2ND, 3RD, 21ST)
+    #   • Basements drop the 'LEVEL ' prefix (B1, B2)
+    #   • Mezzanines skip the ordinal (1M, B1M)
+    #   • Roof drops 'LEVEL ' too
+    ("V3 A1 + L1 = 1ST FLOOR PLAN",             "A1", "A1.03", "LEVEL 1",     "1ST FLOOR PLAN"),
+    ("V3 A1 + L2 = 2ND FLOOR PLAN",             "A1", "A1.04", "LEVEL 2",     "2ND FLOOR PLAN"),
+    ("V3 A1 + L3 = 3RD FLOOR PLAN",             "A1", "A1.05", "LEVEL 3",     "3RD FLOOR PLAN"),
+    ("V3 A1 + L4 = 4TH FLOOR PLAN",             "A1", "A1.06", "LEVEL 4",     "4TH FLOOR PLAN"),
+    ("V3 A1 + L11 = 11TH FLOOR PLAN",           "A1", "A1.10", "LEVEL 11",    "11TH FLOOR PLAN"),
+    ("V3 A1 + L21 = 21ST FLOOR PLAN",           "A1", "A1.20", "LEVEL 21",    "21ST FLOOR PLAN"),
+    ("V3 A1 + L1M = 1M FLOOR PLAN (mezz)",      "A1", "A1.03", "L1M",         "1M FLOOR PLAN"),
+    ("V3 A1 + B1 = B1 FLOOR PLAN",              "A1", "A1.01", "LEVEL B1",    "B1 FLOOR PLAN"),
+    ("V3 A1 + B2 = B2 FLOOR PLAN",              "A1", "A1.02", "LEVEL B2",    "B2 FLOOR PLAN"),
+    ("V3 A1 + B1M = B1M FLOOR PLAN",            "A1", "A1.01", "B1M",         "B1M FLOOR PLAN"),
     ("V3 A1 + SITE = SITE PLAN",                "A1", "A1.00", "SITE",        "SITE PLAN"),
-    ("V3 A1 + ROOF = LEVEL ROOF PLAN",          "A1", "A1.05", "ROOF LEVEL",  "LEVEL ROOF PLAN"),
-    ("V3 A5 + L1 = LEVEL 1 CEILING PLAN",       "A5", "A5.01", "LEVEL 1",     "LEVEL 1 CEILING PLAN"),
+    ("V3 A1 + ROOF = ROOF PLAN",                "A1", "A1.05", "ROOF LEVEL",  "ROOF PLAN"),
+    ("V3 A5 + L1 = 1ST CEILING PLAN",           "A5", "A5.03", "LEVEL 1",     "1ST CEILING PLAN"),
+    ("V3 A5 + B1 = B1 CEILING PLAN",            "A5", "A5.01", "LEVEL B1",    "B1 CEILING PLAN"),
 
     # A6 — uses V2 reorder (FLOOR PATTERN PLAN first, then TOILET)
     # Note named_slots indexing: idx 0 = slot 0, idx 1 = slot 1, etc.
@@ -946,6 +962,17 @@ PARSE_CASES_V3 = [
     ("V3 parse A5.01",  "A5.01",  (1, "A5")),
     ("V3 parse A9.10",  "A9.10",  (10, "A9")),
     ("V3 parse X0.02",  "X0.02",  (2, "X0")),
+    # Sub-parts (A1.03.1, A5.03.3) are accepted by the regex; _parse_slot
+    # returns the parent slot integer, ignoring the sub-component. Sub-parts
+    # are siblings of the parent for allocation purposes — the auto-allocator
+    # never emits them; users add them via the rename wizard's editable cells.
+    ("V3 parse A1.03.1 (sub-part)",  "A1.03.1",  (3, "A1")),
+    ("V3 parse A1.03.2 (sub-part)",  "A1.03.2",  (3, "A1")),
+    ("V3 parse A5.03.3 (mezz)",      "A5.03.3",  (3, "A5")),
+    ("V3 parse A1.00.1 (site sub)",  "A1.00.1",  (0, "A1")),
+    ("V3 parse X0.05.2 (X-series sub)", "X0.05.2", (5, "X0")),
+    # 4-component (sub-sub) is rejected by the regex.
+    ("V3 parse A1.03.1.5 rejected",  "A1.03.1.5", (None, None)),
     # 'NUM - NAME' wrappers aren't part of _parse_slot (caller strips first),
     # but still useful to confirm raw dotted input round-trips.
     ("V3 parse rejects bare '1010' as iso, not dotted",

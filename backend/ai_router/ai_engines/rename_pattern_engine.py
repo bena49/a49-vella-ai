@@ -14,8 +14,10 @@
 # 3. Preview shows BOTH old and new for each field — frontend renders diff.
 # 4. Warnings are per-row, not aborting. The wizard surfaces them so the user
 #    can decide row-by-row.
-# 5. Sheet number formats stay consistent with naming_engine.SCHEMES — uses
-#    `_parse_slot` / `_format_slot` so dotted/v1/v2 are all understood.
+# 5. Cross-scheme renumbering (e.g. iso19650 ↔ a49_dotted) is intentionally
+#    NOT a built-in op — automatic mapping is lossy or semantically ambiguous
+#    in either direction. Use the `manual_edit` op instead and have the user
+#    fill in the targets.
 #
 # OPERATION SPEC SHAPE
 # ────────────────────
@@ -41,7 +43,6 @@
 import re
 
 from .bilingual_dictionary import translate_en_to_th, translate_th_to_en
-from .naming_engine import SCHEMES, _parse_slot, _format_slot, _range_size
 
 
 # ── Field helpers ────────────────────────────────────────────────────────
@@ -202,7 +203,7 @@ def op_offset_renumber(item, params):
     """Add a fixed integer delta to a numeric sheet number.
 
     Works on iso19650 4-digit / 5-digit numbers (pure-numeric or X-prefixed).
-    Skips a49_dotted with a warning — use scheme_convert for dotted projects.
+    Skips a49_dotted with a warning — use Manual Edit for dotted projects.
 
     Params:
       delta: integer to add (negative to subtract)
@@ -222,7 +223,7 @@ def op_offset_renumber(item, params):
     if "." in old and old[0].isalpha():
         return {"warnings": [
             f"offset_renumber: skipped dotted number {old!r} — "
-            f"use scheme_convert for dotted projects"
+            f"use Manual Edit for dotted projects"
         ]}
 
     # X-prefix (X010, X0100)
@@ -253,104 +254,16 @@ def op_offset_renumber(item, params):
     return {"number": f"{new_n:0{width}d}"}
 
 
-def op_scheme_convert(item, params):
-    """Convert a sheet number from one scheme to another.
+def op_manual_edit(item, params):
+    """No-op operation. Produces no automatic changes — the user fills in
+    the desired new number (and/or name) directly in the preview table.
 
-    Easy direction (deterministic math):
-      iso19650_4digit ↔ iso19650_5digit
-      iso19650_4digit / iso19650_5digit → a49_dotted (slot position mapping)
-
-    Hard direction (best-effort, may need user verification):
-      a49_dotted → iso19650 — slot positions don't carry level semantics.
-      A1.05 might be "5TH FLOOR" or "B5" depending on creation order.
-      Warns the user; preview will show the naive mapping.
-
-    Params:
-      from_scheme: "iso19650_4digit" | "iso19650_5digit" | "a49_dotted"
-      to_scheme:   same
+    Use case: cross-scheme renumbering where automatic mapping is lossy or
+    semantically ambiguous (e.g. iso19650_5digit ↔ a49_dotted). The wizard
+    renders a row per sheet with editable cells, the user types the targets,
+    and the apply step batches whatever they actually changed.
     """
-    from_name = params.get("from_scheme")
-    to_name = params.get("to_scheme")
-    if from_name not in SCHEMES:
-        return {"warnings": [f"scheme_convert: unknown from_scheme {from_name!r}"]}
-    if to_name not in SCHEMES:
-        return {"warnings": [f"scheme_convert: unknown to_scheme {to_name!r}"]}
-    if from_name == to_name:
-        return {}
-
-    from_scheme = SCHEMES[from_name]
-    to_scheme = SCHEMES[to_name]
-
-    old = _get_field(item, "number").strip()
-    if not old:
-        return {}
-
-    slot, category = _parse_slot(old, from_scheme)
-    if slot is None or category not in to_scheme["categories"]:
-        return {"warnings": [
-            f"scheme_convert: cannot map {old!r} from {from_name} to {to_name}"
-        ]}
-
-    from_cat = from_scheme["categories"].get(category, {})
-    to_cat = to_scheme["categories"][category]
-
-    # Pick the right "step" granularity for the conversion direction:
-    #   - same type (numeric↔numeric or dotted↔dotted): use FINE granularity
-    #     (sub_level_increment / sub_increment) so sub-slots like L1M = 1011
-    #     map cleanly to v2 10110.
-    #   - cross type (numeric↔dotted): use COARSE granularity (level_increment
-    #     / primary_increment) — dotted has no sub-positions, so we map by
-    #     primary position only. v1 1010 (L1) → A1.01 (position 1), not A1.10.
-    from_dotted = from_scheme.get("digit_count") is None
-    to_dotted = to_scheme.get("digit_count") is None
-    same_type = from_dotted == to_dotted
-
-    def _step(cat, fine):
-        if fine:
-            return (cat.get("sub_level_increment")
-                    or cat.get("sub_increment")
-                    or cat.get("primary_increment", 1))
-        return cat.get("level_increment") or cat.get("primary_increment", 1)
-
-    from_step = _step(from_cat, fine=same_type)
-    to_step = _step(to_cat, fine=same_type)
-    from_base = from_cat.get("base", 0) or 0
-    to_base = to_cat.get("base", 0) or 0
-
-    if from_step == 0:
-        return {"warnings": [f"scheme_convert: zero increment in {from_name}.{category}"]}
-
-    offset = slot - from_base
-    position = offset // from_step  # integer division — drops sub-position info if present
-    new_slot = to_base + position * to_step
-
-    # Validate new_slot fits within target category's range.
-    # Each category occupies [base, base + range_size). X0 uses its own format
-    # so range check is relaxed (X-prefix has its own digit allowance).
-    range_size = _range_size(to_scheme)
-    if category != "X0" and new_slot >= to_base + range_size:
-        return {"warnings": [
-            f"scheme_convert: {old!r} → slot {new_slot} overflows "
-            f"{to_name}.{category} range"
-        ]}
-
-    new_number = _format_slot(category, new_slot, to_scheme)
-
-    warnings = []
-    # Warn if the source had sub-position info that won't survive cross-type conversion.
-    if from_step > 0 and (offset % from_step) != 0:
-        warnings.append(
-            f"scheme_convert: {old!r} had sub-position info that can't map "
-            f"cleanly to {to_name}; rounded down"
-        )
-    # Warn for dotted → numeric — level semantics aren't preserved.
-    if from_dotted and not to_dotted:
-        warnings.append(
-            f"scheme_convert: {old!r} → {new_number!r} uses naive position "
-            f"mapping; verify level assignment matches your intent"
-        )
-
-    return {"number": new_number, "warnings": warnings} if warnings else {"number": new_number}
+    return {}
 
 
 # ── Operation registry ───────────────────────────────────────────────────
@@ -363,7 +276,7 @@ OPERATIONS = {
     "translate_th_to_en":    op_translate_th_to_en,
     "add_stage_prefix":      op_add_stage_prefix,
     "offset_renumber":       op_offset_renumber,
-    "scheme_convert":        op_scheme_convert,
+    "manual_edit":           op_manual_edit,
 }
 
 

@@ -202,24 +202,22 @@
                   placeholder="e.g. 100 or -10" />
                 <div class="text-[11px] text-white/50 italic leading-relaxed">
                   Adds the delta to each numeric sheet number while preserving
-                  digit width. Skips dotted (a49_dotted) numbers — use Scheme
-                  Convert for those.
+                  digit width. Skips dotted (a49_dotted) numbers — use Manual
+                  Edit for those.
                 </div>
               </template>
 
-              <!-- scheme_convert -->
-              <template v-else-if="operation === 'scheme_convert'">
-                <ParamSegmented v-model="params.from_scheme" label="From scheme"
-                  :options="SCHEME_OPTIONS" />
-                <ParamSegmented v-model="params.to_scheme" label="To scheme"
-                  :options="SCHEME_OPTIONS" />
-                <div v-if="params.from_scheme === 'a49_dotted' && params.to_scheme && params.to_scheme !== 'a49_dotted'"
-                  class="text-[11px] text-amber-300/90 italic leading-relaxed flex items-start gap-2">
-                  <Icon name="lucide:alert-triangle" class="text-sm mt-0.5 shrink-0" />
-                  <span>
-                    Dotted → numeric uses naive position mapping. The original
-                    dotted slot doesn't carry level semantics, so verify the
-                    preview before applying.
+              <!-- manual_edit -->
+              <template v-else-if="operation === 'manual_edit'">
+                <div class="text-[11px] text-white/60 leading-relaxed">
+                  No automatic transformation. Every sheet is listed in the
+                  preview with its <span class="font-bold text-white/80">number</span>
+                  cell editable — type the desired new number for any rows you
+                  want to change, leave the rest alone, then apply.
+                  <br />
+                  <span class="italic text-white/40">
+                    Use this for cross-scheme renumbering (e.g. 5-digit ↔ A49
+                    dotted) where automatic mapping is lossy.
                   </span>
                 </div>
               </template>
@@ -295,20 +293,24 @@
               <tbody class="divide-y divide-white/5">
                 <tr v-for="row in previewRows" :key="row.unique_id"
                   class="group hover:bg-white/5 transition"
-                  :class="row.changed ? '' : 'opacity-50'">
+                  :class="isRowChanged(row) ? '' : 'opacity-60'">
 
                   <td class="py-2 pl-2 align-top">
                     <input type="checkbox" v-model="rowSelected[row.unique_id]"
-                      :disabled="!row.changed"
+                      :disabled="!isRowChanged(row)"
                       class="accent-[#D8B4FE] cursor-pointer" />
                   </td>
 
                   <td class="py-2 pr-3 font-mono align-top">
-                    <div v-if="row.old_number !== row.new_number" class="flex flex-col gap-0.5">
-                      <span class="text-white/40 line-through">{{ row.old_number }}</span>
-                      <span class="text-[#D8B4FE] font-bold">{{ row.new_number }}</span>
+                    <div class="flex flex-col gap-1">
+                      <span class="text-white/40 text-[10px] leading-tight"
+                        :class="{ 'line-through': isRowChanged(row) }">{{ row.old_number }}</span>
+                      <input type="text" v-model="row.new_number"
+                        @input="onNewNumberInput(row)"
+                        :placeholder="row.old_number"
+                        class="bg-white/5 hover:bg-white/10 focus:bg-white/10 border border-transparent focus:border-[#D8B4FE]/40 outline-none rounded px-1.5 py-0.5 w-full font-mono text-xs transition"
+                        :class="isRowChanged(row) ? 'text-[#D8B4FE] font-bold' : 'text-white/70'" />
                     </div>
-                    <span v-else class="text-white/50">{{ row.old_number }}</span>
                   </td>
 
                   <td class="py-2 pr-2 align-top">
@@ -488,12 +490,6 @@ const STAGE_OPTIONS = [
 
 const CATEGORY_OPTIONS = ['*', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'X0'];
 
-const SCHEME_OPTIONS = [
-  { value: 'iso19650_4digit', label: '4-digit (small)' },
-  { value: 'iso19650_5digit', label: '5-digit (large)' },
-  { value: 'a49_dotted',      label: 'A49 dotted' },
-];
-
 const SCHEME_LABELS = {
   iso19650_4digit: 'ISO19650 · 4-digit',
   iso19650_5digit: 'ISO19650 · 5-digit',
@@ -515,8 +511,8 @@ const OPERATIONS = [
     hint: 'Bilingual A49 dictionary (Thai → English).' },
   { value: 'offset_renumber',    label: 'Offset Renumber',      icon: 'lucide:plus-square',
     hint: 'Add a fixed integer to numeric sheet numbers.' },
-  { value: 'scheme_convert',     label: 'Convert Scheme',       icon: 'lucide:shuffle',
-    hint: 'Map between 4-digit, 5-digit, and A49 dotted formats.' },
+  { value: 'manual_edit',        label: 'Manual Edit',          icon: 'lucide:pencil',
+    hint: 'Type new numbers directly — no auto-transform applied.' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -626,8 +622,28 @@ const filteredSheets = computed(() => {
   return items;
 });
 
+// A row counts as "changed" whenever its current new_* differs from its
+// original old_* — covers both auto-transformed values (from the operation)
+// AND values the user has typed into the editable cells. This is the single
+// source of truth for the checkbox enabled-state, the row opacity, the
+// selected count, and the apply filter.
+function isRowChanged(row) {
+  return (row.new_number || '') !== (row.old_number || '')
+      || (row.new_name   || '') !== (row.old_name   || '');
+}
+
+// Auto-check the row's checkbox the first time the user types a number that
+// differs from old_number. Without this, a freshly-edited row stays opted
+// out of the apply unless the user also clicks the checkbox — which is
+// surprising for the manual_edit workflow.
+function onNewNumberInput(row) {
+  if (isRowChanged(row)) {
+    rowSelected.value = { ...rowSelected.value, [row.unique_id]: true };
+  }
+}
+
 const activeUpdateCount = computed(() =>
-  previewRows.value.filter(r => r.changed && rowSelected.value[r.unique_id]).length
+  previewRows.value.filter(r => isRowChanged(r) && rowSelected.value[r.unique_id]).length
 );
 
 const warningCount = computed(() =>
@@ -652,7 +668,7 @@ const OP_DEFAULTS = {
   translate_th_to_en: () => ({}),
   add_stage_prefix:   () => ({ stage: '', separator: ' - ', strip_existing: true }),
   offset_renumber:    () => ({ delta: 0 }),
-  scheme_convert:     () => ({ from_scheme: 'iso19650_4digit', to_scheme: 'iso19650_5digit' }),
+  manual_edit:        () => ({}),
 };
 
 function selectOperation(name) {
@@ -664,8 +680,6 @@ function opParamsValid() {
   switch (operation.value) {
     case 'find_replace':    return !!(params.value.find || '').length;
     case 'offset_renumber': return Number.isInteger(Number(params.value.delta)) && Number(params.value.delta) !== 0;
-    case 'scheme_convert':  return params.value.from_scheme && params.value.to_scheme &&
-                                   params.value.from_scheme !== params.value.to_scheme;
     default:                return true;
   }
 }
@@ -735,7 +749,9 @@ async function fetchPreview() {
     }
     const rows = result.preview || [];
     previewRows.value = rows;
-    // Default: every changed row is selected.
+    // Default: every row that the operation already changed is selected.
+    // Manual_edit rows arrive with changed=false; they get selected on first
+    // edit by onNewNumberInput().
     const sel = {};
     rows.forEach(r => { sel[r.unique_id] = !!r.changed; });
     rowSelected.value = sel;
@@ -748,7 +764,7 @@ async function fetchPreview() {
 
 function selectAll(value) {
   const sel = { ...rowSelected.value };
-  previewRows.value.forEach(r => { if (r.changed) sel[r.unique_id] = value; });
+  previewRows.value.forEach(r => { if (isRowChanged(r)) sel[r.unique_id] = value; });
   rowSelected.value = sel;
 }
 
@@ -758,7 +774,6 @@ function selectAll(value) {
 function apply() {
   const updates = [];
   for (const row of previewRows.value) {
-    if (!row.changed) continue;
     if (!rowSelected.value[row.unique_id]) continue;
     const changes = {};
     if (row.new_number !== row.old_number) changes.number = row.new_number;

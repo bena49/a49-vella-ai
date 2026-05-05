@@ -207,66 +207,18 @@ OP_CASES = [
      _sheet("u1", "1010"),
      {}),
 
-    # ─── scheme_convert ──────────────────────────────────────────────
-    ("scheme_convert: v1 1010 → v2 10100 (L1)",
-     {"operation": "scheme_convert", "params": {"from_scheme": "iso19650_4digit",
-                                                "to_scheme": "iso19650_5digit"}},
-     _sheet("u1", "1010"),
-     {"number": "10100"}),
-
-    ("scheme_convert: v1 1009 → v2 10090 (B1)",
-     {"operation": "scheme_convert", "params": {"from_scheme": "iso19650_4digit",
-                                                "to_scheme": "iso19650_5digit"}},
-     _sheet("u3", "1009"),
-     {"number": "10090"}),
-
-    ("scheme_convert: v1 1000 → v2 10000 (SITE)",
-     {"operation": "scheme_convert", "params": {"from_scheme": "iso19650_4digit",
-                                                "to_scheme": "iso19650_5digit"}},
-     _sheet("u4", "1000"),
-     {"number": "10000"}),
-
-    ("scheme_convert: v1 1011 → v2 10110 (L1M sub-slot)",
-     {"operation": "scheme_convert", "params": {"from_scheme": "iso19650_4digit",
-                                                "to_scheme": "iso19650_5digit"}},
-     _sheet("u1", "1011"),
-     {"number": "10110"}),
-
-    ("scheme_convert: v1 0000 → v2 00000 (cover)",
-     {"operation": "scheme_convert", "params": {"from_scheme": "iso19650_4digit",
-                                                "to_scheme": "iso19650_5digit"}},
-     _sheet("u5", "0000"),
-     {"number": "00000"}),
-
-    ("scheme_convert: v1 X010 → v2 X0100",
-     {"operation": "scheme_convert", "params": {"from_scheme": "iso19650_4digit",
-                                                "to_scheme": "iso19650_5digit"}},
-     _sheet("u6", "X010", category="X0"),
-     {"number": "X0100"}),
-
-    ("scheme_convert: v2 → v1 (reverse, lossy by design)",
-     {"operation": "scheme_convert", "params": {"from_scheme": "iso19650_5digit",
-                                                "to_scheme": "iso19650_4digit"}},
-     _sheet("u1", "10100"),
-     {"number": "1010"}),
-
-    ("scheme_convert: v1 → a49_dotted (A1.01 from 1010)",
-     {"operation": "scheme_convert", "params": {"from_scheme": "iso19650_4digit",
-                                                "to_scheme": "a49_dotted"}},
-     _sheet("u1", "1010"),
-     {"number": "A1.01"}),
-
-    ("scheme_convert: same scheme → no-op",
-     {"operation": "scheme_convert", "params": {"from_scheme": "iso19650_4digit",
-                                                "to_scheme": "iso19650_4digit"}},
+    # ─── manual_edit ─────────────────────────────────────────────────
+    # Always returns no changes — the user fills in targets via the
+    # editable preview cells in the wizard, not via params here.
+    ("manual_edit: numeric sheet, no auto-changes",
+     {"operation": "manual_edit", "params": {}},
      _sheet("u1", "1010"),
      {}),
 
-    ("scheme_convert: unknown scheme warns",
-     {"operation": "scheme_convert", "params": {"from_scheme": "fake_scheme",
-                                                "to_scheme": "iso19650_5digit"}},
-     _sheet("u1", "1010"),
-     {}),  # no diff, just warning
+    ("manual_edit: dotted sheet, no auto-changes",
+     {"operation": "manual_edit", "params": {}},
+     _sheet("u1", "A1.05"),
+     {}),
 
     # ─── unknown operation ───────────────────────────────────────────
     ("unknown operation: graceful warning, no diff",
@@ -281,10 +233,6 @@ WARNING_CASES = [
     ("offset_renumber on dotted",
      {"operation": "offset_renumber", "params": {"delta": 10}},
      _sheet("u1", "A1.03"), True),
-    ("scheme_convert unknown scheme",
-     {"operation": "scheme_convert", "params": {"from_scheme": "fake",
-                                                "to_scheme": "iso19650_5digit"}},
-     _sheet("u1", "1010"), True),
     ("add_stage_prefix without stage info",
      {"operation": "add_stage_prefix"},
      {"unique_id": "u9", "number": "1010", "name": "Foo", "category": "A1"},  # no stage
@@ -303,47 +251,16 @@ WARNING_CASES = [
 
 PREVIEW_CASES = [
     {
-        "desc": "v1→v2 across mixed inventory: all sheets get scaled",
+        # Baseline: selection + deselection plumbing must work even when the
+        # operation produces zero auto-changes (manual_edit). The preview
+        # rows still exist with `changed=False`; preview_to_updates filters
+        # them out so the resulting updates list is empty.
+        "desc": "manual_edit: no auto-changes, no updates emitted",
         "inventory": INVENTORY_MIXED,
-        "operation": {"operation": "scheme_convert",
-                      "params": {"from_scheme": "iso19650_4digit",
-                                 "to_scheme": "iso19650_5digit"}},
-        "selection": None,  # all
-        "deselected": None,
-        "expected_changes": {
-            "u1": {"number": "10100"},
-            "u2": {"number": "10200"},
-            "u3": {"number": "10090"},
-            "u4": {"number": "10000"},
-            "u5": {"number": "00000"},
-            "u6": {"number": "X0100"},
-        },
-    },
-    {
-        "desc": "selection limits which items are previewed",
-        "inventory": INVENTORY_MIXED,
-        "operation": {"operation": "scheme_convert",
-                      "params": {"from_scheme": "iso19650_4digit",
-                                 "to_scheme": "iso19650_5digit"}},
-        "selection": ["u1", "u2"],
-        "deselected": None,
-        "expected_changes": {
-            "u1": {"number": "10100"},
-            "u2": {"number": "10200"},
-        },
-    },
-    {
-        "desc": "deselection drops rows from final updates",
-        "inventory": INVENTORY_MIXED,
-        "operation": {"operation": "scheme_convert",
-                      "params": {"from_scheme": "iso19650_4digit",
-                                 "to_scheme": "iso19650_5digit"}},
+        "operation": {"operation": "manual_edit"},
         "selection": None,
-        "deselected": ["u3", "u4", "u5", "u6"],
-        "expected_changes": {
-            "u1": {"number": "10100"},
-            "u2": {"number": "10200"},
-        },
+        "deselected": None,
+        "expected_changes": {},
     },
     {
         "desc": "EN→TH translation across mixed inventory",
@@ -428,7 +345,7 @@ def _run():
     expected_ops = {
         "find_replace", "case_transform", "prefix_suffix",
         "translate_en_to_th", "translate_th_to_en", "add_stage_prefix",
-        "offset_renumber", "scheme_convert",
+        "offset_renumber", "manual_edit",
     }
     actual_ops = set(list_operations())
     if actual_ops == expected_ops:

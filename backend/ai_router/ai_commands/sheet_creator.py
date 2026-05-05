@@ -252,7 +252,7 @@ def execute_sheet_creation(request):
     all_created_sheets = []
 
     # Resolve the active numbering scheme for this project (auto-detect from
-    # cached sheets first, falls back to session override / v1_small default).
+    # cached sheets first, falls back to session override / iso19650_4digit default).
     scheme = resolve_scheme_for_request(request)
 
     try:

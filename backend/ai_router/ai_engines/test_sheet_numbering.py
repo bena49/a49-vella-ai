@@ -506,7 +506,7 @@ PAYLOAD_CASES = [
 #   - A6 reordered: FLOOR PATTERN PLAN (60100) before TOILET (60200)
 # ============================================================================
 
-V2 = SCHEMES["v2_large"]
+V2 = SCHEMES["iso19650_5digit"]
 
 SEQUENCE_CASES_V2 = [
     ("V2 A0 first sheet",                "A0", [],                                       "00000"),
@@ -841,18 +841,18 @@ PAYLOAD_CASES_V2 = [
 DETECT_CASES = [
     # (description, sheets list, expected scheme name or None)
     ("Empty list → None (caller falls back)",         [],                                  None),
-    ("All-V1 4-digit numbers → v1_small",              ["1010", "1020", "5010"],            "v1_small"),
-    ("All-V2 5-digit numbers → v2_large",              ["10100", "10200", "50100"],         "v2_large"),
-    ("Mixed (V1 + V2) → v2_large (decisive)",          ["1010", "10100"],                   "v2_large"),
-    ("V1 with 'NUM - NAME' shape → v1_small",          ["1010 - LEVEL 1", "1020 - LEVEL 2"], "v1_small"),
-    ("V2 with 'NUM - NAME' shape → v2_large",          ["10100 - LEVEL 1"],                 "v2_large"),
-    ("X-series V1 (X010) → v1_small",                  ["X010", "X020"],                    "v1_small"),
-    ("X-series V2 (X0100) → v2_large",                 ["X0100", "X0200"],                  "v2_large"),
+    ("All 4-digit numbers → iso19650_4digit",          ["1010", "1020", "5010"],            "iso19650_4digit"),
+    ("All 5-digit numbers → iso19650_5digit",          ["10100", "10200", "50100"],         "iso19650_5digit"),
+    ("Mixed 4+5-digit → iso19650_5digit (decisive)",   ["1010", "10100"],                   "iso19650_5digit"),
+    ("4-digit with 'NUM - NAME' shape",                ["1010 - LEVEL 1", "1020 - LEVEL 2"], "iso19650_4digit"),
+    ("5-digit with 'NUM - NAME' shape",                ["10100 - LEVEL 1"],                 "iso19650_5digit"),
+    ("X-series 4-digit (X010)",                        ["X010", "X020"],                    "iso19650_4digit"),
+    ("X-series 5-digit (X0100)",                       ["X0100", "X0200"],                  "iso19650_5digit"),
     ("Only non-A49 names → None (cache uninformative)",["My Sheet", "Untitled"],            None),
-    ("Mix of A49 + garbage → ignores garbage",         ["My Sheet", "1010"],                "v1_small"),
-    ("V2 shape mixed with garbage → v2_large",         ["My Sheet", "10100"],               "v2_large"),
-    ("Cover slot V1 (4-digit '0000') → v1_small",      ["0000"],                            "v1_small"),
-    ("Cover slot V2 (5-digit '00000') → v2_large",     ["00000"],                           "v2_large"),
+    ("Mix of A49 + garbage → ignores garbage",         ["My Sheet", "1010"],                "iso19650_4digit"),
+    ("5-digit shape mixed with garbage",               ["My Sheet", "10100"],               "iso19650_5digit"),
+    ("Cover slot 4-digit ('0000')",                    ["0000"],                            "iso19650_4digit"),
+    ("Cover slot 5-digit ('00000')",                   ["00000"],                           "iso19650_5digit"),
 ]
 
 
@@ -869,26 +869,36 @@ class _FakeRequest:
 
 RESOLVE_CASES = [
     # (description, session dict, expected scheme name)
-    ("No request → default v1_small",
-        None, "v1_small"),
-    ("Empty session, no override → v1_small",
-        {}, "v1_small"),
-    ("Empty session + override v2_large → v2_large (override wins for empty)",
-        {"ai_numbering_scheme": "v2_large"}, "v2_large"),
-    ("Empty session + override v1_small → v1_small",
-        {"ai_numbering_scheme": "v1_small"}, "v1_small"),
-    ("V1 sheets cached, no override → v1_small",
-        {"ai_last_known_sheets": ["1010", "1020"]}, "v1_small"),
-    ("V2 sheets cached, no override → v2_large",
-        {"ai_last_known_sheets": ["10100", "10200"]}, "v2_large"),
-    ("V2 sheets cached + override v1_small → v2_large (auto-detect wins)",
-        {"ai_last_known_sheets": ["10100"], "ai_numbering_scheme": "v1_small"}, "v2_large"),
-    ("V1 sheets cached + override v2_large → v1_small (auto-detect wins)",
-        {"ai_last_known_sheets": ["1010"], "ai_numbering_scheme": "v2_large"}, "v1_small"),
-    ("Garbage-only cached + override v2_large → v2_large (cache uninformative)",
-        {"ai_last_known_sheets": ["My Sheet"], "ai_numbering_scheme": "v2_large"}, "v2_large"),
-    ("Invalid override value → falls back to default v1_small",
-        {"ai_numbering_scheme": "v3_unknown"}, "v1_small"),
+    ("No request → default iso19650_4digit",
+        None, "iso19650_4digit"),
+    ("Empty session, no override → default iso19650_4digit",
+        {}, "iso19650_4digit"),
+    ("Empty session + override 5-digit → 5-digit (override wins for empty)",
+        {"ai_numbering_scheme": "iso19650_5digit"}, "iso19650_5digit"),
+    ("Empty session + override 4-digit → 4-digit",
+        {"ai_numbering_scheme": "iso19650_4digit"}, "iso19650_4digit"),
+    ("4-digit sheets cached, no override → 4-digit",
+        {"ai_last_known_sheets": ["1010", "1020"]}, "iso19650_4digit"),
+    ("5-digit sheets cached, no override → 5-digit",
+        {"ai_last_known_sheets": ["10100", "10200"]}, "iso19650_5digit"),
+    ("5-digit cached + override 4-digit → 5-digit (auto-detect wins)",
+        {"ai_last_known_sheets": ["10100"], "ai_numbering_scheme": "iso19650_4digit"}, "iso19650_5digit"),
+    ("4-digit cached + override 5-digit → 4-digit (auto-detect wins)",
+        {"ai_last_known_sheets": ["1010"], "ai_numbering_scheme": "iso19650_5digit"}, "iso19650_4digit"),
+    ("Garbage-only cached + override 5-digit → 5-digit (cache uninformative)",
+        {"ai_last_known_sheets": ["My Sheet"], "ai_numbering_scheme": "iso19650_5digit"}, "iso19650_5digit"),
+    ("Invalid override value → falls back to default 4-digit",
+        {"ai_numbering_scheme": "v3_unknown"}, "iso19650_4digit"),
+
+    # ── Legacy session-key migration ───────────────────────────────────
+    # Sessions stored before the v1_small/v2_large → iso19650_* rename.
+    # Migration shim in resolve_scheme_for_request rewrites them in place.
+    ("Legacy override 'v1_small' → migrated to iso19650_4digit",
+        {"ai_numbering_scheme": "v1_small"}, "iso19650_4digit"),
+    ("Legacy override 'v2_large' → migrated to iso19650_5digit",
+        {"ai_numbering_scheme": "v2_large"}, "iso19650_5digit"),
+    ("Legacy override + auto-detect: cached 4-digit beats legacy 'v2_large'",
+        {"ai_last_known_sheets": ["1010"], "ai_numbering_scheme": "v2_large"}, "iso19650_4digit"),
 ]
 
 
@@ -953,7 +963,7 @@ def _run():
                              "expected": case["expected_numbers"]})
 
     # ─── V2 (large) cases ───────────────────────────────────────────────
-    # Pass scheme=V2 explicitly to exercise the v2_large path while keeping
+    # Pass scheme=V2 explicitly to exercise the iso19650_5digit path while keeping
     # the active scheme default unchanged for the rest of the codebase.
 
     for desc, st, existing, expected in SEQUENCE_CASES_V2:

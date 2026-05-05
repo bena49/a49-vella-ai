@@ -7,6 +7,19 @@ from .naming_engine import (
     _detect_scheme_from_sheets,
 )
 
+
+def _scheme_label(scheme_name, thai=False):
+    """User-facing label for an internal scheme key.
+
+    Internal keys are `iso19650_4digit` / `iso19650_5digit`. Legacy keys
+    (`v1_small`, `v2_large`) from earlier session storage are auto-migrated
+    by `resolve_scheme_for_request()`.
+    """
+    digit_count = SCHEMES.get(scheme_name, {}).get("digit_count", "?")
+    if thai:
+        return f"ISO19650 {digit_count} หลัก"
+    return f"ISO19650 {digit_count}-digit"
+
 def process_conversational_intent(raw_text_lower, request):
     """
     Intercepts basic conversational intents (Greetings, Thank You, Help, Reset)
@@ -155,36 +168,61 @@ def process_conversational_intent(raw_text_lower, request):
         return Response({"message": msg})
 
     # ==========================================================
-    # 5. NUMBERING SCHEME TOGGLE (V1 small / V2 large)
+    # 5. NUMBERING SCHEME TOGGLE (ISO19650 4-digit / 5-digit)
     # ==========================================================
-    # Quick chat command for opting a new/empty project into the v2 5-digit
+    # Quick chat command for opting a new/empty project into the 5-digit
     # numbering scheme. Auto-detect (resolve_scheme_for_request) takes over
-    # once the project has its first v2 sheet — at that point the override
-    # becomes a no-op. Use these to bootstrap empty projects only.
+    # once the project has its first 5-digit sheet — at that point the
+    # override becomes a no-op. Use these to bootstrap empty projects only.
+    #
+    # Internal scheme keys are iso19650_4digit / iso19650_5digit. Legacy
+    # keys (v1_small / v2_large) from earlier session storage are
+    # auto-migrated by resolve_scheme_for_request().
 
     set_v2 = {
-        "use v2 numbering", "use v2", "switch to v2",
-        "use large project numbering", "use large numbering",
-        "use 5 digit numbering", "use 5-digit numbering",
-        "ใช้เลขแบบ v2", "ใช้เลข 5 หลัก", "ใช้เลขโครงการใหญ่",
+        # ISO19650 phrasings (with and without space, with and without "use"/"switch")
+        "use iso19650 5-digit", "use iso 19650 5-digit", "use iso 5-digit",
+        "switch to iso19650 5-digit", "switch to iso 19650 5-digit", "switch to iso 5-digit",
+        "iso19650 5-digit", "iso 19650 5-digit", "iso 5-digit",
+        # Generic digit-only phrasings
+        "use 5 digit numbering", "use 5-digit numbering", "use 5 digit", "use 5-digit",
+        "switch to 5-digit", "switch to 5 digit",
+        "5-digit numbering", "5 digit numbering", "5-digit", "5 digit",
+        # Thai
+        "ใช้เลขแบบ iso19650 5 หลัก", "ใช้เลขแบบ iso 19650 5 หลัก",
+        "ใช้เลข iso19650 5 หลัก", "ใช้เลข iso 5 หลัก",
+        "ใช้เลข 5 หลัก", "เลขแบบ 5 หลัก", "เลข 5 หลัก",
     }
 
     set_v1 = {
-        "use v1 numbering", "use v1", "switch to v1",
-        "use small project numbering", "use small numbering",
-        "use 4 digit numbering", "use 4-digit numbering",
-        "ใช้เลขแบบ v1", "ใช้เลข 4 หลัก", "ใช้เลขโครงการเล็ก",
+        # ISO19650 phrasings
+        "use iso19650 4-digit", "use iso 19650 4-digit", "use iso 4-digit",
+        "switch to iso19650 4-digit", "switch to iso 19650 4-digit", "switch to iso 4-digit",
+        "iso19650 4-digit", "iso 19650 4-digit", "iso 4-digit",
+        # Generic digit-only phrasings
+        "use 4 digit numbering", "use 4-digit numbering", "use 4 digit", "use 4-digit",
+        "switch to 4-digit", "switch to 4 digit",
+        "4-digit numbering", "4 digit numbering", "4-digit", "4 digit",
+        # Thai
+        "ใช้เลขแบบ iso19650 4 หลัก", "ใช้เลขแบบ iso 19650 4 หลัก",
+        "ใช้เลข iso19650 4 หลัก", "ใช้เลข iso 4 หลัก",
+        "ใช้เลข 4 หลัก", "เลขแบบ 4 หลัก", "เลข 4 หลัก",
     }
 
     inquire_scheme = {
         "what numbering scheme", "what scheme", "which numbering scheme",
         "current scheme", "current numbering scheme",
         "what numbering scheme is active", "show numbering scheme",
+        # ISO19650-themed phrasings
+        "what iso scheme", "which iso scheme", "show iso scheme",
+        "what iso19650 scheme", "current iso scheme",
+        # Thai
         "เลขแบบไหน", "ใช้เลขแบบไหน", "ตอนนี้ใช้เลขอะไร",
+        "เลข iso แบบไหน", "ใช้เลข iso แบบไหน",
     }
 
     if clean_text in set_v2 or clean_text in set_v1:
-        target_name = "v2_large" if clean_text in set_v2 else "v1_small"
+        target_name = "iso19650_5digit" if clean_text in set_v2 else "iso19650_4digit"
         request.session["ai_numbering_scheme"] = target_name
         request.session.modified = True
 
@@ -193,11 +231,9 @@ def process_conversational_intent(raw_text_lower, request):
         effective = resolve_scheme_for_request(request)
         effective_name = next(
             (n for n, cfg in SCHEMES.items() if cfg is effective), "unknown")
-        cached_sheets = request.session.get("ai_last_known_sheets") or []
-        detected = _detect_scheme_from_sheets(cached_sheets)
 
-        target_label = "5-digit (large project)" if target_name == "v2_large" else "4-digit (small project)"
-        target_label_th = "เลข 5 หลัก (โครงการใหญ่)" if target_name == "v2_large" else "เลข 4 หลัก (โครงการเล็ก)"
+        target_label = _scheme_label(target_name, thai=False)
+        target_label_th = _scheme_label(target_name, thai=True)
 
         if effective_name == target_name:
             if is_thai:
@@ -206,11 +242,12 @@ def process_conversational_intent(raw_text_lower, request):
                 msg = f"✅ Numbering scheme set to **{target_label}**. New sheets will use this format."
         else:
             # Override was set, but auto-detect won — explain why.
-            effective_label = "5-digit (v2)" if effective_name == "v2_large" else "4-digit (v1)"
+            effective_label = _scheme_label(effective_name, thai=False)
+            effective_label_th = _scheme_label(effective_name, thai=True)
             if is_thai:
                 msg = (
                     f"⚠️ ตั้งค่าเป็น {target_label_th} แล้ว แต่ระบบตรวจพบว่าโครงการนี้มี Sheet "
-                    f"แบบ {effective_label} อยู่แล้ว — เพื่อไม่ให้ผสมกัน ระบบจะใช้ {effective_label} ต่อค่ะ\n"
+                    f"แบบ {effective_label_th} อยู่แล้ว — เพื่อไม่ให้ผสมกัน ระบบจะใช้ {effective_label_th} ต่อค่ะ\n"
                     f"ถ้าต้องการเปลี่ยนจริง ๆ ต้องเปลี่ยนเลข Sheet เก่าให้ตรงกับรูปแบบใหม่ก่อนนะคะ"
                 )
             else:
@@ -240,23 +277,27 @@ def process_conversational_intent(raw_text_lower, request):
             reason = "default"
             reason_th = "ค่าเริ่มต้น"
 
-        digit_count = effective["digit_count"]
-        scheme_label = f"{effective_name} ({digit_count}-digit)"
+        scheme_label = _scheme_label(effective_name, thai=False)
+        scheme_label_th = _scheme_label(effective_name, thai=True)
 
         if is_thai:
             msg = (
-                f"📐 รูปแบบเลข Sheet ที่ใช้: **{scheme_label}**\n"
+                f"📐 รูปแบบเลข Sheet ที่ใช้: **{scheme_label_th}**\n"
                 f"แหล่งที่มา: {reason_th}"
             )
             if override and detected and override != detected:
-                msg += f"\n(หมายเหตุ: ตั้ง Override เป็น {override} แต่ตรวจพบ {detected} ในโครงการ — ระบบใช้ตามที่ตรวจพบ)"
+                override_label_th = _scheme_label(override, thai=True)
+                detected_label_th = _scheme_label(detected, thai=True)
+                msg += f"\n(หมายเหตุ: ตั้ง Override เป็น {override_label_th} แต่ตรวจพบ {detected_label_th} ในโครงการ — ระบบใช้ตามที่ตรวจพบ)"
         else:
             msg = (
                 f"📐 Active numbering scheme: **{scheme_label}**\n"
                 f"Source: {reason}"
             )
             if override and detected and override != detected:
-                msg += f"\n(Override is `{override}` but project sheets are `{detected}` — auto-detect wins.)"
+                override_label = _scheme_label(override, thai=False)
+                detected_label = _scheme_label(detected, thai=False)
+                msg += f"\n(Override is **{override_label}** but project sheets are **{detected_label}** — auto-detect wins.)"
 
         return Response({"message": msg, "session_key": request.session.session_key})
 

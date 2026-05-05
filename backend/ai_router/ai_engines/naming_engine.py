@@ -225,19 +225,22 @@ COVER_TITLEBLOCK = {"family": "A49_TB_A1_Horizontal_Cover", "type": "Cover"}
 #   level_increment ... only "level" type — step between L<N> slots
 #                       (e.g. L1 = base+10, L2 = base+20 → +10)
 #   sub_level_increment . only "level" type — step for M/T variants
-#                         (collisions on L1 push +1 in v1 small)
+#                         (collisions on L1 push +1 in iso19650_4digit)
 #   site_slots ........ only "level" type — count of SITE slots reserved at
-#                       the very base (A1 has 1 in v1; A5 has 0 = no SITE)
+#                       the very base (A1 has 1 in 4-digit; A5 has 0 = no SITE)
 #   basement_count .... only "level" type — max basement number supported
 #                       (B<n> for n in 1..basement_count)
 #   roof_offset ....... only "level" type — "auto" = max above-grade L + 1,
 #                       or an int = fixed offset from base
 #
-# Phase 1: only "v1_small" registered. Phase 2 will add "v2_large".
+# Two schemes ship today: iso19650_4digit (small projects, default) and
+# iso19650_5digit (large projects). Adding a third is a config addition,
+# not a code change. Legacy keys "v1_small" / "v2_large" are auto-migrated
+# in resolve_scheme_for_request() so old saved sessions keep working.
 # =====================================================================
 
 SCHEMES = {
-    "v1_small": {
+    "iso19650_4digit": {
         "digit_count": 4,
         "categories": {
             "A0": {"type": "sequence", "base": 0,    "primary_increment": 10, "sub_increment": 1, "format": "{:04d}",
@@ -265,11 +268,11 @@ SCHEMES = {
             "X0": {"type": "sequence", "base": 0,    "primary_increment": 10, "sub_increment": 1, "format": "X{:03d}"},
         },
     },
-    "v2_large": {
-        # V2 5-digit format for large projects: every increment is ×10 the
-        # v1 value (primary 100 vs 10, sub 10 vs 1). Same conceptual shape,
-        # more breathing room. SITE has 10 slots in A1 instead of 1; basements
-        # span 9 slots (B9-B1) at +10 spacing instead of 3 slots at +1.
+    "iso19650_5digit": {
+        # 5-digit format for large projects: every increment is ×10 the 4-digit
+        # value (primary 100 vs 10, sub 10 vs 1). Same conceptual shape, more
+        # breathing room. SITE has 10 slots in A1 instead of 1; basements span
+        # 9 slots (B9-B1) at +10 spacing instead of 3 slots at +1.
         "digit_count": 5,
         "categories": {
             "A0": {"type": "sequence", "base": 0,     "primary_increment": 100, "sub_increment": 10, "format": "{:05d}",
@@ -302,12 +305,12 @@ SCHEMES = {
 def get_active_scheme(scheme_name=None):
     """Return the scheme config dict to use for slot calculations.
 
-    When called with no arguments, returns the global default (v1_small).
-    Per-request resolution should use `resolve_scheme_for_request(request)`
-    instead — it inspects the project's existing sheets and the user's
-    session override.
+    When called with no arguments, returns the global default
+    (iso19650_4digit). Per-request resolution should use
+    `resolve_scheme_for_request(request)` instead — it inspects the
+    project's existing sheets and the user's session override.
     """
-    return SCHEMES[scheme_name or "v1_small"]
+    return SCHEMES[scheme_name or "iso19650_4digit"]
 
 
 def _cat_cfg(sheet_type, scheme=None):
@@ -317,25 +320,35 @@ def _cat_cfg(sheet_type, scheme=None):
 
 
 # ── Per-request scheme resolution ────────────────────────────────────────
-# Selects v1_small or v2_large based on (in priority order):
+# Selects iso19650_4digit or iso19650_5digit based on (in priority order):
 #   1. Auto-detect from cached project sheets — if any A49-shaped sheet
-#      number is 5+ chars, the project is on v2 (decisive — wins over the
-#      override so a v2 project can never accidentally write v1 slots).
+#      number is 5+ chars, the project is on the 5-digit scheme (decisive
+#      — wins over the override so a 5-digit project can never accidentally
+#      write 4-digit slots).
 #   2. Explicit session override — `request.session['ai_numbering_scheme']`,
 #      used for new/empty projects where auto-detect can't decide.
-#   3. Default — v1_small.
+#   3. Default — iso19650_4digit.
 #
 # This implements the user-approved "B + A combined" toggle from the
 # Phase 0 design conversation: auto-detect is primary, override is a
 # fallback for empty projects.
 
+# Legacy scheme keys → new ISO19650 keys. Auto-applied to session overrides
+# in resolve_scheme_for_request() so any session that still has the old
+# value stored (from before the v1.2.x rename) keeps working.
+_LEGACY_SCHEME_KEYS = {
+    "v1_small": "iso19650_4digit",
+    "v2_large": "iso19650_5digit",
+}
+
+
 def _detect_scheme_from_sheets(sheets):
     """Inspect a list of cached sheet-number strings and return the scheme
     name that matches the dominant numbering shape:
-      - "v2_large" if any sheet looks like a 5+ char A49 number (4-digit
-        post-X for X-series, 5+ digits for A-series).
-      - "v1_small" if at least one sheet looks like a valid A49 number but
-        none is 5+ chars (i.e. the project is established on v1).
+      - "iso19650_5digit" if any sheet looks like a 5+ char A49 number.
+      - "iso19650_4digit" if at least one sheet looks like a valid A49
+        number but none is 5+ chars (i.e. the project is established on
+        the 4-digit scheme).
       - None if the cache is empty or contains no recognisably-A49 sheets
         (caller falls back to override or default).
 
@@ -355,8 +368,8 @@ def _detect_scheme_from_sheets(sheets):
             continue
         saw_any_a49 = True
         if len(num) >= 5:
-            return "v2_large"
-    return "v1_small" if saw_any_a49 else None
+            return "iso19650_5digit"
+    return "iso19650_4digit" if saw_any_a49 else None
 
 
 def resolve_scheme_for_request(request):
@@ -364,14 +377,14 @@ def resolve_scheme_for_request(request):
 
     Returns the scheme dict (suitable for passing into
     `build_sheets_payload(..., scheme=...)`, `get_next_sheet_number(..., scheme=...)`,
-    etc.). Falls back to the global default (v1_small) when no request
-    context is available.
+    etc.). Falls back to the global default (iso19650_4digit) when no
+    request context is available.
     """
     if request is None:
         return get_active_scheme()
 
     # 1. Auto-detect from cached project sheets — wins over override so a
-    #    project with v2 sheets is never written to v1 by accident.
+    #    5-digit project is never written to 4-digit by accident.
     cached_sheets = []
     try:
         cached_sheets = request.session.get("ai_last_known_sheets") or []
@@ -386,11 +399,17 @@ def resolve_scheme_for_request(request):
         override = request.session.get("ai_numbering_scheme")
     except Exception:
         override = None
+    # Migrate legacy keys ("v1_small" / "v2_large") to current names so old
+    # saved sessions keep working without manual cleanup.
+    if override in _LEGACY_SCHEME_KEYS:
+        override = _LEGACY_SCHEME_KEYS[override]
+        request.session["ai_numbering_scheme"] = override
+        request.session.modified = True
     if override and override in SCHEMES:
         return SCHEMES[override]
 
     # 3. Default
-    return SCHEMES["v1_small"]
+    return SCHEMES["iso19650_4digit"]
 
 
 # Categories whose slot is determined by a level (not by sequence position).
@@ -428,8 +447,8 @@ def _series_base(sheet_type, scheme=None):
 def _format_slot(sheet_type, slot, scheme=None):
     """Render an integer slot as the displayed sheet-number string,
     using the format template defined by the active scheme.
-    v1_small: A0-A9 → 4-digit zero-padded; X0 → 'X' + 3-digit.
-    v2_large: A0-A9 → 5-digit zero-padded; X0 → 'X' + 4-digit."""
+    iso19650_4digit: A0-A9 → 4-digit zero-padded; X0 → 'X' + 3-digit.
+    iso19650_5digit: A0-A9 → 5-digit zero-padded; X0 → 'X' + 4-digit."""
     cat = _cat_cfg(sheet_type, scheme)
     if cat and cat.get("format"):
         return cat["format"].format(int(slot))
@@ -784,7 +803,7 @@ def build_sheets_payload(request_data, existing_sheet_numbers, scheme=None):
     project inventory wasn't passed in (degraded — ROOF will land at
     max(levels)+10 instead of project max+10).
 
-    `scheme` selects the active numbering scheme (defaults to v1_small via
+    `scheme` selects the active numbering scheme (defaults to iso19650_4digit via
     `get_active_scheme()`)."""
     scheme = scheme or get_active_scheme()
     stage = request_data.get("stage", "CD")
@@ -901,7 +920,7 @@ def apply(request_data, existing_view_names, existing_sheet_numbers,
           scheme=None):
     """Main naming-engine entry point.
 
-    `scheme` selects the active numbering scheme (defaults to v1_small via
+    `scheme` selects the active numbering scheme (defaults to iso19650_4digit via
     `get_active_scheme()`). Callers in the request flow should resolve via
     `resolve_scheme_for_request(request)` and pass the result here so each
     project uses its detected scheme.

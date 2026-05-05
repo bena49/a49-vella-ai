@@ -1,22 +1,31 @@
 ---
-name: A49 Sheet Numbering — Dual-Scheme Reference
-description: V1 (4-digit small project) and V2 (5-digit large project) numbering schemes shipped in v1.2.0. Single source of truth lives in naming_engine.SCHEMES.
+name: A49 Sheet Numbering — Dual-Scheme Reference (ISO19650)
+description: ISO19650 4-digit (iso19650_4digit) and ISO19650 5-digit (iso19650_5digit) numbering schemes shipped in v1.2.0. Single source of truth lives in naming_engine.SCHEMES.
 type: project
 ---
 
-The naming engine supports **two numbering schemes** selected per project. Both are config-driven from `SCHEMES` in [`backend/ai_router/ai_engines/naming_engine.py`](backend/ai_router/ai_engines/naming_engine.py). Adding a third scheme is a config addition, not a code change.
+The naming engine supports **two numbering schemes** selected per project. User-facing labels and internal keys are aligned: **ISO19650 4-digit** = `iso19650_4digit`, **ISO19650 5-digit** = `iso19650_5digit`.
+
+Both schemes are config-driven from `SCHEMES` in [`backend/ai_router/ai_engines/naming_engine.py`](backend/ai_router/ai_engines/naming_engine.py). Adding a third scheme is a config addition, not a code change.
+
+> **Legacy keys**: sessions stored under the earlier `v1_small` / `v2_large` keys (pre-rename) are auto-migrated to the new keys by `resolve_scheme_for_request()`. The mapping table lives in `naming_engine._LEGACY_SCHEME_KEYS`. Migration is silent and one-shot per session.
 
 ## Scheme selection (per request)
 
 `resolve_scheme_for_request(request)` picks the active scheme using this priority:
 
-1. **Auto-detect** from `request.session["ai_last_known_sheets"]` — if any A49-shaped sheet number (pure digits or `X`+digits) is 5+ chars, scheme = `v2_large`. Else if any are present and 4 chars, scheme = `v1_small`. Decisive — **wins over the override** so a v2 project is never accidentally written to v1 (mixed-scheme projects are explicitly disallowed).
-2. **Session override** `request.session["ai_numbering_scheme"] = "v1_small" | "v2_large"` — used for new/empty projects where auto-detect can't decide.
-3. **Default** `v1_small`.
+1. **Auto-detect** from `request.session["ai_last_known_sheets"]` — if any A49-shaped sheet number (pure digits or `X`+digits) is 5+ chars, scheme = `iso19650_5digit`. Else if any are present and 4 chars, scheme = `iso19650_4digit`. Decisive — **wins over the override** so a 5-digit project is never accidentally written to 4-digit (mixed-scheme projects are explicitly disallowed).
+2. **Session override** `request.session["ai_numbering_scheme"] = "iso19650_4digit" | "iso19650_5digit"` (or legacy `"v1_small"` / `"v2_large"`, which the migration shim rewrites). Used for new/empty projects where auto-detect can't decide.
+3. **Default** `iso19650_4digit`.
 
-Set the override via chat: `use v2 numbering`, `use v1 numbering`, `what numbering scheme`. Handlers live in [`conversation_engine.py`](backend/ai_router/ai_engines/conversation_engine.py) under section 5.
+Set the override via chat (English or Thai, case-insensitive). Common phrasings:
+- **Switch to 5-digit**: `use iso19650 5-digit`, `use iso 5-digit`, `use 5-digit numbering`, `5-digit`, `ใช้เลข iso19650 5 หลัก`, `ใช้เลข 5 หลัก`
+- **Switch to 4-digit**: `use iso19650 4-digit`, `use iso 4-digit`, `use 4-digit numbering`, `4-digit`, `ใช้เลข iso19650 4 หลัก`, `ใช้เลข 4 หลัก`
+- **Inquire**: `what numbering scheme`, `what iso scheme`, `current scheme`, `เลขแบบไหน`, `ตอนนี้ใช้เลขอะไร`
 
-## v1_small (4-digit, default)
+Full phrase set + handlers live in [`conversation_engine.py`](backend/ai_router/ai_engines/conversation_engine.py) under section 5.
+
+## iso19650_4digit (default)
 
 Used for typical projects. Format: 4-digit numeric or `X`+3-digit.
 
@@ -36,9 +45,9 @@ Used for typical projects. Format: 4-digit numeric or `X`+3-digit.
 
 Constraints: 1 SITE slot in A1, basement count = 9 max (B1-B9), level cap = L99.
 
-## v2_large (5-digit)
+## iso19650_5digit
 
-Used for large projects that need more slot density. Format: 5-digit numeric or `X`+4-digit. Every increment is ×10 the v1 value.
+Used for large projects that need more slot density. Format: 5-digit numeric or `X`+4-digit. Every increment is ×10 the 4-digit value.
 
 | Category | Base | Primary +inc | Sub +inc | Example slots |
 |---|---|---|---|---|
@@ -59,31 +68,32 @@ Constraints: 10 SITE slots in A1 (10000-10009), basement count = 9 max (B9-B1 sp
 ## Sub-level encoding (M, T, etc.)
 
 User-assigned, free-form. The engine just allocates the next available sub-slot via the collision loop:
-- v1: L1 = 1010 → L1M = 1011 → L1T = 1012 (collision pushes +1)
-- v2: L1 = 10100 → L1M = 10110 → L1T = 10120 (collision pushes +10)
+- 4-digit: L1 = 1010 → L1M = 1011 → L1T = 1012 (collision pushes +1)
+- 5-digit: L1 = 10100 → L1M = 10110 → L1T = 10120 (collision pushes +10)
 
 No hardcoded "M = +1" or "T = +20" rule — whichever sub-level is requested first gets the lowest free sub-slot.
 
 ## Basement encoding
 
 `B<N>` slots descend from the top: closer to grade = larger N is closest to L1.
-- v1: B<n> = base + (10 - n) → B1=1009, B2=1008, … B9=1001
-- v2: B<n> = base + (10 - n) × 10 → B1=10090, B2=10080, … B9=10010
+- 4-digit: B<n> = base + (10 - n) → B1=1009, B2=1008, … B9=1001
+- 5-digit: B<n> = base + (10 - n) × 10 → B1=10090, B2=10080, … B9=10010
 
 When both `B<N>` and `B<N>M`/`B<N>T` exist in the same request, the suffix variant takes the parent's natural slot (closer to grade) and the bare basement cascades down by `sub_increment`. See `compute_sheet_slot()` for the cascade logic.
 
 ## Roof / TOP encoding
 
 `roof_offset = "auto"` (both schemes) → `base + (max_above_grade_level + 1) × level_increment`. Roof always lands one primary slot above the project's highest L<N>.
-- v1, project max L5 → ROOF = 1060
-- v2, project max L5 → ROOF = 10600
+- 4-digit, project max L5 → ROOF = 1060
+- 5-digit, project max L5 → ROOF = 10600
 
 ## Backwards compatibility
 
-- All existing v1 projects continue working unchanged. Auto-detect picks v1 from existing 4-digit sheets.
-- Frontend Match Reference filter accepts both 4-digit (v1) and 5-digit (v2) sheets via `startsWith('1') || startsWith('5') || startsWith('X')` — see [`CreateAndPlaceWizard.vue`](frontend/components/wizards/CreateAndPlaceWizard.vue).
+- All existing 4-digit projects continue working unchanged. Auto-detect picks the 4-digit scheme from existing sheets.
+- Frontend Match Reference filter accepts both 4-digit and 5-digit sheets via `startsWith('1') || startsWith('5') || startsWith('X')` — see [`CreateAndPlaceWizard.vue`](frontend/components/wizards/CreateAndPlaceWizard.vue).
 - Backend reference-sheet regex in [`gpt_integration.py`](backend/ai_router/ai_core/gpt_integration.py) accepts 4-8 char sheet numbers (covers both schemes plus master/placeholder sheets like `10XX` or `1010XX`).
-- Cover titleblock auto-assignment in [`titleblock_engine.py`](backend/ai_router/ai_engines/titleblock_engine.py) recognises both `"0000"` (v1) and `"00000"` (v2).
+- Cover titleblock auto-assignment in [`titleblock_engine.py`](backend/ai_router/ai_engines/titleblock_engine.py) recognises both `"0000"` (4-digit) and `"00000"` (5-digit).
+- Sessions stored under the earlier `v1_small` / `v2_large` keys (pre-rename) are auto-migrated by `resolve_scheme_for_request()` via `_LEGACY_SCHEME_KEYS` — no manual cleanup needed.
 
 ## Adding a new scheme
 
@@ -94,4 +104,4 @@ When both `B<N>` and `B<N>M`/`B<N>T` exist in the same request, the suffix varia
 
 ## Test coverage
 
-Run via `cd backend && python -m ai_router.ai_engines.test_sheet_numbering`. Current count: 235 cases (111 V1 + 101 V2 + 23 scheme-detection).
+Run via `cd backend && python -m ai_router.ai_engines.test_sheet_numbering`. Current count: 238 cases (111 4-digit + 101 5-digit + 13 detection + 13 resolution including 3 legacy-migration).

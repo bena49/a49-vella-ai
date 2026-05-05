@@ -47,14 +47,16 @@ Frontend (WebView2) ↔ C# Add-in (WebView2 bridge) → Django Backend (HTTP) �
 - Frontend: Nuxt 4.1.3, MSAL Browser 5.5.0, pnpm 10.23.0
 - C#: Newtonsoft.Json 13.0.4, WebView2 1.0.2792.45, A49LicenseManager (custom DLL)
 
-## Sheet Numbering (dual-scheme)
-`naming_engine.py` is config-driven via the `SCHEMES` dict. Two schemes ship today:
-- **`v1_small`** (4-digit): A0=0010, A1=1010, X0=X010 — A1 supports 1 site slot, B1-B9
-- **`v2_large`** (5-digit): A0=00100, A1=10100, X0=X0100 — A1 supports 10 site slots, B1-B9 with +10 spacing, +9 sub-slots per level for mezzanine/transfer
+## Sheet Numbering (dual-scheme, ISO19650)
+`naming_engine.py` is config-driven via the `SCHEMES` dict. Two schemes ship today (user-facing labels in **bold**, internal keys in `code`):
+- **ISO19650 4-digit** (`iso19650_4digit`): A0=0010, A1=1010, X0=X010 — A1 supports 1 site slot, B1-B9
+- **ISO19650 5-digit** (`iso19650_5digit`): A0=00100, A1=10100, X0=X0100 — A1 supports 10 site slots, B1-B9 with +10 spacing, +9 sub-slots per level for mezzanine/transfer
 
 Scheme is resolved per-request via `resolve_scheme_for_request(request)`:
-1. Auto-detect from cached project sheets (5+ char number → v2)
-2. Session override `ai_numbering_scheme = "v1_small" | "v2_large"`
-3. Default `v1_small`
+1. Auto-detect from cached project sheets (5+ char number → 5-digit scheme)
+2. Session override `ai_numbering_scheme = "iso19650_4digit" | "iso19650_5digit"`
+3. Default `iso19650_4digit`
 
-Users toggle via chat: `use v2 numbering` / `use v1 numbering` / `what numbering scheme`. See `numbering_schemes.md` for the full spec.
+Users toggle via chat: `use iso19650 5-digit` / `use iso19650 4-digit` / `what numbering scheme` (plus generic `use 5-digit` / `use 4-digit` and Thai variants). See `numbering_schemes.md` for the full spec.
+
+Sessions stored under the earlier `v1_small` / `v2_large` keys (pre-rename) are auto-migrated by `resolve_scheme_for_request()` — no breakage for existing users.

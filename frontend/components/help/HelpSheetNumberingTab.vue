@@ -3,9 +3,21 @@
 
     <!-- Intro / scheme selection -->
     <div class="space-y-3">
-      <h3 class="text-sm font-bold text-[#A78BFA] mb-2">Numbering Scheme Selection</h3>
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="text-sm font-bold text-[#A78BFA]">
+          {{ isThai ? 'เลือกรูปแบบเลข Sheet' : 'Numbering Scheme Selection' }}
+        </h3>
+        <div class="flex items-center bg-white/5 rounded-md border border-white/15 p-0.5">
+          <button @click="setLang('en')"
+            class="px-2 py-0.5 rounded text-[10px] font-bold transition"
+            :class="isThai ? 'text-white/50 hover:text-white/80' : 'bg-white/20 text-white'">EN</button>
+          <button @click="setLang('th')"
+            class="px-2 py-0.5 rounded text-[10px] font-bold transition"
+            :class="isThai ? 'bg-white/20 text-white' : 'text-white/50 hover:text-white/80'">TH</button>
+        </div>
+      </div>
       <div class="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 space-y-3">
-        <div class="text-[11px] text-white/70 leading-relaxed">
+        <div v-if="!isThai" class="text-[11px] text-white/70 leading-relaxed">
           Vella supports two ISO19650 numbering schemes. The active scheme is
           <strong>auto-detected</strong> from your project's existing sheets:
           sheet numbers with 4 chars → 4-digit scheme; 5+ chars → 5-digit scheme.
@@ -13,21 +25,67 @@
           Once a project has its first real sheet, auto-detect locks the scheme
           in (mixed 4-digit + 5-digit projects are not allowed).
         </div>
-        <HelpItem label="Switch to 5-digit (large project)" :prompts="[
-          'use iso19650 5-digit',
-          'use 5-digit numbering',
-          'switch to iso 5-digit'
-        ]" @pick="$emit('pick', $event)" />
-        <HelpItem label="Switch to 4-digit (small project)" :prompts="[
-          'use iso19650 4-digit',
-          'use 4-digit numbering',
-          'switch to iso 4-digit'
-        ]" @pick="$emit('pick', $event)" />
-        <HelpItem label="Check active scheme" :prompts="[
-          'what numbering scheme',
-          'what scheme',
-          'current scheme'
-        ]" @pick="$emit('pick', $event)" />
+        <div v-else class="text-[11px] text-white/70 leading-relaxed">
+          Vella รองรับการใช้เลขแบบ ISO19650 สองรูปแบบ ระบบจะ<strong>ตรวจหาอัตโนมัติ</strong>จาก
+          Sheet ที่มีอยู่ในโครงการ: เลข Sheet 4 ตัวอักษร → ใช้รูปแบบ 4 หลัก;
+          5 ตัวอักษรขึ้นไป → ใช้รูปแบบ 5 หลัก สำหรับโครงการใหม่หรือว่างเปล่า
+          สามารถเลือกรูปแบบที่ต้องการผ่านคำสั่งด้านล่างได้ค่ะ เมื่อโครงการมี Sheet
+          แรกแล้ว ระบบจะล็อครูปแบบไว้โดยอัตโนมัติ (ไม่อนุญาตให้ใช้ทั้ง 4 หลักและ 5 หลักผสมกันในโครงการเดียว)
+        </div>
+        <HelpItem
+          v-if="!isThai"
+          label="Switch to 5-digit (large project)"
+          :prompts="[
+            'use iso19650 5-digit',
+            'use 5-digit numbering',
+            'switch to iso 5-digit'
+          ]"
+          @pick="$emit('pick', $event)" />
+        <HelpItem
+          v-else
+          label="เปลี่ยนเป็นเลข 5 หลัก (โครงการใหญ่)"
+          :prompts="[
+            'ใช้เลข iso19650 5 หลัก',
+            'ใช้เลข iso 5 หลัก',
+            'ใช้เลข 5 หลัก'
+          ]"
+          @pick="$emit('pick', $event)" />
+        <HelpItem
+          v-if="!isThai"
+          label="Switch to 4-digit (small project)"
+          :prompts="[
+            'use iso19650 4-digit',
+            'use 4-digit numbering',
+            'switch to iso 4-digit'
+          ]"
+          @pick="$emit('pick', $event)" />
+        <HelpItem
+          v-else
+          label="เปลี่ยนเป็นเลข 4 หลัก (โครงการเล็ก)"
+          :prompts="[
+            'ใช้เลข iso19650 4 หลัก',
+            'ใช้เลข iso 4 หลัก',
+            'ใช้เลข 4 หลัก'
+          ]"
+          @pick="$emit('pick', $event)" />
+        <HelpItem
+          v-if="!isThai"
+          label="Check active scheme"
+          :prompts="[
+            'what numbering scheme',
+            'what scheme',
+            'current scheme'
+          ]"
+          @pick="$emit('pick', $event)" />
+        <HelpItem
+          v-else
+          label="ตรวจสอบรูปแบบที่ใช้อยู่"
+          :prompts="[
+            'ตอนนี้ใช้เลขอะไร',
+            'ใช้เลขแบบไหน',
+            'ใช้เลข iso แบบไหน'
+          ]"
+          @pick="$emit('pick', $event)" />
       </div>
     </div>
 
@@ -60,13 +118,25 @@
 
     <!-- Edge-case rules summary -->
     <div class="space-y-3">
-      <h3 class="text-sm font-bold text-[#A78BFA] mb-2">Numbering Rules &amp; Edge Cases</h3>
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="text-sm font-bold text-[#A78BFA]">
+          {{ isThai ? 'กฎการตั้งเลขและกรณีพิเศษ' : 'Numbering Rules & Edge Cases' }}
+        </h3>
+        <div class="flex items-center bg-white/5 rounded-md border border-white/15 p-0.5">
+          <button @click="setLang('en')"
+            class="px-2 py-0.5 rounded text-[10px] font-bold transition"
+            :class="isThai ? 'text-white/50 hover:text-white/80' : 'bg-white/20 text-white'">EN</button>
+          <button @click="setLang('th')"
+            class="px-2 py-0.5 rounded text-[10px] font-bold transition"
+            :class="isThai ? 'bg-white/20 text-white' : 'text-white/50 hover:text-white/80'">TH</button>
+        </div>
+      </div>
       <div class="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 hover:border-white/20 transition-all duration-200">
         <ul class="space-y-1.5">
           <li v-for="(rule, idx) in sheetNumberRules" :key="idx"
               class="text-[11px] text-white/70 leading-relaxed flex gap-2">
             <span class="text-white/40">•</span>
-            <span>{{ rule }}</span>
+            <span>{{ isThai ? rule.th : rule.en }}</span>
           </li>
         </ul>
       </div>
@@ -76,10 +146,33 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import HelpItem from './HelpItem.vue';
 
 defineEmits(['pick']);
+
+// Instruction language toggle for the Numbering Scheme Selection card.
+// Persisted per browser via localStorage so each staff member's preference
+// (EN / TH) sticks across sessions. Same pattern as RoomElevationWizard.
+const LANG_STORAGE_KEY = 'vella.help.numbering.lang';
+const isThai = ref(false);
+
+onMounted(() => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      isThai.value = window.localStorage.getItem(LANG_STORAGE_KEY) === 'th';
+    }
+  } catch { /* localStorage may be blocked — fall back to default EN */ }
+});
+
+function setLang(lang) {
+  isThai.value = lang === 'th';
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(LANG_STORAGE_KEY, lang);
+    }
+  } catch { /* ignore */ }
+}
 
 // SHEET NUMBERING FORMAT (ISO19650 dual-scheme — v1.2.0)
 // Examples mirror the SCHEMES dict in backend/ai_router/ai_engines/naming_engine.py
@@ -150,13 +243,38 @@ const numberingSchemes = ref([
   }
 ]);
 
+// Bilingual {en, th} pairs — rendered through the same isThai ref used by
+// the Numbering Scheme Selection card above. A native Thai speaker may want
+// to refine the translations; the technical terms (slot, increment, B1, M, T)
+// are kept in English where the spec uses them as identifiers.
 const sheetNumberRules = ref([
-  'Above-grade levels: L1, L2 … L99 (cap at L99). Slot = base + N × level_increment.',
-  'Below-grade levels: B1 closest to grade, B9 deepest. B1 takes the slot just before L1; deeper basements descend.',
-  'Mezzanine / Transfer suffixes (M, T): take the parent slot, bare basement shifts down by sub_increment (e.g. B1+B1M → B1M takes B1\'s slot, B1 shifts down).',
-  'ROOF / TOP: lands at (max above-grade level + 1) × level_increment. Project max determines the slot.',
-  'A5 + SITE is rejected (no ceiling plan for site level — wizard greys out the option).',
-  'Auto-detect picks the scheme from your project\'s existing sheets. Mixed-scheme projects are not allowed — once a project has 5-digit sheets, new ones are also 5-digit.',
-  'Legacy "A1.01" / "A1.xx" dotted format is deprecated and no longer accepted as input.'
+  {
+    en: 'Above-grade levels: L1, L2 … L99 (cap at L99). Slot = base + N × level_increment.',
+    th: 'ระดับเหนือพื้นดิน: L1, L2 … L99 (สูงสุดที่ L99) สูตร: ช่อง = ฐาน + N × ระยะระหว่างระดับ',
+  },
+  {
+    en: 'Below-grade levels: B1 closest to grade, B9 deepest. B1 takes the slot just before L1; deeper basements descend.',
+    th: 'ระดับใต้ดิน: B1 อยู่ใกล้พื้นดินที่สุด, B9 ลึกที่สุด B1 จะอยู่ในช่องก่อนหน้า L1 และชั้นใต้ดินที่ลึกกว่าจะไล่ลงไป',
+  },
+  {
+    en: 'Mezzanine / Transfer suffixes (M, T): take the parent slot, bare basement shifts down by sub_increment (e.g. B1+B1M → B1M takes B1\'s slot, B1 shifts down).',
+    th: 'ตัวต่อท้ายชั้นลอย/Transfer (M, T): จะใช้ช่องของชั้นหลัก ส่วนชั้นใต้ดินตัวเปล่าจะเลื่อนลงตาม sub_increment (เช่น B1 + B1M → B1M ใช้ช่องของ B1 และ B1 เลื่อนลง)',
+  },
+  {
+    en: 'ROOF / TOP: lands at (max above-grade level + 1) × level_increment. Project max determines the slot.',
+    th: 'ROOF / TOP: อยู่ที่ช่อง (ระดับสูงสุดเหนือพื้นดิน + 1) × ระยะระหว่างระดับ ระดับสูงสุดของโครงการเป็นตัวกำหนดช่อง',
+  },
+  {
+    en: 'A5 + SITE is rejected (no ceiling plan for site level — wizard greys out the option).',
+    th: 'A5 + SITE จะถูกปฏิเสธ (ไม่มี Ceiling Plan สำหรับระดับ Site — Wizard จะปิดการเลือกอัตโนมัติ)',
+  },
+  {
+    en: 'Auto-detect picks the scheme from your project\'s existing sheets. Mixed-scheme projects are not allowed — once a project has 5-digit sheets, new ones are also 5-digit.',
+    th: 'ระบบตรวจหาอัตโนมัติจาก Sheet ที่มีในโครงการ ไม่อนุญาตให้ใช้รูปแบบผสมในโครงการเดียว — เมื่อโครงการมี Sheet แบบ 5 หลักแล้ว Sheet ใหม่จะใช้ 5 หลักด้วย',
+  },
+  {
+    en: 'Legacy "A1.01" / "A1.xx" dotted format is deprecated and no longer accepted as input.',
+    th: 'รูปแบบเดิม "A1.01" / "A1.xx" ที่ใช้จุดคั่น ถูกยกเลิกการใช้งาน และระบบจะไม่รับเป็น Input อีกต่อไป',
+  },
 ]);
 </script>

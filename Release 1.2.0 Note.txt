@@ -1,0 +1,65 @@
+Vella AI — v1.2.0 Release Notes
+
+🆕 What's New
+
+ISO19650 5-digit Numbering — A new 5-digit sheet numbering scheme is now available for large projects, alongside the standard 4-digit format. The 5-digit scheme gives you:
+
+- 10 SITE plan slots in A1 (10000-10009) — was 1 slot in 4-digit
+- 9 basement levels B1-B9 (10090-10010) with +10 spacing — was 3 slots tightly packed in 4-digit
+- 9 sub-slots per level for Mezzanine, Transfer, etc. (e.g. L1 = 10100, L1M = 10110, L1T = 10120) — was 1 sub-slot in 4-digit
+- Plenty of room to weave in additional sheets in any A2-A9 series (60100, 60110, 60120, 60200…)
+
+Smart Auto-Detection — Vella looks at your project's existing sheets and picks the right scheme automatically. Existing 4-digit projects keep working unchanged. New 5-digit projects are recognized as soon as they have a single 5-digit sheet.
+
+Chat Toggle Commands — For new/empty projects, you can opt in to either scheme with a chat command:
+
+- use iso19650 5-digit  /  use 5-digit numbering  /  switch to iso 5-digit
+- use iso19650 4-digit  /  use 4-digit numbering  /  switch to iso 4-digit
+- what numbering scheme  /  what scheme  /  current scheme
+
+Thai variants are also accepted:
+- ใช้เลข iso 5 หลัก  /  ใช้เลข 5 หลัก  /  เลข 5 หลัก
+- ใช้เลข iso 4 หลัก  /  ใช้เลข 4 หลัก  /  เลข 4 หลัก
+- ตอนนี้ใช้เลขอะไร  /  ใช้เลขแบบไหน
+
+Once your project has its first sheet, auto-detect takes over and locks the scheme in. Mixed projects are not allowed — you stay on whichever scheme the project's existing sheets use.
+
+Sheet Numbering Format Help Tab (NEW) — A dedicated tab in Help → Standards (above "Standards Reference") with everything you need:
+
+- Numbering Scheme Selection — quick-pick buttons for the toggle commands above
+- Slot Allocation by Series — side-by-side spec for both ISO19650 4-digit and 5-digit schemes, with example slot numbers for every category (A0-A9, X0)
+- Numbering Rules & Edge Cases — basement cascade, ROOF auto-computation, A5 + SITE rejection, mixed-scheme prevention, etc.
+- EN | TH language toggle for the Numbering Scheme Selection and the Numbering Rules sections — preference is saved per browser
+
+A6 Sheet Order Updated — Both schemes now follow the new A6 convention:
+
+- 6010 / 60100 → FLOOR PATTERN PLAN (was: ENLARGED TOILET PLAN)
+- 6020 / 60200 → ENLARGED TOILET PLAN (was: FLOOR PATTERN PLAN)
+- 6030 / 60300 → CANOPY PLAN (unchanged)
+
+🐛 Bug Fixes
+
+- Thai SITE/TOP levels now resolve correctly when creating views via chat (was failing in projects with Thai-named levels)
+- Create View now refreshes its cache after each run so deleted views don't push new ones into wrong slots
+- Match Reference dropdown in Create-and-Place now shows ALL A1/A5/X-series sheets including project-specific master/placeholder sheets (e.g. 10XX - LEVEL 1 (MASTER), 1010XX - …)
+- Match Reference UX — picking "Match Reference" now opens the dropdown immediately, shows an "N sheets available" count, and displays a clear "no sheets found" message when the project has nothing to match against
+- Stale state cleanup — a failed Create-and-Place no longer leaves alignment / reference-sheet state behind to confuse the next command (Sheet Wizard, View Wizard, etc.)
+- PlanViewWizard SITE filter — now greys out SITE for Ceiling Plan AND Area Plan in Thai-named projects (matches SheetWizard behaviour)
+- Wizard auto-open — selecting "Match Reference" now auto-focuses the input and opens the dropdown reliably (was sometimes requiring an extra click)
+
+🧹 Deprecations
+
+- The legacy A1.01 / A1.xx dotted format is no longer accepted as input. Use the 4-digit format (e.g. 1010) or 5-digit format (e.g. 10100) instead.
+- Old chat phrases "use v1 numbering" / "use v2 numbering" have been replaced by the ISO19650 phrasings above. The system prompt has been updated to teach GPT only the new format.
+
+📚 More Info
+
+- Open Help → Standards → Sheet Numbering Format for the full spec, examples, and quick-pick toggle buttons (with EN | TH support)
+- Type "what numbering scheme" in chat to check what's active in your project
+- Contact the IRIs Department for help
+
+🔧 For Developers / IT
+
+- Internal scheme keys in the codebase were renamed from v1_small / v2_large to iso19650_4digit / iso19650_5digit for consistency with user-facing terminology. A migration shim auto-rewrites any sessions still holding the old keys, so no manual cleanup is required.
+- Single source of truth: backend/ai_router/ai_engines/naming_engine.py SCHEMES dict. Adding a future scheme is a config addition, not a code change.
+- Test coverage: 298 backend tests (238 sheet numbering + 60 level matcher), all green.

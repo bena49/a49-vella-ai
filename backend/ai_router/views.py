@@ -232,6 +232,60 @@ def ai_router(request):
                     )
                 })
 
+        # ==========================================================
+        # 0.95) DUPLICATE-CHOICE INTERCEPTOR
+        # When sheet_creator or batch_processor returns the "⚠ Sheets
+        # already exist" prompt, it sets ai_expecting_duplicate_choice.
+        # We catch the user's reply here — BEFORE GPT — for the same
+        # reason as titleblock/template interceptors above: GPT
+        # otherwise misclassifies short keyword replies as fresh
+        # commands and the user gets re-prompted in a loop.
+        #
+        # Recognised replies (case-insensitive):
+        #   "cancel" / "abort" / "stop" / "nevermind"        → cancel
+        #   "skip" / "skip duplicates" / "skip dup"          → skip
+        #   "sub-parts" / "subparts" / "create as sub-parts" → subparts
+        # ==========================================================
+        if request.session.get("ai_expecting_duplicate_choice"):
+            import re as _re
+            cleaned = raw_text_original.strip().lower()
+            choice = None
+            if _re.search(r'\b(cancel|abort|stop|nevermind|never\s*mind)\b', cleaned):
+                choice = "cancel"
+            elif _re.search(r'\b(sub[\s\-]?parts?)\b', cleaned) or "create as sub" in cleaned:
+                choice = "subparts"
+            elif _re.search(r'\bskip(\s+dup\w*)?\b', cleaned):
+                choice = "skip"
+
+            if choice:
+                debug_session(request, f"🛡️ Duplicate-choice interceptor: '{cleaned}' → {choice}")
+                request.session["ai_duplicate_choice"] = choice
+                request.session["ai_expecting_duplicate_choice"] = False
+                request.session.modified = True
+                # Resume the create flow with the resolved choice — no GPT call.
+                return finalize_router(request)
+
+            # Escape hatch — user typed a fresh command rather than a choice.
+            import re as _re2
+            if _re2.match(
+                r'^\s*(create|make|add|build|generate|new|open|browse|insert|show|run|preflight|tag|dimension|refresh|reload|update|sync)\b',
+                cleaned, _re2.IGNORECASE):
+                debug_session(request, "🛡️ Duplicate-choice: user typed a new command — clearing expectation.")
+                request.session["ai_expecting_duplicate_choice"] = False
+                request.session["ai_pending_duplicate_info"] = None
+                request.session.modified = True
+                # Fall through to normal GPT routing.
+            else:
+                # Re-prompt with the same options so the user sees what's expected.
+                return Response({
+                    "message": (
+                        "I didn't catch that. Please reply with one of:\n"
+                        "  • **cancel** — abort, no sheets created\n"
+                        "  • **skip** — only create sheets for new (non-duplicate) levels\n"
+                        "  • **sub-parts** — create duplicates as sub-parts of the existing sheets"
+                    )
+                })
+
         # 💥 BULLETPROOF "NO" INTERCEPTOR
         if clean_text in ["no", "none", "skip", "n", "nope", "cancel"]:
             current_intent = request.session.get("ai_pending_intent")

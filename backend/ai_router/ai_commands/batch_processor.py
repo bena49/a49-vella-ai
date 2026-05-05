@@ -208,10 +208,16 @@ def finalize_create_and_place(request):
         for p in sub_payloads:
             sheets_cache.append(p.get("sheet_number"))
 
-        # Non-duplicate levels go through the regular allocator.
+        # Non-duplicate levels go through the regular allocator. If EVERY
+        # input level was a duplicate, skip build_sheets_payload entirely —
+        # otherwise the level-based path would fall through to the generic
+        # batch-count path and create a spurious extra primary sheet.
         non_dup_levels = [l for l in pending_levels if l not in duplicate_levels_set]
-        sheet_req["levels"] = non_dup_levels
-        primary_sheets = build_sheets_payload(sheet_req, sheets_cache, scheme=scheme)
+        if non_dup_levels:
+            sheet_req["levels"] = non_dup_levels
+            primary_sheets = build_sheets_payload(sheet_req, sheets_cache, scheme=scheme)
+        else:
+            primary_sheets = []
         created_sheets = sub_payloads + primary_sheets
         # Filter views down to the levels we actually emitted sheets for —
         # build_subpart_sheets may have skipped basements; their views

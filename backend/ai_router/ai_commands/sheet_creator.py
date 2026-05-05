@@ -353,6 +353,25 @@ def execute_sheet_creation(request):
             else:
                 levels_for_primary = levels
 
+            # If we already filled this category via sub-parts AND every
+            # original level was a duplicate (so levels_for_primary is now
+            # empty), DON'T call apply() — it would fall through to the
+            # generic batch-count path and create a spurious "CUSTOM SHEET"
+            # at the next free primary slot. We only skip this when the
+            # input WAS level-based; pure-batch (count-only) requests still
+            # go through apply().
+            input_was_level_based = bool(levels)
+            if (duplicate_choice == "subparts"
+                    and input_was_level_based
+                    and not levels_for_primary
+                    and sub_levels_in_cat):
+                debug_session(
+                    request,
+                    f"⏭ Skip apply() for {cat}: all {len(sub_levels_in_cat)} "
+                    "input levels became sub-parts; no primaries to allocate.",
+                )
+                continue
+
             req = {
                 "command": "create_sheet",
                 "sheet_category": cat,

@@ -243,6 +243,14 @@ def process_conversational_intent(raw_text_lower, request):
             target_name = "iso19650_4digit"
         else:
             target_name = "a49_dotted"
+        # Treat scheme toggle as a "fresh slate" signal (mirrors the greetings
+        # handler at the top of this file). Without this, any stale
+        # ai_pending_intent from earlier interactions (e.g. an Insert Standard
+        # Details wizard click that wasn't completed) leaks into the user's
+        # next workflow command and ask_for_missing_info fires on the wrong
+        # intent. ai_numbering_scheme is NOT in reset_pending's clear list, so
+        # the value we set on the next line survives the reset.
+        reset_pending(request)
         request.session["ai_numbering_scheme"] = target_name
         request.session.modified = True
 

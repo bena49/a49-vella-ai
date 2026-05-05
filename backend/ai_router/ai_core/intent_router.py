@@ -21,6 +21,7 @@ from ..ai_commands.comment import handle_send_comment
 from ..ai_commands.automate_tag import handle_automate_tag
 from ..ai_commands.automate_tag_nlp import handle_automate_tag_nlp, handle_nlp_tag_conversation, resume_pending_nlp_tag
 from ..ai_commands.automate_dim import handle_automate_dim
+from ..ai_commands.rename_preview import handle_rename_preview, handle_list_rename_operations
 
 
 # =====================================================================
@@ -283,6 +284,9 @@ ALLOWED_IMMEDIATE_COMMANDS = [
     "cache_dim_inventory",
     "cache_tag_inventory",
     "cache_level_inventory",
+    "rename_preview",
+    "list_rename_operations",
+    "clear_sheet_cache",
     "ui:help",
     "wizard:create_views",
     "wizard:create_sheets",
@@ -391,6 +395,25 @@ def dispatch_immediate_command(request, intent, gpt_json):
         
         return Response({"message": "", "status": "silent"})
 
+    # 💥 RENAME PREVIEW (Phase 2 wizard — stateless preview computation)
+    if intent == "rename_preview":
+        return handle_rename_preview(request)
+
+    # 💥 LIST RENAME OPERATIONS (Phase 2 wizard — operation registry lookup)
+    if intent == "list_rename_operations":
+        return handle_list_rename_operations(request)
+
+    # 💥 CLEAR SHEET CACHE — fired by the rename wizard right after a batch
+    # update so the next sheet-needing command refetches fresh data. Without
+    # this, ai_last_known_sheets carries stale numbers/names from before the
+    # rename and downstream commands (Create-and-Place ref-sheet validation,
+    # auto-detect of numbering scheme, etc.) make decisions on bad data.
+    if intent == "clear_sheet_cache":
+        request.session["ai_last_known_sheets"] = None
+        request.session.modified = True
+        debug_session(request, "🧹 Cleared ai_last_known_sheets cache")
+        return Response({"message": "", "status": "silent"})
+
     # 💥 INTERACTIVE ROOM PACKAGE
     if intent == "start_interactive_room_package":
         stage = gpt_json.get("stage_raw") or request.session.get("ai_pending_stage") or "CD"
@@ -453,6 +476,7 @@ def process_intent(request, raw_text_original):
         "send_comment",
         "cache_level_inventory", "cache_dim_inventory", "cache_tag_inventory",
         "automate_tag_nlp",
+        "rename_preview", "list_rename_operations", "clear_sheet_cache",
     )
     if request.session.get("ai_pending_intent") in _STALE_TRANSIENTS:
         debug_session(request, f"🧹 Cleared stale transient intent: {request.session.get('ai_pending_intent')}")
@@ -482,6 +506,7 @@ def process_intent(request, raw_text_original):
         "cache_tag_inventory", "cache_dim_inventory", "cache_level_inventory",
         "refresh_project_info",
         "send_comment",
+        "rename_preview", "list_rename_operations", "clear_sheet_cache",
     )
     if intent not in TRANSIENT_INTENTS:
         route_gpt_fields(request, gpt_json)

@@ -31,7 +31,17 @@ def fast_route_intent(user_text):
 
     if txt == "cache_level_inventory":
         return {"intent": "cache_level_inventory"}
-    
+
+    # Phase 2 rename wizard — direct dispatch from frontend (submitDirect path).
+    # Must be checked BEFORE the "rename" keyword fallback below, otherwise
+    # these get rerouted to fetch_project_inventory.
+    if txt == "rename_preview":
+        return {"intent": "rename_preview"}
+    if txt == "list_rename_operations":
+        return {"intent": "list_rename_operations"}
+    if txt == "clear_sheet_cache":
+        return {"intent": "clear_sheet_cache"}
+
     if any(word in txt for word in ["renumber", "rename", "inventory"]):
         return {"intent": "fetch_project_inventory"}
     

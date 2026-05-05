@@ -177,7 +177,7 @@ const {
   handleInsertStandardDetailsRequestPreview, handleInsertStandardDetailsSubmit,
   applyInsertStandardDetailsResult,
   closeWizard, updateWizardProps, updateInventoryProps
-} = useWizards(messages, scrollToBottom, handleUserSubmit, sendToBackend, sendToRevit, sessionKey);
+} = useWizards(messages, scrollToBottom, handleUserSubmit, sendToBackend, sendToRevit, sessionKey, submitDirect);
 
 // Wire up the proxy now that handleAction exists
 _handleAction = handleAction;

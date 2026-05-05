@@ -14,7 +14,10 @@ export function useWizards(
   handleUserSubmit: (text: string) => void,
   sendToBackend: (payload: any) => void,
   sendToRevit: (data: any) => void,
-  sessionKey: Ref<string | null>
+  sessionKey: Ref<string | null>,
+  // submitDirect — async POST to the chat backend that returns the raw JSON
+  // without touching chat state. Used by the rename wizard to fetch previews.
+  submitDirect?: (payload: any) => Promise<any>
 ) {
   // --- WIZARD VISIBILITY ---
   const showWizard            = ref(false);
@@ -65,7 +68,10 @@ export function useWizards(
       sendToRevit({ command: "fetch_project_info", args: { types: ["levels", "templates", "scope_boxes", "titleblocks", "sheets"] } });
     }
     else if (action === "wizard:rename_wizard") {
-      renameWizardProps.value = { inventoryData: { sheets: [], views: [] } };
+      renameWizardProps.value = {
+        inventoryData: { sheets: [], views: [] },
+        requestPreview: requestRenamePreview,
+      };
       sendToRevit({ command: "fetch_project_inventory" });
     }
     else if (action === "wizard:room_elevations") {
@@ -107,6 +113,29 @@ export function useWizards(
     showRenameWizard.value = false;
     sendToRevit({ revit_command: { command: "execute_batch_update", raw: { updates } } });
     messages.value.push({ from: "vella", text: `🔄 Applying ${updates.length} updates...` });
+    // Invalidate the backend's cached sheet list — the rename just changed
+    // numbers/names so any subsequent command that consults the cache (ref-
+    // sheet validation in Create-and-Place, scheme auto-detect in Create
+    // Sheets, etc.) would otherwise see stale data. Silent + stateless.
+    sendToBackend({ message: "clear_sheet_cache", session_key: sessionKey.value });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Rename wizard backend bridge — wraps submitDirect so the wizard can
+  // request a preview without knowing about HTTP / auth / session keys.
+  // ─────────────────────────────────────────────────────────────────────
+  async function requestRenamePreview(payload: { inventory: any[]; operation: string; params: any; selection?: string[] | null }) {
+    if (!submitDirect) {
+      return { status: "error", message: "Preview unavailable: backend bridge not wired." };
+    }
+    return await submitDirect({
+      message:     "rename_preview",
+      inventory:   payload.inventory,
+      operation:   payload.operation,
+      params:      payload.params,
+      selection:   payload.selection ?? null,
+      session_key: sessionKey.value,
+    });
   }
 
   function handleRoomElevationExecute(payload: any) {
@@ -287,7 +316,10 @@ export function useWizards(
 
   function updateInventoryProps(projectInventory: any) {
     if (!projectInventory || Object.keys(projectInventory).length === 0) return;
-    renameWizardProps.value = { inventoryData: projectInventory };
+    renameWizardProps.value = {
+      inventoryData:  projectInventory,
+      requestPreview: requestRenamePreview,
+    };
     showRenameWizard.value = true;
     wizardKey.value++;
   }

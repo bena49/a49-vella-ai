@@ -524,6 +524,34 @@ def _format_slot(sheet_type, slot, scheme=None):
     scheme = scheme or get_active_scheme()
     return f"{int(slot):0{scheme['digit_count']}d}"
 
+def _next_sub_slot(parent_sheet_number, existing_sheet_numbers):
+    """Return the next free integer sub-slot under a dotted parent number.
+
+    Example: parent='A1.03' with existing ['A1.03.1', 'A1.03.2'] → 3.
+    Returns 1 when no sub-slots exist yet, or None if the parent is empty.
+
+    Sub-slots are siblings of the parent (the parent itself does not count
+    as one), and the search is gap-fill: the lowest free positive integer
+    is returned so deleting 'A1.03.1' frees that slot for re-use.
+    """
+    if not parent_sheet_number:
+        return None
+    prefix = f"{parent_sheet_number}.".upper()
+    used = set()
+    for num in existing_sheet_numbers or ():
+        s = str(num or "").strip().upper()
+        if s.startswith(prefix):
+            tail = s[len(prefix):]
+            try:
+                used.add(int(tail))
+            except (ValueError, TypeError):
+                pass
+    n = 1
+    while n in used:
+        n += 1
+    return n
+
+
 def _range_size(scheme):
     """Per-category slot capacity for the given scheme.
     iso19650_4digit: 1000 (A0=0-999, A1=1000-1999, …)
@@ -1091,18 +1119,63 @@ def build_sheets_payload(request_data, existing_sheet_numbers, scheme=None):
 
     level_based = _level_based_categories(scheme)
 
+    # a49_dotted attaches mezzanines (M-suffix levels) to their parent floor as
+    # sub-parts: B1 → A1.01, B1M → A1.01.1; L2 → A1.03, L2M → A1.03.1. The
+    # iso19650 schemes encode mezzanines in the digit slot already (e.g.
+    # 5-digit 10110 is L1's mezz via the tens digit), so they should NOT use
+    # this routing — keep them on the legacy primary-slot path.
+    is_dotted = scheme is not None and scheme.get("digit_count") is None
+
     if levels and sheet_type in level_based:
+        # (prefix, digit) → primary sheet number, populated as we allocate
+        # parent floors so subsequent mezz levels can attach beneath them.
+        # Levels are sorted by elevation upstream (sheet_creator.py), so a
+        # parent always appears before its mezz in this loop.
+        level_to_slot = {}
+
         for lvl in levels:
-            num = get_next_sheet_number(sheet_type, existing_sheet_numbers,
-                                        level_name=lvl,
-                                        project_levels=project_levels,
-                                        request_levels=levels,
-                                        scheme=scheme)
+            num = None
+            mezz_parent_num = None
+
+            if is_dotted:
+                from .level_matcher import extract_level_signature
+                sig = extract_level_signature(lvl)
+                is_mezz = ((sig.get("suffix") or "").upper() == "M"
+                           and sig.get("digit") is not None)
+                if is_mezz:
+                    parent_key = ((sig.get("prefix") or "L"), sig["digit"])
+                    mezz_parent_num = level_to_slot.get(parent_key)
+
+            if mezz_parent_num:
+                sub_n = _next_sub_slot(mezz_parent_num, existing_sheet_numbers)
+                if sub_n is not None:
+                    num = f"{mezz_parent_num}.{sub_n}"
+
+            # Fall through to primary-slot allocation when:
+            #   - the scheme isn't dotted, or
+            #   - this isn't a mezz level, or
+            #   - the parent floor wasn't created in this batch.
+            if num is None:
+                num = get_next_sheet_number(sheet_type, existing_sheet_numbers,
+                                            level_name=lvl,
+                                            project_levels=project_levels,
+                                            request_levels=levels,
+                                            scheme=scheme)
             if not num:
                 # Invalid combo (e.g. A5+SITE) — skip silently; caller decides
                 # whether to surface "no sheets created" message.
                 continue
             existing_sheet_numbers.append(num)
+
+            # Record this level's slot so a later M-suffix sibling can attach
+            # to it. Only the parent (no suffix) is registered.
+            if is_dotted:
+                from .level_matcher import extract_level_signature
+                sig = extract_level_signature(lvl)
+                if (sig.get("digit") is not None
+                        and (sig.get("suffix") or "").upper() != "M"):
+                    level_to_slot[((sig.get("prefix") or "L"), sig["digit"])] = num
+
             final_name = user_name if user_name else generate_smart_name(
                 sheet_type, sheet_number=num, level_name=lvl, scheme=scheme)
             sheets.append(create_payload(num, final_name.upper()))

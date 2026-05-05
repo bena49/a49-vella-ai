@@ -175,21 +175,46 @@ def execute_sheet_creation(request):
     levels = request.session.get("ai_pending_levels_parsed")
 
     # SORT LEVELS LOGIC
+    #
+    # Sheet allocation depends on level order (mezzanines must be processed
+    # AFTER their parent floor so they can attach as sub-parts). The most
+    # reliable signal is the actual Revit elevation, which the C# add-in
+    # caches per session as ai_last_known_levels = [{name, elevation_mm}, …].
+    # We use that when available; otherwise we fall back to a heuristic
+    # that orders by category (basement → site → numbered floor → roof) and
+    # uses the embedded digit as a tiebreaker.
     if levels:
-        def level_sort_key(lvl_token):
+        project_levels_cache = request.session.get("ai_last_known_levels") or []
+        elev_lookup = {}
+        for entry in project_levels_cache:
+            if isinstance(entry, dict):
+                nm = (entry.get("name") or "").strip()
+                if nm:
+                    elev_lookup[nm.upper()] = entry.get("elevation_mm")
+
+        # Heuristic fallback. Substring checks are ordered carefully:
+        # ROOF/TOP first so 'TOP' isn't pulled into the 'P' (parking) bucket.
+        def heuristic_key(lvl_token):
             upper = lvl_token.upper()
-            if "B" in upper: 
-                 num = int(re.search(r'\d+', upper).group()) if re.search(r'\d+', upper) else 0
-                 return (0, num) 
-            if "P" in upper:
-                 num = int(re.search(r'\d+', upper).group()) if re.search(r'\d+', upper) else 0
-                 return (1, num) 
-            if "SITE" in upper: return (2, 0)
-            if "L" in upper or "LEVEL" in upper:
-                 num = int(re.search(r'\d+', upper).group()) if re.search(r'\d+', upper) else 0
-                 return (3, num) 
-            if "ROOF" in upper or "RF" in upper: return (4, 0)
+            digit_match = re.search(r'\d+', upper)
+            num = int(digit_match.group()) if digit_match else 0
+            if "ROOF" in upper or upper in ("TOP", "RF"): return (4, 999)
+            if upper.startswith("B"):  return (0, num)
+            if upper.startswith("P"):  return (1, num)
+            if "SITE" in upper:        return (2, 0)
+            if upper.startswith("L") or "LEVEL" in upper: return (3, num)
             return (5, 0)
+
+        def level_sort_key(lvl_token):
+            elev = elev_lookup.get(lvl_token.upper())
+            if isinstance(elev, (int, float)):
+                # Real elevation wins. Tuple shape matches the heuristic so
+                # a mixed batch (some known, some not) sorts coherently.
+                return (0, float(elev))
+            # Unknown level → fall back to the heuristic but tag with a
+            # sentinel high value so known-elevation levels always sort first.
+            heur = heuristic_key(lvl_token)
+            return (1, heur)
 
         levels = sorted(levels, key=level_sort_key)
 

@@ -1155,8 +1155,6 @@ ISO_SUB_SLOT_CASES = [
                                       [f"101{n}" for n in range(1, 10)],
                                       None),
     ("V1 L5 sub-part",                V1, "A1", 1050, [],                              1051),
-    ("V1 B1 (basement) → None — no sub-slot room",
-                                      V1, "A1", 1009, [],                              None),
 
     # ── 5-digit (V2) ─────────────────────────────────────────────────
     ("V2 L1 first sub-part",          V2, "A1", 10100, [],                             10110),
@@ -1167,12 +1165,33 @@ ISO_SUB_SLOT_CASES = [
                                       [str(10100 + i*10) for i in range(1, 10)],
                                       None),
     ("V2 L5 sub-part",                V2, "A1", 10500, [],                             10510),
-    ("V2 B1 (basement) → None — no sub-slot room (B1 borders L1)",
-                                      V2, "A1", 10090, [],                             None),
+
+    # ── 5-digit BASEMENT sub-parts (units digit) ────────────────────
+    # iso19650_5digit basements are spaced 10 apart (B1M=10090, B1=10080,
+    # B2=10070…), leaving the units digit free for sub-parts.
+    # basement_sub_increment=1 enables 9 sub-slots per basement primary.
+    ("V2 B1M first sub-part (parent 10090)",
+                                      V2, "A1", 10090, ["10080", "10090", "10100"],   10091),
+    ("V2 B1  first sub-part (parent 10080) — doesn't collide with B1M",
+                                      V2, "A1", 10080, ["10080", "10090", "10100"],   10081),
+    ("V2 B1M sub-part gap fill (10091 used)",
+                                      V2, "A1", 10090, ["10090", "10091", "10100"],   10092),
+    ("V2 B1M sub-part fills hole (10091/10092/10094 used)",
+                                      V2, "A1", 10090, ["10090", "10091", "10092", "10094"], 10093),
+    ("V2 B1M all 9 sub-parts taken → None",
+                                      V2, "A1", 10090,
+                                      ["10090"] + [str(10091 + i) for i in range(9)],
+                                      None),
+
+    # ── 4-digit BASEMENT still rejected (no basement_sub_increment) ──
+    ("V1 B1 (basement) → None — 4-digit has no room (B1 borders L1)",
+                                      V1, "A1", 1009, [],                              None),
 
     # ── A5 ceiling — same shape as A1 ────────────────────────────────
     ("V1 A5 L1 sub-part",             V1, "A5", 5010, [],                              5011),
     ("V2 A5 L1 sub-part",             V2, "A5", 50100, [],                             50110),
+    ("V2 A5 B1M sub-part (basement → units digit)",
+                                      V2, "A5", 50090, ["50080", "50090", "50100"],   50091),
 
     # ── a49_dotted (V3) — caller should use _next_sub_slot, not this ─
     # but verify defensive behavior: dotted has no level_increment so the
@@ -1267,12 +1286,42 @@ SUBPART_BUILD_CASES = [
      ["10100", "10110", "10120"],
      ["10130"], []),
 
-    ("V2 B1 (basement) → SKIPPED",
+    # iso19650_5digit basements get sub-parts via the units digit (added
+    # post-launch — basement_sub_increment=1 enables 9 slots per primary).
+    ("V2 B1M duplicate → 10091 (units-digit sub-part)",
+     V2, "A1",
+     [{"level": "B1M", "proposed_name": "LEVEL B1M FLOOR PLAN",
+       "existing_number": "10090", "existing_name": "LEVEL B1M FLOOR PLAN"}],
+     ["10080", "10090", "10100"],
+     ["10091"], []),
+
+    ("V2 B1 duplicate (with B1M present) → 10081 (doesn't collide with 10090)",
      V2, "A1",
      [{"level": "B1", "proposed_name": "LEVEL B1 FLOOR PLAN",
-       "existing_number": "10090", "existing_name": "LEVEL B1 FLOOR PLAN"}],
-     ["10090"],
-     [], ["B1"]),
+       "existing_number": "10080", "existing_name": "LEVEL B1 FLOOR PLAN"}],
+     ["10080", "10090", "10100"],
+     ["10081"], []),
+
+    ("V2 B1M with 10091 already → 10092 (gap-fill in basement sub-slots)",
+     V2, "A1",
+     [{"level": "B1M", "proposed_name": "LEVEL B1M FLOOR PLAN",
+       "existing_number": "10090", "existing_name": "LEVEL B1M FLOOR PLAN"}],
+     ["10090", "10091", "10100"],
+     ["10092"], []),
+
+    ("V2 B1M with all 9 sub-slots taken → SKIPPED with reason",
+     V2, "A1",
+     [{"level": "B1M", "proposed_name": "LEVEL B1M FLOOR PLAN",
+       "existing_number": "10090", "existing_name": "LEVEL B1M FLOOR PLAN"}],
+     ["10090"] + [str(10091 + i) for i in range(9)],
+     [], ["B1M"]),
+
+    ("V2 A5 B1M duplicate → 50091 (basement sub-parts also work for ceiling plans)",
+     V2, "A5",
+     [{"level": "B1M", "proposed_name": "LEVEL B1M CEILING PLAN",
+       "existing_number": "50090", "existing_name": "LEVEL B1M CEILING PLAN"}],
+     ["50080", "50090", "50100"],
+     ["50091"], []),
 
     # ── Empty input ──────────────────────────────────────────────────
     ("Empty duplicate list → empty payloads + empty skipped",

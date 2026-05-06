@@ -226,6 +226,12 @@ COVER_TITLEBLOCK = {"family": "A49_TB_A1_Horizontal_Cover", "type": "Cover"}
 #                       (e.g. L1 = base+10, L2 = base+20 → +10)
 #   sub_level_increment . only "level" type — step for M/T variants
 #                         (collisions on L1 push +1 in iso19650_4digit)
+#   basement_sub_increment . optional, only "level" type — stride for sub-parts
+#                         under a BASEMENT primary slot. iso19650_5digit uses
+#                         the units digit (=1) so 10090 (B1M) gets sub-parts
+#                         10091..10099. Omit (or set 0) to keep the existing
+#                         "skip with warning" behavior — iso19650_4digit can't
+#                         fit basement sub-parts because basements are 1 apart.
 #   site_slots ........ only "level" type — count of SITE slots reserved at
 #                       the very base (A1 has 1 in 4-digit; A5 has 0 = no SITE)
 #   basement_count .... only "level" type — max basement number supported
@@ -335,12 +341,14 @@ SCHEMES = {
                    "named_slots": ["COVER", "DRAWING INDEX", "SITE AND VICINITY PLAN",
                                    "STANDARD SYMBOLS", "SAFETY PLAN", "WALL TYPES"]},
             "A1": {"type": "level",    "base": 10000, "level_increment": 100, "sub_level_increment": 10,
+                                       "basement_sub_increment": 1,
                                        "site_slots": 10, "basement_count": 9, "roof_offset": "auto",
                                        "format": "{:05d}"},
             "A2": {"type": "sequence", "base": 20000, "primary_increment": 100, "sub_increment": 10, "format": "{:05d}"},
             "A3": {"type": "sequence", "base": 30000, "primary_increment": 100, "sub_increment": 10, "format": "{:05d}"},
             "A4": {"type": "sequence", "base": 40000, "primary_increment": 100, "sub_increment": 10, "format": "{:05d}"},
             "A5": {"type": "level",    "base": 50000, "level_increment": 100, "sub_level_increment": 10,
+                                       "basement_sub_increment": 1,
                                        "site_slots": 0, "basement_count": 9, "roof_offset": "auto",
                                        "format": "{:05d}"},
             # A6 reordered per V2 spec: FLOOR PATTERN first, TOILET second.
@@ -608,6 +616,36 @@ def detect_duplicate_levels(category, levels, existing_inventory, scheme=None):
     return out
 
 
+def _iso_sub_stride(parent_slot, scheme, category):
+    """Return (stride, upper_bound) for sub-slot allocation under a parent in
+    an iso19650 numeric scheme, or (None, None) if the parent doesn't admit
+    sub-parts.
+
+    Two cases:
+      - Above-grade primary (offset aligned to level_increment): stride is
+        sub_level_increment, window is one level_increment wide.
+      - Basement primary (offset aligned to sub_increment but NOT
+        level_increment): stride is basement_sub_increment if the scheme
+        opts in, window is one sub_increment wide. Otherwise rejected.
+    """
+    if scheme is None:
+        return None, None
+    cat_def = scheme.get("categories", {}).get(category, {})
+    sub_inc = cat_def.get("sub_level_increment") or 0
+    level_inc = cat_def.get("level_increment") or 0
+    base = cat_def.get("base", 0) or 0
+    if sub_inc <= 0 or level_inc <= 0 or sub_inc >= level_inc:
+        return None, None
+    offset = parent_slot - base
+    if offset % level_inc == 0:
+        return sub_inc, parent_slot + level_inc
+    if offset % sub_inc == 0:
+        basement_stride = cat_def.get("basement_sub_increment") or 0
+        if 0 < basement_stride < sub_inc:
+            return basement_stride, parent_slot + sub_inc
+    return None, None
+
+
 def _next_iso_sub_slot(parent_slot, scheme, category, existing_sheet_numbers):
     """Next free sub-slot in iso19650 numeric format. Mirrors a49_dotted's
     _next_sub_slot but encodes the sub-part in the trailing digit(s) per the
@@ -616,9 +654,12 @@ def _next_iso_sub_slot(parent_slot, scheme, category, existing_sheet_numbers):
     iso19650_4digit: parent=1010 (LEVEL 1), sub-parts 1011-1019 (sub_inc=1).
     iso19650_5digit: parent=10100 (LEVEL 1), sub-parts 10110-10190 (sub_inc=10).
 
-    Basement primary slots (e.g. 4-digit B1=1009, 5-digit B1=10090) sit
-    immediately below the next level's primary, so they have ZERO sub-slot
-    room — return None and let the caller fall back to skip-with-warning.
+    Basements:
+      - iso19650_4digit basements (1009, 1008, …) are spaced 1 apart, so there
+        is no numeric room for sub-parts — return None and skip-with-warning.
+      - iso19650_5digit basements (10090, 10080, …) are spaced 10 apart, so
+        the units digit is free for sub-parts: B1M=10090 → 10091..10099.
+        Enabled by setting `basement_sub_increment: 1` in the category config.
 
     Args:
         parent_slot: integer slot of the existing sheet, e.g. 1010 or 10100.
@@ -628,37 +669,24 @@ def _next_iso_sub_slot(parent_slot, scheme, category, existing_sheet_numbers):
 
     Returns:
         Integer slot for the next free sub-part, or None if the parent has
-        no sub-slot room (basement, or all 9 sub-slots already used).
+        no sub-slot room (basement in a scheme without basement_sub_increment,
+        or all available sub-slots already used).
     """
-    if scheme is None:
-        return None
-    cat_def = scheme.get("categories", {}).get(category, {})
-    sub_inc = cat_def.get("sub_level_increment") or 0
-    level_inc = cat_def.get("level_increment") or 0
-    if sub_inc <= 0 or level_inc <= 0 or sub_inc >= level_inc:
+    stride, upper_bound = _iso_sub_stride(parent_slot, scheme, category)
+    if stride is None:
         return None
 
-    # Primary slots align to multiples of level_increment from the category
-    # base. A basement slot doesn't align (e.g. 1009 - 1000 = 9, not divisible
-    # by level_increment 10) — sub-slots between basements would collide
-    # with the next-deeper basement's primary, so refuse.
-    base = cat_def.get("base", 0) or 0
-    if (parent_slot - base) % level_inc != 0:
-        return None
-
-    # Sub-slots live in the open interval (parent_slot, parent_slot+level_inc),
-    # stepping by sub_inc. e.g. 4-digit L1: 1011, 1012 ... 1019 (9 slots).
     used = set()
     for num in existing_sheet_numbers or ():
         slot, cat = _parse_slot(num, scheme)
         if slot is not None and cat == category:
             used.add(slot)
 
-    candidate = parent_slot + sub_inc
-    while candidate < parent_slot + level_inc:
+    candidate = parent_slot + stride
+    while candidate < upper_bound:
         if candidate not in used:
             return candidate
-        candidate += sub_inc
+        candidate += stride
     return None  # All sub-slots taken
 
 
@@ -692,7 +720,6 @@ def build_subpart_sheets(category, duplicates, existing_sheet_numbers,
         return payloads, skipped
 
     is_dotted = scheme is not None and scheme.get("digit_count") is None
-    cat_def = (scheme or {}).get("categories", {}).get(category, {})
 
     for d in duplicates:
         parent_num = d.get("existing_number")
@@ -718,16 +745,21 @@ def build_subpart_sheets(category, duplicates, existing_sheet_numbers,
                 continue
             sub_slot = _next_iso_sub_slot(parent_slot, scheme, category, existing_sheet_numbers)
             if sub_slot is None:
-                # Most common cause: basement primaries (1009, 10090) sit
-                # immediately below the next level's primary, so there's no
-                # numeric room for sub-parts in iso19650. Caller should
-                # surface this in the success message so the user knows.
+                # iso19650_4digit basements (B1=1009 etc.) are spaced 1 apart
+                # and sit immediately below L1=1010, so they have no room for
+                # sub-parts in this scheme. iso19650_5digit handles basement
+                # sub-parts via basement_sub_increment; if THAT is full too,
+                # all 9 units-digit slots are already used.
                 skipped.append({"level": level,
-                                "reason": "basement has no sub-slot room in this scheme"})
+                                "reason": "this scheme doesn't support basement sub-parts (or all sub-slots are taken)"})
                 continue
             new_num = _format_slot(category, sub_slot, scheme)
-            sub_inc = cat_def.get("sub_level_increment") or 1
-            ordinal = (sub_slot - parent_slot) // sub_inc
+            # Use the same stride that allocated the slot so the ordinal lines
+            # up with what the user sees in the sheet number — units-digit
+            # stride for basements (10091 → Part 1), sub_level_increment for
+            # above-grade levels (1011 → Part 1, 10110 → Part 1).
+            stride, _ = _iso_sub_stride(parent_slot, scheme, category)
+            ordinal = (sub_slot - parent_slot) // (stride or 1)
 
         new_name = f"{proposed} (Part {ordinal})"
         sheet = make_standard_sheet(category, new_num, new_name.upper(), stage)

@@ -142,9 +142,9 @@ def finalize_create_and_place(request):
                 lines.append(f"  • {d['existing_number']} — {d['existing_name']}")
             lines.append("")
             lines.append("What would you like to do? Reply with one of:")
-            lines.append("  • **cancel** — abort, no sheets created")
-            lines.append("  • **skip** — only create sheets for new (non-duplicate) levels")
-            lines.append("  • **sub-sheets** — create duplicates as sub-parts of the existing sheets")
+            lines.append("  • ** cancel ** — abort, no sheets created")
+            lines.append("  • ** skip ** — only create sheets for new (non-duplicate) levels")
+            lines.append("  • ** sub-sheets ** — create duplicates as sub-parts of the existing sheets")
             return Response({
                 "message": "\n".join(lines),
                 "options": ["Cancel", "Skip duplicates", "Create as sub-sheets"],

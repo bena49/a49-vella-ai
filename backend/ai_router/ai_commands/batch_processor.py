@@ -112,7 +112,7 @@ def finalize_create_and_place(request):
         raw_msg_l = (request.data.get("message", "") or "").strip().lower()
         if _re.search(r'\b(cancel|abort|stop|nevermind|never\s*mind)\b', raw_msg_l):
             duplicate_choice = "cancel"
-        elif _re.search(r'\b(sub[\s\-]?parts?)\b', raw_msg_l) or "create as sub" in raw_msg_l:
+        elif _re.search(r'\b(sub[\s\-]?(?:parts?|sheets?))\b', raw_msg_l) or "create as sub" in raw_msg_l:
             duplicate_choice = "subparts"
         elif _re.search(r'\bskip(\s+dup\w*)?\b', raw_msg_l):
             duplicate_choice = "skip"
@@ -142,12 +142,12 @@ def finalize_create_and_place(request):
                 lines.append(f"  • {d['existing_number']} — {d['existing_name']}")
             lines.append("")
             lines.append("What would you like to do? Reply with one of:")
-            lines.append("  • **cancel** — abort, no sheets created")
-            lines.append("  • **skip** — only create new (non-duplicate) levels")
-            lines.append("  • **sub-parts** — attach duplicates as sub-parts of existing sheets")
+            lines.append("  • ** cancel ** — abort, no sheets created")
+            lines.append("  • ** skip ** — only create sheets for new (non-duplicate) levels")
+            lines.append("  • ** sub-sheets ** — create duplicates as sub-parts of the existing sheets")
             return Response({
                 "message": "\n".join(lines),
-                "options": ["Cancel", "Skip duplicates", "Create as sub-parts"],
+                "options": ["Cancel", "Skip duplicates", "Create as sub-sheets"],
             })
 
     duplicate_levels_set = {d["level"] for d in duplicate_info}

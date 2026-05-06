@@ -277,7 +277,7 @@ def execute_sheet_creation(request):
         raw_msg_l = (request.data.get("message", "") or "").strip().lower()
         if re.search(r'\b(cancel|abort|stop|nevermind|never\s*mind)\b', raw_msg_l):
             duplicate_choice = "cancel"
-        elif re.search(r'\b(sub[\s\-]?parts?)\b', raw_msg_l) or "create as sub" in raw_msg_l:
+        elif re.search(r'\b(sub[\s\-]?(?:parts?|sheets?))\b', raw_msg_l) or "create as sub" in raw_msg_l:
             duplicate_choice = "subparts"
         elif re.search(r'\bskip(\s+dup\w*)?\b', raw_msg_l):
             duplicate_choice = "skip"
@@ -314,12 +314,12 @@ def execute_sheet_creation(request):
                 lines.append(f"  • {d['existing_number']} — {d['existing_name']}")
             lines.append("")
             lines.append("What would you like to do? Reply with one of:")
-            lines.append("  • **cancel** — abort, no sheets created")
-            lines.append("  • **skip** — only create sheets for new (non-duplicate) levels")
-            lines.append("  • **sub-parts** — create duplicates as sub-parts of the existing sheets")
+            lines.append("  • ** cancel ** — abort, no sheets created")
+            lines.append("  • ** skip ** — only create sheets for new (non-duplicate) levels")
+            lines.append("  • ** sub-sheets ** — create duplicates as sub-parts of the existing sheets")
             return Response({
                 "message": "\n".join(lines),
-                "options": ["Cancel", "Skip duplicates", "Create as sub-parts"],
+                "options": ["Cancel", "Skip duplicates", "Create as sub-sheets"],
             })
 
     # Choice resolved (or never needed). Apply branch behavior.
@@ -464,7 +464,7 @@ def execute_sheet_creation(request):
                 for s in skipped_subpart_levels
             )
             return message(
-                "⚠ Could not create sub-parts for the following levels — "
+                "⚠ Could not create sub-sheets for the following levels — "
                 "this scheme has no sub-slot room for them:\n" + skipped_lines +
                 "\n\nUse the Manual Edit wizard if you need to add them at a different slot."
             )
@@ -484,7 +484,7 @@ def execute_sheet_creation(request):
             for s in skipped_subpart_levels
         )
         response.data["message"] = (
-            "ℹ Some levels couldn't be added as sub-parts under their parent and were skipped:\n"
+            "ℹ Some levels couldn't be added as sub-sheets under their parent and were skipped:\n"
             + skipped_lines +
             "\n(Use Manual Edit if you need to give them a custom slot.)"
         )

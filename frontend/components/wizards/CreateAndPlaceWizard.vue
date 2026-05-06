@@ -267,6 +267,8 @@
                        class="w-full bg-[#0A1D4A]/50 border rounded-lg px-3 py-2 text-sm text-white outline-none font-mono focus:bg-[#0A1D4A]/80 transition"
                        :class="isValidReference ? 'border-[#00BCD4]/50 focus:border-[#00BCD4]' : 'border-red-500/50 focus:border-red-500'"
                        @focus="isRefSheetOpen = true"
+                       @click="isRefSheetOpen = true"
+                       @input="isRefSheetOpen = true"
                 />
 
                 <div v-if="isRefSheetOpen"
@@ -333,7 +335,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
 import { getFilteredTemplates, getFilteredScopeBoxes } from '~/utils/a49Standards';
 
 const props = defineProps({
@@ -557,24 +559,22 @@ const filteredReferenceSheets = computed(() => {
     );
 });
 
-// When the user picks "Match Reference", auto-focus the input and open the
-// dropdown so they immediately see what's available without needing to click
-// into the field. Same trick for "Center" → close the dropdown.
-//
-// Use `await nextTick()` (not the callback form) so the watcher reliably
-// waits for the v-if'd input to mount — without this the input ref is still
-// null when we try to focus it, which is what was causing the "click into
-// the box, then click out, then click back in" workaround.
-watch(() => form.placement, async (mode) => {
-    if (mode === 'MATCH') {
-        await nextTick();
-        // Second tick guards against the rare case where the v-if subtree
-        // mounts a render pass later than the watcher fires.
-        await nextTick();
-        refSheetInput.value?.focus?.();
-        isRefSheetOpen.value = true;
-    } else {
+// Switching AWAY from MATCH closes the dropdown immediately.
+watch(() => form.placement, (mode) => {
+    if (mode !== 'MATCH') {
         isRefSheetOpen.value = false;
+    }
+});
+
+// Auto-focus + open dropdown the instant the v-if'd input actually mounts.
+// Watching `refSheetInput` itself (instead of the placement mode + nextTick
+// dance) sidesteps the timing race that previously left the input mounted
+// but unfocused — the symptom was "click in field → nothing happens, click
+// out then click back in to see the list".
+watch(refSheetInput, (input) => {
+    if (input && form.placement === 'MATCH') {
+        input.focus();
+        isRefSheetOpen.value = true;
     }
 });
 

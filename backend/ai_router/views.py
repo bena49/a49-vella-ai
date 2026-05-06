@@ -280,9 +280,9 @@ def ai_router(request):
                 return Response({
                     "message": (
                         "I didn't catch that. Please reply with one of:\n"
-                        "  • **cancel** — abort, no sheets created\n"
-                        "  • **skip** — only create sheets for new (non-duplicate) levels\n"
-                        "  • **sub-parts** — create duplicates as sub-parts of the existing sheets"
+                        "  • ** cancel ** — abort, no sheets created\n"
+                        "  • ** skip ** — only create sheets for new (non-duplicate) levels\n"
+                        "  • ** sub-sheets ** — create duplicates as sub-parts of the existing sheets"
                     )
                 })
 

@@ -58,4 +58,26 @@
 			SkipUnchangedFiles="true"
 			ContinueOnError="true" />
 	</Target>
+
+	<!--
+	  Auto-deploy after every build. Mirrors the deploy target in
+	  revit-addin/A49AIRevitAssistant.csproj so 2021 ↔ 2024/2025 stay
+	  consistent. Single config (RR2021) + single TFM (net48), so no
+	  framework-filtering needed (unlike the multi-version project).
+	-->
+	<Target Name="DeployToRevitAddins" AfterTargets="CopyWebView2Loader">
+		<PropertyGroup>
+			<RevitVersion Condition="'$(Configuration)' == 'RR2021'">2021</RevitVersion>
+			<RevitAddinDir>C:\ProgramData\Autodesk\Revit\Addins\$(RevitVersion)\A49AIRevitAssistantAddin</RevitAddinDir>
+		</PropertyGroup>
+		<Exec
+			Command='xcopy /Y /I /E /Q "$(TargetDir)*" "$(RevitAddinDir)\"'
+			Condition="'$(RevitVersion)' != '' And Exists('C:\ProgramData\Autodesk\Revit\Addins\$(RevitVersion)\')"
+			ContinueOnError="true"
+			IgnoreExitCode="true" />
+		<Message
+			Condition="'$(RevitVersion)' != '' And Exists('C:\ProgramData\Autodesk\Revit\Addins\$(RevitVersion)\')"
+			Text="Vella → deployed $(TargetFramework) build to $(RevitAddinDir)\"
+			Importance="high" />
+	</Target>
 </Project>

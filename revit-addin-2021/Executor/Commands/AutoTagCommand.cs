@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // A49AIRevitAssistant/Executor/Commands/AutoTagCommand.cs
 // ============================================================================
 // Unified tagging orchestrator for the "Automate Tagging" wizard.
@@ -15,6 +15,17 @@
 //   }
 //
 // Results sent directly to Vue via SendRawMessage.
+//
+// Revit 2021 adaptations vs canonical (revit-addin/):
+//   - new ElementId(long) → new ElementId((int)long)
+//   - ElementId.Value → ElementId.IntegerValue
+//   - Reference.LinkedElementId is Revit 2022+ — CollectTaggedFloorKeys
+//     simplifies to host-only floor keys (linked-floor dedup unavailable).
+//   - Reference.CreateLinkReference is Revit 2022+ — FindFloorRefForRoom's
+//     linked-floor branch is unreachable in 2021 (LinkedTagHelpers.EnumerateLinks
+//     yields nothing) AND defensively `continue`s if it ever does run.
+//   - Linked-room spot-elevation paths are dead code in 2021 (EnumerateLinks
+//     stub) but kept structurally for parity with revit-addin/.
 // ============================================================================
 
 using System;
@@ -217,9 +228,6 @@ namespace A49AIRevitAssistant.Executor.Commands
         // ============================================================================
         // SPOT ELEVATION — ORCHESTRATOR
         // ============================================================================
-        // Handles FloorPlan and Section views independently because they need
-        // different SpotDimensionTypes and different element targets.
-        // ============================================================================
         private string ExecuteSpotElevation(Document doc, JObject payload, List<ElementId> viewIds, bool skipTagged)
         {
             string planTypeName    = payload.Value<string>("spot_plan_type")    ?? "";
@@ -311,10 +319,6 @@ namespace A49AIRevitAssistant.Executor.Commands
         // ============================================================================
         // SPOT ELEVATION — FLOOR PLAN
         // ============================================================================
-        // Iterates rooms visible in the floor plan view.
-        // For each room, finds the floor slab beneath it and places a SpotElevation
-        // on the slab's top face, offset 500 mm "below" the room centre in screen space.
-        // ============================================================================
         private int TagRoomsWithSpotElevation(Document doc, View view, SpotDimensionType spotType, bool skipTagged)
         {
             int tagged = 0;
@@ -326,34 +330,14 @@ namespace A49AIRevitAssistant.Executor.Commands
                 .Where(r => r.Area > 0 && r.Location != null)
                 .ToList();
 
-            // Pre-collect floor IDs that already have a SpotDimension in this view.
-            var taggedFloorIds = new HashSet<long>();
-            if (skipTagged)
-            {
-                try
-                {
-                    var existingSpots = new FilteredElementCollector(doc, view.Id)
-                        .OfClass(typeof(SpotDimension))
-                        .Cast<SpotDimension>();
-                    foreach (SpotDimension sd in existingSpots)
-                    {
-                        try
-                        {
-                            var dim = sd as Dimension;
-                            if (dim?.References != null)
-                                foreach (Reference r in dim.References)
-                                    if (r?.ElementId != null) taggedFloorIds.Add(r.ElementId.IntegerValue);
-                        }
-                        catch { }
-                    }
-                }
-                catch { }
-            }
+            // Pre-collect dedup keys for floors already tagged in this view.
+            var taggedFloorKeys = skipTagged
+                ? CollectTaggedFloorKeys(doc, view)
+                : new HashSet<string>();
 
             // Two-phase placement:
             //   1. Place each spot elevation directly at the room centre (zero-length leader).
-            //   2. After the loop, batch-move all newly placed tags 500 mm "down on screen"
-            //      using ElementTransformUtils — equivalent to a manual select-all + Move.
+            //   2. After the loop, batch-move all newly placed tags 500 mm "down on screen".
             var newSpotIds = new List<ElementId>();
 
             foreach (Room room in rooms)
@@ -363,18 +347,17 @@ namespace A49AIRevitAssistant.Executor.Commands
                     var locPt = room.Location as LocationPoint;
                     if (locPt == null) continue;
 
-                    var (faceRef, floorTopZ, _) = GetFloorTopFaceInfo(doc, room, locPt.Point);
+                    var (faceRef, originHost, dedup, foundLabel) =
+                        FindFloorRefForRoom(doc, view, null, room, locPt.Point);
                     if (faceRef == null) continue;
+                    if (skipTagged && dedup != null && taggedFloorKeys.Contains(dedup)) continue;
 
-                    if (skipTagged && taggedFloorIds.Contains(faceRef.ElementId.IntegerValue)) continue;
-
-                    // Phase 1: place at room centre. origin = bend = end so the leader
-                    // is zero-length. hasLeader=true is required for `end` to position
-                    // the text — otherwise the SpotDimensionType's default text-offset
-                    // shifts the value 700 mm to the right.
-                    XYZ origin = new XYZ(locPt.Point.X, locPt.Point.Y, floorTopZ);
-                    SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, origin, origin, origin, origin, true);
-                    if (sd == null) continue;
+                    SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, originHost, originHost, originHost, originHost, true);
+                    if (sd == null)
+                    {
+                        A49Logger.Log($"⚠️ SpotElev plan: NewSpotElevation returned null for host room {room.Id.IntegerValue} (floor source: {foundLabel})");
+                        continue;
+                    }
 
                     try { sd.ChangeTypeId(spotType.Id); } catch { }
                     newSpotIds.Add(sd.Id);
@@ -386,8 +369,58 @@ namespace A49AIRevitAssistant.Executor.Commands
                 }
             }
 
+            // ────────────────────────────────────────────────────────────
+            // LINKED PASS — REVIT 2021: stubbed via LinkedTagHelpers
+            // (yields nothing). Loop body never executes. Kept for parity.
+            // ────────────────────────────────────────────────────────────
+            foreach (var link in TagStrategies.LinkedTagHelpers.EnumerateLinks(doc, view))
+            {
+                IEnumerable<Room> linkedRooms;
+                try
+                {
+                    linkedRooms = new FilteredElementCollector(link.Document)
+                        .OfCategory(BuiltInCategory.OST_Rooms)
+                        .WhereElementIsNotElementType()
+                        .Cast<Room>()
+                        .Where(r => r.Area > 0 && r.Location != null);
+                }
+                catch (Exception ex)
+                {
+                    A49Logger.Log($"⚠️ SpotElev linked doc '{link.Document.Title}': {ex.Message}");
+                    continue;
+                }
+
+                foreach (Room room in linkedRooms)
+                {
+                    try
+                    {
+                        var locPt = room.Location as LocationPoint;
+                        if (locPt == null) continue;
+
+                        XYZ pointHost = link.Transform.OfPoint(locPt.Point);
+                        if (view.CropBoxActive && !TagHelpers.IsElementInCropRegion(view, pointHost))
+                            continue;
+
+                        var (faceRef, originHost, dedup, foundLabel) =
+                            FindFloorRefForRoom(doc, view, link, room, locPt.Point);
+                        if (faceRef == null) continue;
+                        if (skipTagged && dedup != null && taggedFloorKeys.Contains(dedup)) continue;
+
+                        SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, originHost, originHost, originHost, originHost, true);
+                        if (sd == null) continue;
+
+                        try { sd.ChangeTypeId(spotType.Id); } catch { }
+                        newSpotIds.Add(sd.Id);
+                        tagged++;
+                    }
+                    catch (Exception ex)
+                    {
+                        A49Logger.Log($"⚠️ SpotElev linked room {room.Id.IntegerValue}: {ex.Message}");
+                    }
+                }
+            }
+
             // Phase 2: batch-move all newly placed tags 500 mm down on screen.
-            // view.UpDirection.Negate() = "down on screen" regardless of view rotation.
             if (newSpotIds.Count > 0)
             {
                 try
@@ -407,16 +440,10 @@ namespace A49AIRevitAssistant.Executor.Commands
         // ============================================================================
         // SPOT ELEVATION — SECTION
         // ============================================================================
-        // Iterates rooms cut by / visible in the section view.
-        // For each room, finds the floor under it and places one SpotElevation at the
-        // room's centre XY on the floor's top face. Label offsets 300 mm down (world -Z).
-        // ============================================================================
         private int TagFloorsWithSpotElevationInSection(Document doc, View view, SpotDimensionType spotType, bool skipTagged)
         {
             int tagged = 0;
 
-            // 1. Collect all placed rooms in the document, then filter to those inside
-            //    the section's crop volume (rooms cut by or visible in this section).
             var rooms = new FilteredElementCollector(doc)
                 .OfCategory(BuiltInCategory.OST_Rooms)
                 .WhereElementIsNotElementType()
@@ -427,8 +454,6 @@ namespace A49AIRevitAssistant.Executor.Commands
 
             A49Logger.Log($"📐 SpotElev section '{view.Name}': {rooms.Count} room(s) in view");
 
-            // 2. Pre-collect rooms that already have a SpotDimension placed near their
-            //    plan area in this view (so re-runs don't double-tag).
             var taggedRoomIds = new HashSet<long>();
             if (skipTagged)
             {
@@ -456,10 +481,12 @@ namespace A49AIRevitAssistant.Executor.Commands
                 catch { }
             }
 
-            // 3. In a section, view.UpDirection = (0,0,1), so Negate() = (0,0,-1) → label
-            //    appears just below the floor cut line. Correct for any section orientation.
             double offsetFt = 300.0 / 304.8;
             XYZ downDir = view.UpDirection.Negate();
+
+            var taggedFloorKeysSec = skipTagged
+                ? CollectTaggedFloorKeys(doc, view)
+                : new HashSet<string>();
 
             foreach (Room room in rooms)
             {
@@ -470,15 +497,20 @@ namespace A49AIRevitAssistant.Executor.Commands
                     var locPt = room.Location as LocationPoint;
                     if (locPt == null) continue;
 
-                    var (faceRef, floorTopZ, _) = GetFloorTopFaceInfo(doc, room, locPt.Point);
+                    var (faceRef, originHost, dedup, foundLabel) =
+                        FindFloorRefForRoom(doc, view, null, room, locPt.Point);
                     if (faceRef == null) continue;
+                    if (skipTagged && dedup != null && taggedFloorKeysSec.Contains(dedup)) continue;
 
-                    XYZ origin = new XYZ(locPt.Point.X, locPt.Point.Y, floorTopZ);
-                    XYZ end    = origin + downDir * offsetFt;
-                    XYZ bend   = origin + downDir * (offsetFt * 0.5);
+                    XYZ end  = originHost + downDir * offsetFt;
+                    XYZ bend = originHost + downDir * (offsetFt * 0.5);
 
-                    SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, origin, bend, end, origin, false);
-                    if (sd == null) continue;
+                    SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, originHost, bend, end, originHost, false);
+                    if (sd == null)
+                    {
+                        A49Logger.Log($"⚠️ SpotElev section: NewSpotElevation returned null for host room {room.Id.IntegerValue} (floor source: {foundLabel})");
+                        continue;
+                    }
 
                     try { sd.ChangeTypeId(spotType.Id); } catch { }
                     tagged++;
@@ -489,7 +521,268 @@ namespace A49AIRevitAssistant.Executor.Commands
                 }
             }
 
+            // ────────────────────────────────────────────────────────────
+            // LINKED PASS (section) — REVIT 2021: stubbed (dead code).
+            // ────────────────────────────────────────────────────────────
+            foreach (var link in TagStrategies.LinkedTagHelpers.EnumerateLinks(doc, view))
+            {
+                IEnumerable<Room> linkedRooms;
+                try
+                {
+                    linkedRooms = new FilteredElementCollector(link.Document)
+                        .OfCategory(BuiltInCategory.OST_Rooms)
+                        .WhereElementIsNotElementType()
+                        .Cast<Room>()
+                        .Where(r => r.Area > 0 && r.Location != null);
+                }
+                catch (Exception ex)
+                {
+                    A49Logger.Log($"⚠️ SpotElev section linked doc '{link.Document.Title}': {ex.Message}");
+                    continue;
+                }
+
+                foreach (Room room in linkedRooms)
+                {
+                    try
+                    {
+                        var locPt = room.Location as LocationPoint;
+                        if (locPt == null) continue;
+
+                        XYZ pointHost = link.Transform.OfPoint(locPt.Point);
+                        if (!IsPointInSectionView(pointHost, view)) continue;
+
+                        var (faceRef, originHost, dedup, foundLabel) =
+                            FindFloorRefForRoom(doc, view, link, room, locPt.Point);
+                        if (faceRef == null) continue;
+                        if (skipTagged && dedup != null && taggedFloorKeysSec.Contains(dedup)) continue;
+
+                        XYZ end  = originHost + downDir * offsetFt;
+                        XYZ bend = originHost + downDir * (offsetFt * 0.5);
+
+                        SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, originHost, bend, end, originHost, false);
+                        if (sd == null) continue;
+
+                        try { sd.ChangeTypeId(spotType.Id); } catch { }
+                        tagged++;
+                    }
+                    catch (Exception ex)
+                    {
+                        A49Logger.Log($"⚠️ SpotElev section linked room {room.Id.IntegerValue}: {ex.Message}");
+                    }
+                }
+            }
+
             return tagged;
+        }
+
+        // ============================================================================
+        // FLOOR-UNDER-ROOM LOOKUP — Revit 2021 variant
+        // ============================================================================
+        // Same multi-doc search as canonical, but the linked-floor branch is
+        // unreachable in 2021 because:
+        //   1. LinkedTagHelpers.EnumerateLinks yields nothing → no linked
+        //      entries get added to `searches`.
+        //   2. Even if a caller passes roomLink != null somehow,
+        //      Reference.CreateLinkReference doesn't exist in 2021's API
+        //      so we'd `continue` rather than try to call it.
+        // Net: only the host-doc search ever runs in Revit 2021. Linked-floor
+        // dedup keys are never produced. Fine for projects without links.
+        // ============================================================================
+        private (Reference faceRef, XYZ originHost, string dedupKey, string foundLabel)
+            FindFloorRefForRoom(Document hostDoc, View view, TagStrategies.LinkContext roomLink, Room room, XYZ roomCenter)
+        {
+            Transform roomToHost = (roomLink != null) ? roomLink.Transform : Transform.Identity;
+
+            var searches = new List<(Document doc, Transform xform, RevitLinkInstance link, string label)>();
+
+            if (roomLink != null)
+            {
+                searches.Add((roomLink.Document, roomLink.Transform, roomLink.Instance,
+                              $"linked: {roomLink.Document.Title}"));
+            }
+
+            searches.Add((hostDoc, Transform.Identity, null, "host"));
+
+            try
+            {
+                foreach (var other in TagStrategies.LinkedTagHelpers.EnumerateLinks(hostDoc, view))
+                {
+                    if (roomLink != null && other.Instance.Id == roomLink.Instance.Id) continue;
+                    searches.Add((other.Document, other.Transform, other.Instance,
+                                  $"linked: {other.Document.Title}"));
+                }
+            }
+            catch { }
+
+            BoundingBoxXYZ roomBB = null;
+            try { roomBB = room.get_BoundingBox(null); } catch { }
+            if (roomBB == null) return (null, null, null, null);
+
+            foreach (var s in searches)
+            {
+                try
+                {
+                    Transform roomToSearch = s.xform.Inverse.Multiply(roomToHost);
+                    XYZ pA = roomToSearch.OfPoint(roomBB.Min);
+                    XYZ pB = roomToSearch.OfPoint(roomBB.Max);
+                    XYZ minN = new XYZ(Math.Min(pA.X, pB.X), Math.Min(pA.Y, pB.Y), Math.Min(pA.Z, pB.Z));
+                    XYZ maxN = new XYZ(Math.Max(pA.X, pB.X), Math.Max(pA.Y, pB.Y), Math.Max(pA.Z, pB.Z));
+
+                    Floor floor = FindFloorByBBox(s.doc, minN, maxN);
+                    if (floor == null) continue;
+
+                    XYZ centerSearch = roomToSearch.OfPoint(roomCenter);
+                    var (localFaceRef, topZ, _) = GetFloorTopFaceAtPoint(s.doc, floor, centerSearch);
+                    if (localFaceRef == null) continue;
+
+                    Reference hostFaceRef;
+                    string dedup;
+                    if (s.link == null)
+                    {
+                        hostFaceRef = localFaceRef;
+                        dedup = $"F{floor.Id.IntegerValue}";
+                    }
+                    else
+                    {
+                        // Revit 2021: Reference.CreateLinkReference doesn't exist (Revit 2022+).
+                        // We can't make a host-valid link reference here, so skip linked floors.
+                        continue;
+                    }
+
+                    XYZ originSearch = new XYZ(centerSearch.X, centerSearch.Y, topZ);
+                    XYZ originHost = s.xform.OfPoint(originSearch);
+
+                    return (hostFaceRef, originHost, dedup, s.label);
+                }
+                catch (Exception ex)
+                {
+                    A49Logger.Log($"⚠️ SpotElev floor search '{s.label}' for room {room.Id.IntegerValue}: {ex.Message}");
+                }
+            }
+
+            return (null, null, null, null);
+        }
+
+        // ============================================================================
+        // CollectTaggedFloorKeys — Revit 2021 variant (host floors only)
+        // ============================================================================
+        // Canonical uses Reference.LinkedElementId (Revit 2022+) to distinguish
+        // host-floor refs from linked-floor refs. In 2021 we only have
+        // Reference.ElementId, so we produce host-floor keys exclusively.
+        // Linked-floor dedup is unavailable — but since the linked-floor branch
+        // in FindFloorRefForRoom is dead code in 2021 anyway, we never produce
+        // linked-floor spot tags to dedup.
+        // ============================================================================
+        private HashSet<string> CollectTaggedFloorKeys(Document doc, View view)
+        {
+            var keys = new HashSet<string>();
+            try
+            {
+                foreach (SpotDimension sd in new FilteredElementCollector(doc, view.Id)
+                    .OfClass(typeof(SpotDimension))
+                    .Cast<SpotDimension>())
+                {
+                    try
+                    {
+                        var refs = (sd as Dimension)?.References;
+                        if (refs == null) continue;
+                        foreach (Reference r in refs)
+                        {
+                            if (r == null || r.ElementId == null) continue;
+                            keys.Add($"F{r.ElementId.IntegerValue}");
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+            return keys;
+        }
+
+        // BBox-first floor search shared by host and link doc lookups.
+        private Floor FindFloorByBBox(Document searchDoc, XYZ minPt, XYZ maxPt)
+        {
+            try
+            {
+                var expandedMin = new XYZ(minPt.X, minPt.Y, minPt.Z - 2.0);
+                var expandedMax = new XYZ(maxPt.X, maxPt.Y, maxPt.Z);
+                var outline = new Outline(expandedMin, expandedMax);
+                var bbFilter = new BoundingBoxIntersectsFilter(outline);
+
+                var floors = new FilteredElementCollector(searchDoc)
+                    .OfClass(typeof(Floor))
+                    .WherePasses(bbFilter)
+                    .Cast<Floor>()
+                    .ToList();
+
+                if (floors.Count == 0) return null;
+
+                double roomBaseZ = minPt.Z;
+                Floor best = null;
+                double bestDelta = double.MaxValue;
+                foreach (Floor f in floors)
+                {
+                    BoundingBoxXYZ fbb = f.get_BoundingBox(null);
+                    if (fbb == null) continue;
+                    double delta = Math.Abs(fbb.Max.Z - roomBaseZ);
+                    if (delta < bestDelta) { bestDelta = delta; best = f; }
+                }
+                return best;
+            }
+            catch { return null; }
+        }
+
+        // Same algorithm as FindFloorUnderRoom but takes the doc explicitly so
+        // we can search a link's document instead of the host. (Dead code in
+        // 2021 because EnumerateLinks is stubbed, but kept for parity.)
+        private Floor FindFloorUnderRoomInDoc(Document searchDoc, Room room)
+        {
+            try
+            {
+                BoundingBoxXYZ roomBB = room.get_BoundingBox(null);
+                if (roomBB == null) return null;
+
+                var expandedMin = new XYZ(roomBB.Min.X, roomBB.Min.Y, roomBB.Min.Z - 2.0);
+                var expandedMax = new XYZ(roomBB.Max.X, roomBB.Max.Y, roomBB.Max.Z);
+                var outline  = new Outline(expandedMin, expandedMax);
+                var bbFilter = new BoundingBoxIntersectsFilter(outline);
+
+                var floors = new FilteredElementCollector(searchDoc)
+                    .OfClass(typeof(Floor))
+                    .WherePasses(bbFilter)
+                    .Cast<Floor>()
+                    .ToList();
+
+                if (floors.Count == 0) return null;
+
+                double roomBaseZ = roomBB.Min.Z;
+                Floor  best      = null;
+                double bestDelta = double.MaxValue;
+                foreach (Floor f in floors)
+                {
+                    BoundingBoxXYZ fbb = f.get_BoundingBox(null);
+                    if (fbb == null) continue;
+                    double delta = Math.Abs(fbb.Max.Z - roomBaseZ);
+                    if (delta < bestDelta) { bestDelta = delta; best = f; }
+                }
+                return best;
+            }
+            catch { return null; }
+        }
+
+        // Crop-volume containment for a host-coord point in a section view.
+        private bool IsPointInSectionView(XYZ pointHost, View view)
+        {
+            BoundingBoxXYZ crop = view.CropBox;
+            if (crop == null) return true;
+            try
+            {
+                XYZ localPt = crop.Transform.Inverse.OfPoint(pointHost);
+                return localPt.X >= crop.Min.X && localPt.X <= crop.Max.X &&
+                       localPt.Y >= crop.Min.Y && localPt.Y <= crop.Max.Y &&
+                       localPt.Z >= crop.Min.Z && localPt.Z <= crop.Max.Z;
+            }
+            catch { return false; }
         }
 
         // Returns true if the room's location point lies inside the section view's
@@ -526,8 +819,6 @@ namespace A49AIRevitAssistant.Executor.Commands
             return GetFloorTopFaceAtPoint(doc, floor, roomCenter);
         }
 
-        // Returns the highest near-horizontal upward PlanarFace reference on the floor solid,
-        // plus pf.Origin — a point guaranteed to lie on the face (used as NewSpotElevation origin).
         private (Reference faceRef, double topZ, XYZ facePoint) GetFloorTopFaceAtPoint(Document doc, Floor floor, XYZ nearPoint)
         {
             try
@@ -553,14 +844,14 @@ namespace A49AIRevitAssistant.Executor.Commands
                     {
                         PlanarFace pf = face as PlanarFace;
                         if (pf == null) continue;
-                        if (pf.FaceNormal.Z < 0.9) continue;   // only upward-facing horizontal faces
+                        if (pf.FaceNormal.Z < 0.9) continue;
 
                         double faceZ = pf.Origin.Z;
                         if (faceZ > bestZ)
                         {
                             bestZ     = faceZ;
                             bestRef   = face.Reference;
-                            bestPoint = pf.Origin;  // guaranteed on-face point
+                            bestPoint = pf.Origin;
                         }
                     }
                 }
@@ -573,7 +864,6 @@ namespace A49AIRevitAssistant.Executor.Commands
             }
         }
 
-        // Finds the floor whose top-Z is closest to the room's base elevation.
         private Floor FindFloorUnderRoom(Document doc, Room room)
         {
             try
@@ -581,7 +871,6 @@ namespace A49AIRevitAssistant.Executor.Commands
                 BoundingBoxXYZ roomBB = room.get_BoundingBox(null);
                 if (roomBB == null) return null;
 
-                // Search 2 ft below the room's lower face to catch the slab
                 var expandedMin = new XYZ(roomBB.Min.X, roomBB.Min.Y, roomBB.Min.Z - 2.0);
                 var expandedMax = new XYZ(roomBB.Max.X, roomBB.Max.Y, roomBB.Max.Z);
 
@@ -628,11 +917,9 @@ namespace A49AIRevitAssistant.Executor.Commands
                 .Cast<SpotDimensionType>()
                 .ToList();
 
-            // Exact match first
             SpotDimensionType found = all.FirstOrDefault(
                 sdt => sdt.Name.Equals(typeName, StringComparison.OrdinalIgnoreCase));
 
-            // Fallback: first available type if nothing matched
             return found ?? all.FirstOrDefault();
         }
 

@@ -1,12 +1,22 @@
-﻿// ============================================================================
-// InteractiveRoomPackageCommand.cs — Vella AI
+// ============================================================================
+// InteractiveRoomPackageCommand.cs — Vella AI (Revit 2021)
 // Executes a 2-part interactive workflow: Pick Room -> Create Callout ->
-// Switch View -> Pick Marker -> Generate Elevations -> Create & Populate Sheet. 
+// Switch View -> Pick Marker -> Generate Elevations -> Create & Populate Sheet.
+//
+// Revit 2021 adaptations vs canonical (revit-addin/):
+//   - Linked-room support DOES work in 2021: Reference.LinkedElementId,
+//     RevitLinkInstance.GetLinkDocument(), and link.GetTotalTransform() are
+//     all 2014-era APIs. We don't need Reference.CreateLinkReference (2022+)
+//     because this workflow uses host-doc creation APIs (CreateCallout,
+//     CreateElevationMarker) — they just need transformed XYZ coords, not
+//     link references.
+//   - LabelOffset / LabelLineLength on Viewport are NOT in 2021 API → omitted.
 // ============================================================================
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Architecture;
 using Autodesk.Revit.UI;
@@ -19,6 +29,14 @@ namespace A49AIRevitAssistant.Executor.Commands
     {
         private readonly UIApplication _uiapp;
         private readonly JObject _rawPayload;
+
+        // Carried from the first transaction (where we resolve the room's
+        // bbox in host coords) into the deferred ContinueAfterMarkerPick
+        // step. Lets us tightly crop each generated elevation to the room
+        // — eliminates the "default crop is the entire model" problem,
+        // especially for linked rooms where Revit's auto-crop heuristic
+        // can't introspect the linked geometry the same way.
+        private BoundingBoxXYZ _roomBboxFullHost;
 
         public InteractiveRoomPackageCommand(UIApplication uiapp, JObject rawPayload)
         {
@@ -68,19 +86,21 @@ namespace A49AIRevitAssistant.Executor.Commands
                 }
 
                 // --- 3. INTERACTIVE PICK 1: THE ROOM ---
+                // Filter accepts both host-doc rooms and linked-doc rooms via
+                // the RevitLinkInstance branch + AllowReference resolution.
                 Reference roomRef = uidoc.Selection.PickObject(
                     ObjectType.Element,
-                    new RoomSelectionFilter(),
+                    new RoomSelectionFilter(doc),
                     "Vella: Click a Room (or Room Tag) to create an Enlarged Plan.");
 
-                Element clickedElem = doc.GetElement(roomRef);
-                Room targetRoom = clickedElem as Room;
-
-                if (clickedElem is RoomTag tag)
-                {
-                    targetRoom = tag.Room;
-                }
-
+                // Resolve picked element into a Room. Handles four cases:
+                //   1. Host Room   2. Host RoomTag → tag.Room
+                //   3. Linked Room 4. Linked RoomTag → tag.Room (in link doc)
+                //
+                // roomToHost transform converts coords from the room's own doc
+                // into host coords. Identity for host rooms; the link's
+                // GetTotalTransform for linked rooms.
+                var (targetRoom, roomToHost) = ResolveRoomFromReference(doc, roomRef);
                 if (targetRoom == null)
                 {
                     return "{\"status\":\"error\", \"message\":\"❌ Invalid selection. Command cancelled.\"}";
@@ -93,14 +113,52 @@ namespace A49AIRevitAssistant.Executor.Commands
                 {
                     t1.Start();
 
-                    BoundingBoxXYZ bb = targetRoom.get_BoundingBox(activePlan);
+                    // For a host room we can pass activePlan to get the bbox
+                    // clipped to the view's depth. For a LINKED room,
+                    // get_BoundingBox(view) returns null because the view
+                    // belongs to a different doc, so we fall back to the
+                    // intrinsic bbox and transform corners into host coords.
+                    BoundingBoxXYZ bb = targetRoom.get_BoundingBox(activePlan)
+                                       ?? targetRoom.get_BoundingBox(null);
                     if (bb == null)
                     {
                         throw new Exception("Could not determine the selected room bounding box.");
                     }
 
-                    XYZ minPt = new XYZ(bb.Min.X - offsetFt, bb.Min.Y - offsetFt, bb.Min.Z);
-                    XYZ maxPt = new XYZ(bb.Max.X + offsetFt, bb.Max.Y + offsetFt, bb.Max.Z);
+                    // Transform the room bbox corners into host coords. For
+                    // host rooms roomToHost is identity → values unchanged.
+                    XYZ bbMinHost = roomToHost.OfPoint(bb.Min);
+                    XYZ bbMaxHost = roomToHost.OfPoint(bb.Max);
+                    // Re-normalize after transform — link rotation about Z can
+                    // swap X/Y min↔max so we have to take per-axis min/max.
+                    double minX = Math.Min(bbMinHost.X, bbMaxHost.X);
+                    double minY = Math.Min(bbMinHost.Y, bbMaxHost.Y);
+                    double minZ = Math.Min(bbMinHost.Z, bbMaxHost.Z);
+                    double maxX = Math.Max(bbMinHost.X, bbMaxHost.X);
+                    double maxY = Math.Max(bbMinHost.Y, bbMaxHost.Y);
+                    double maxZ = Math.Max(bbMinHost.Z, bbMaxHost.Z);
+
+                    XYZ minPt = new XYZ(minX - offsetFt, minY - offsetFt, minZ);
+                    XYZ maxPt = new XYZ(maxX + offsetFt, maxY + offsetFt, maxZ);
+
+                    // Stash the room's FULL 3D bbox in host coords for the
+                    // elevation-crop step (later transaction). The plan-clipped
+                    // bbox above was good enough for the callout (a 2D crop)
+                    // but elevations need the room's true vertical extent —
+                    // get_BoundingBox(activePlan) may have clipped it to the
+                    // plan view's depth.
+                    BoundingBoxXYZ bbFull = targetRoom.get_BoundingBox(null) ?? bb;
+                    XYZ fmin = roomToHost.OfPoint(bbFull.Min);
+                    XYZ fmax = roomToHost.OfPoint(bbFull.Max);
+                    _roomBboxFullHost = new BoundingBoxXYZ
+                    {
+                        Min = new XYZ(Math.Min(fmin.X, fmax.X),
+                                      Math.Min(fmin.Y, fmax.Y),
+                                      Math.Min(fmin.Z, fmax.Z)),
+                        Max = new XYZ(Math.Max(fmin.X, fmax.X),
+                                      Math.Max(fmin.Y, fmax.Y),
+                                      Math.Max(fmin.Z, fmax.Z)),
+                    };
 
                     ViewFamilyType calloutType = new FilteredElementCollector(doc)
                         .OfClass(typeof(ViewFamilyType))
@@ -218,7 +276,7 @@ namespace A49AIRevitAssistant.Executor.Commands
         {
             ViewSheet newSheet = null;
 
-            // 💥 FIX 1: Move this list declaration out of the Transaction block 
+            // 💥 FIX 1: Move this list declaration out of the Transaction block
             // so it can be accessed at the end of the method for the summary.
             List<View> generatedElevations = new List<View>();
 
@@ -254,6 +312,15 @@ namespace A49AIRevitAssistant.Executor.Commands
                         elevView.ViewTemplateId = elevTemplate.Id;
                     }
 
+                    // Crop the elevation to the room's actual bounds. Revit's
+                    // default crop after CreateElevation extends to whatever
+                    // geometry the marker can "see" in 3D, which for linked
+                    // rooms is usually the entire model — hence the staff
+                    // report of "elevation height crop and view limits are
+                    // off." Setting it explicitly makes the result tight and
+                    // identical for host vs linked rooms.
+                    SetElevationCropToRoom(elevView, _roomBboxFullHost);
+
                     generatedElevations.Add(elevView);
                 }
 
@@ -285,8 +352,13 @@ namespace A49AIRevitAssistant.Executor.Commands
                     if (titleblock != null)
                     {
                         // 💥 1. Calculate the safe number BEFORE creating the sheet!
-                        // A6 series = 6000-band (new 4-digit format: 6010, 6020, …).
-                        string safeSheetNum = GetSafeSheetNumber(doc, 6000);
+                        // A6 series — emits the format matching the project's
+                        // active numbering scheme. Frontend passes the scheme
+                        // hint (`payload.scheme`) so we honor session-override
+                        // even when no A6 sheets exist yet to auto-detect from.
+                        // Falls through to local auto-detect if hint is missing.
+                        string schemeHint = _rawPayload["scheme"]?.ToString();
+                        string safeSheetNum = GetSafeSheetNumber(doc, 6000, "A6", schemeHint);
 
                         // 2. Create the sheet (Revit will auto-assign a temporary number here)
                         newSheet = ViewSheet.Create(doc, titleblock.Id);
@@ -420,6 +492,134 @@ namespace A49AIRevitAssistant.Executor.Commands
         }
 
         // ============================================================================
+        // SET ELEVATION CROP TO ROOM BOUNDS
+        // ============================================================================
+        // After ElevationMarker.CreateElevation, Revit's default crop is a
+        // model-wide guess. For a linked room the heuristic doesn't introspect
+        // the linked geometry the same way, so the crop blows out to the
+        // entire visible model. We explicitly pin the crop to the room's
+        // actual bounds (in host coords), with small XY/Z paddings so wall
+        // thickness stays visible.
+        //
+        // Method: take the 8 corners of the room's host-coord bbox, project
+        // them into the elevation view's local frame, and use the per-axis
+        // min/max as the new crop extents. This is invariant under arbitrary
+        // elevation orientation (north/south/east/west and any in-between).
+        // No-op (try/catch swallow) if Revit rejects the new bbox — better to
+        // leave the default crop than to crash mid-creation.
+        // ============================================================================
+        private void SetElevationCropToRoom(ViewSection elevView, BoundingBoxXYZ roomBboxHost)
+        {
+            if (elevView == null || roomBboxHost == null) return;
+            try
+            {
+                BoundingBoxXYZ crop = elevView.CropBox;
+                if (crop == null || crop.Transform == null) return;
+
+                // 8 corners of the room's bbox in host (world) coords.
+                XYZ rmin = roomBboxHost.Min;
+                XYZ rmax = roomBboxHost.Max;
+                XYZ[] corners = new[]
+                {
+                    new XYZ(rmin.X, rmin.Y, rmin.Z),
+                    new XYZ(rmin.X, rmin.Y, rmax.Z),
+                    new XYZ(rmin.X, rmax.Y, rmin.Z),
+                    new XYZ(rmin.X, rmax.Y, rmax.Z),
+                    new XYZ(rmax.X, rmin.Y, rmin.Z),
+                    new XYZ(rmax.X, rmin.Y, rmax.Z),
+                    new XYZ(rmax.X, rmax.Y, rmin.Z),
+                    new XYZ(rmax.X, rmax.Y, rmax.Z),
+                };
+
+                // Project into elevation-view-local frame:
+                //   X = horizontal across screen
+                //   Y = vertical (up = positive)
+                //   Z = depth (negative = into model, away from viewer)
+                Transform inv = crop.Transform.Inverse;
+                double minX = double.MaxValue, minY = double.MaxValue, minZ = double.MaxValue;
+                double maxX = double.MinValue, maxY = double.MinValue, maxZ = double.MinValue;
+                foreach (XYZ c in corners)
+                {
+                    XYZ p = inv.OfPoint(c);
+                    if (p.X < minX) minX = p.X;
+                    if (p.X > maxX) maxX = p.X;
+                    if (p.Y < minY) minY = p.Y;
+                    if (p.Y > maxY) maxY = p.Y;
+                    if (p.Z < minZ) minZ = p.Z;
+                    if (p.Z > maxZ) maxZ = p.Z;
+                }
+
+                // Padding — 200mm horizontal/vertical so wall thickness shows;
+                // 300mm depth so far clip extends just past the back wall.
+                double padXY = 200.0 / 304.8;
+                double padZ = 300.0 / 304.8;
+
+                crop.Min = new XYZ(minX - padXY, minY - padXY, minZ - padZ);
+                crop.Max = new XYZ(maxX + padXY, maxY + padXY, maxZ + padZ);
+                elevView.CropBox = crop;
+                elevView.CropBoxActive = true;
+            }
+            catch
+            {
+                // Leave Revit's default crop in place if the API rejects ours.
+            }
+        }
+
+        // ============================================================================
+        // RESOLVE PICKED REFERENCE → (Room, transform-from-room-doc-to-host)
+        // ============================================================================
+        // Handles all four combinations the RoomSelectionFilter admits:
+        //   • Host Room        → (room, Identity)
+        //   • Host RoomTag     → (tag.Room, Identity)
+        //   • Linked Room      → (linkedRoom, link.GetTotalTransform())
+        //   • Linked RoomTag   → (tagInLinkDoc.Room, link.GetTotalTransform())
+        //
+        // For host paths returns Transform.Identity so downstream OfPoint
+        // calls leave coords untouched. For linked paths returns the link's
+        // total transform so callers can map the room's bbox / location into
+        // host coords before passing to host-doc APIs (CreateCallout, etc.).
+        // Returns (null, null) when the reference can't be resolved into a Room.
+        //
+        // Revit 2021: Reference.LinkedElementId, RevitLinkInstance.GetLinkDocument,
+        // and link.GetTotalTransform are all 2014-era APIs — fully usable here.
+        // ============================================================================
+        private (Room room, Transform roomToHost) ResolveRoomFromReference(Document hostDoc, Reference roomRef)
+        {
+            if (hostDoc == null || roomRef == null) return (null, null);
+
+            // Host pick: LinkedElementId is the invalid sentinel.
+            if (roomRef.LinkedElementId == ElementId.InvalidElementId)
+            {
+                Element clicked = hostDoc.GetElement(roomRef);
+                Room hostRoom = clicked as Room;
+                if (clicked is RoomTag tag) hostRoom = tag.Room;
+                return (hostRoom, Transform.Identity);
+            }
+
+            // Linked pick: walk through the link instance to its document.
+            try
+            {
+                var link = hostDoc.GetElement(roomRef.ElementId) as RevitLinkInstance;
+                if (link == null) return (null, null);
+                Document linkDoc = link.GetLinkDocument();
+                if (linkDoc == null) return (null, null);
+
+                Element linkedElem = linkDoc.GetElement(roomRef.LinkedElementId);
+                Room linkedRoom = linkedElem as Room;
+                // RoomTag in linked doc — its Room property returns the linked Room.
+                if (linkedElem is RoomTag linkedTag) linkedRoom = linkedTag.Room;
+                if (linkedRoom == null) return (null, null);
+
+                Transform xform = link.GetTotalTransform() ?? Transform.Identity;
+                return (linkedRoom, xform);
+            }
+            catch
+            {
+                return (null, null);
+            }
+        }
+
+        // ============================================================================
         // HELPER 1: SMART VIEW NAMING (" Copy X")
         // ============================================================================
         private void SetUniqueViewName(Document doc, View view, string desiredName)
@@ -444,63 +644,170 @@ namespace A49AIRevitAssistant.Executor.Commands
         }
 
         // ============================================================================
-        // HELPER 2: ROBUST SHEET NUMBERING
+        // HELPER 2: ROBUST SHEET NUMBERING — scheme-aware
         //
-        // Mirrors the Python naming_engine.get_next_sheet_number sequence-based
-        // path: pick max(existing sheets in this series's 1000-band) + 10, then
-        // bump on collision. Format: 4-digit zero-padded (6010, 6020, …).
+        // Mirrors backend naming_engine.get_next_sheet_number for the three
+        // schemes Vella supports. Picks which one by, in priority order:
         //
-        // seriesBase: the thousand-base for this series (6000 for A6, 7000 for A7).
-        // Only 4-digit numeric sheets in the band [seriesBase, seriesBase+1000)
-        // are considered — legacy "A6.01" sheets are ignored (they coexist but
-        // don't influence the new sequence).
+        //   1. `schemeHint` argument (frontend RoomElevationWizard passes the
+        //      detected/active scheme via payload — handles the case where a
+        //      session override is set but no A6 sheets exist yet to anchor
+        //      auto-detect on).
+        //   2. Auto-detect from existing sheets (same heuristic as the frontend
+        //      RenameWizard.detectedScheme):
+        //         · any "A1.NN" / "X0.NN"  → a49_dotted
+        //         · any 5+ digit numeric    → iso19650_5digit
+        //         · else                    → iso19650_4digit
+        //
+        // a49_dotted gap-fills (lowest free slot wins). The iso19650 schemes
+        // advance from max+increment with collision bump-up, no gap-fill.
+        //
+        // seriesBase4: 4-digit thousand-base for this series (6000 for A6).
+        //              Multiplied ×10 for 5-digit (→ 60000-band).
+        // seriesPrefix: the dotted category code, e.g. "A6". Used only when
+        //               the project is detected/declared as a49_dotted.
+        // schemeHint:  optional explicit scheme name ("a49_dotted",
+        //              "iso19650_5digit", "iso19650_4digit"). null/empty
+        //              triggers auto-detect.
         // ============================================================================
-        private string GetSafeSheetNumber(Document doc, int seriesBase)
+        private string GetSafeSheetNumber(Document doc, int seriesBase4,
+                                          string seriesPrefix, string schemeHint = null)
         {
             var allSheetNumbers = new FilteredElementCollector(doc)
                 .OfClass(typeof(ViewSheet))
                 .Cast<ViewSheet>()
-                .Select(s => s.SheetNumber)
+                .Select(s => s.SheetNumber ?? "")
                 .ToList();
 
+            // Resolve scheme from hint first; fall back to auto-detect.
+            bool hasDotted, has5Digit;
+            if (!string.IsNullOrWhiteSpace(schemeHint))
+            {
+                string h = schemeHint.Trim().ToLowerInvariant();
+                hasDotted  = h == "a49_dotted";
+                has5Digit  = h == "iso19650_5digit";
+                // Anything else (including "iso19650_4digit") falls through
+                // to the 4-digit branch below.
+            }
+            else
+            {
+                hasDotted = allSheetNumbers.Any(n =>
+                    Regex.IsMatch(n, @"^[AX]\d\.\d{1,3}(\.\d+)?$"));
+                has5Digit = !hasDotted && allSheetNumbers.Any(n =>
+                    Regex.IsMatch(n, @"^\d{5,}$"));
+            }
+
+            if (hasDotted)
+                return NextDottedSlot(allSheetNumbers, seriesPrefix);
+            if (has5Digit)
+                return NextNumericSlot(allSheetNumbers, seriesBase4 * 10, increment: 100, width: 5);
+            return NextNumericSlot(allSheetNumbers, seriesBase4, increment: 10, width: 4);
+        }
+
+        // Lowest free positive sub-slot under a category (gap-fill semantics).
+        // Sub-parts (A6.05.1) are ignored — they share their parent's primary
+        // slot for allocation purposes, just like the Python side does.
+        private string NextDottedSlot(List<string> allSheetNumbers, string seriesPrefix)
+        {
+            var dottedRe = new Regex($@"^{Regex.Escape(seriesPrefix)}\.(\d{{1,3}})(?:\.\d+)?$",
+                                     RegexOptions.IgnoreCase);
+            var used = new HashSet<int>();
+            foreach (string n in allSheetNumbers)
+            {
+                var m = dottedRe.Match(n);
+                if (m.Success && int.TryParse(m.Groups[1].Value, out int slot))
+                    used.Add(slot);
+            }
+            // a49_dotted A6 starts at .01 (no .00 slot per spec). Walk upward
+            // from 1 until we find a free slot — covers gap-fill after a delete.
+            int next = 1;
+            while (used.Contains(next) && next < 100) next++;
+            return $"{seriesPrefix}.{next:D2}";
+        }
+
+        // Existing behavior, parameterised over digit-width / increment so the
+        // same routine handles iso19650_4digit (6010 increments of 10) and
+        // iso19650_5digit (60100 increments of 100).
+        private string NextNumericSlot(List<string> allSheetNumbers,
+                                       int seriesBase, int increment, int width)
+        {
+            int bandMax = seriesBase + (int)Math.Pow(10, width - 1);
             int maxVal = 0;
             foreach (string num in allSheetNumbers)
             {
-                if (int.TryParse(num, out int val)
-                    && val >= seriesBase && val < seriesBase + 1000)
+                if (int.TryParse(num, out int val) && val >= seriesBase && val < bandMax)
                 {
                     if (val > maxVal) maxVal = val;
                 }
             }
+            int nextVal = (maxVal == 0)
+                ? (seriesBase + increment)
+                : (((maxVal / increment) + 1) * increment);
 
-            // First sheet in the series → seriesBase + 10. Otherwise round up
-            // from the highest existing slot to the next +10 boundary (no gap-fill).
-            int nextVal = (maxVal == 0) ? (seriesBase + 10) : (((maxVal / 10) + 1) * 10);
-
-            string nextNum = nextVal.ToString("D4");
+            string fmt = "D" + width;
+            string nextNum = nextVal.ToString(fmt);
             while (allSheetNumbers.Contains(nextNum))
             {
-                nextVal += 10;
-                nextNum = nextVal.ToString("D4");
-                if (nextVal >= seriesBase + 1000) break;  // Safety: don't overflow band
+                nextVal += increment;
+                nextNum = nextVal.ToString(fmt);
+                if (nextVal >= bandMax) break;  // Safety: don't overflow band
             }
             return nextNum;
         }
     }
 
     // ============================================================================
-    // SELECTION FILTER: Forces user to ONLY click on Rooms or Room Tags
+    // SELECTION FILTER: Forces user to ONLY click on Rooms or Room Tags.
+    // Accepts both HOST elements and LINKED elements — for a linked Revit model
+    // the picker's hit-test surfaces a RevitLinkInstance, so we say "yes" to
+    // the link instance in AllowElement and then narrow to Room/RoomTag in
+    // AllowReference by resolving the linked element through the link's doc.
     // ============================================================================
     public class RoomSelectionFilter : ISelectionFilter
     {
+        private readonly Document _hostDoc;
+
+        public RoomSelectionFilter(Document hostDoc)
+        {
+            _hostDoc = hostDoc;
+        }
+
         public bool AllowElement(Element elem)
         {
-            return elem is Room || elem is RoomTag;
+            // Host-doc Rooms / RoomTags pass directly. RevitLinkInstance also
+            // passes so the picker doesn't reject the click outright — the
+            // linked-element check happens in AllowReference below.
+            return elem is Room
+                || elem is RoomTag
+                || elem is RevitLinkInstance;
         }
 
         public bool AllowReference(Reference reference, XYZ position)
         {
-            return false;
+            if (reference == null || _hostDoc == null) return false;
+
+            // Host references: nothing to narrow — AllowElement already gated
+            // to Room/RoomTag for non-link picks.
+            if (reference.LinkedElementId == ElementId.InvalidElementId)
+                return true;
+
+            // Link references: walk to the linked element and confirm it's a
+            // Room or RoomTag. Reject everything else (walls, doors, etc. in
+            // the linked file would otherwise pass AllowElement via the
+            // RevitLinkInstance branch).
+            try
+            {
+                var link = _hostDoc.GetElement(reference.ElementId) as RevitLinkInstance;
+                if (link == null) return false;
+                Document linkDoc = link.GetLinkDocument();
+                if (linkDoc == null) return false;     // unloaded
+                Element linkedElem = linkDoc.GetElement(reference.LinkedElementId);
+                return linkedElem is Room || linkedElem is RoomTag;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // A49AIRevitAssistant/Executor/Commands/TagStrategies/WallTagStrategy.cs
 // ============================================================================
 // Tags walls in Floor Plan views only.
@@ -22,6 +22,12 @@
 //   - All wall segments get tagged, including those outside any room
 //
 // Note: Wall tags are NOT supported in Elevations/Sections per firm standard.
+//
+// Revit 2021 adaptations vs canonical (revit-addin/):
+//   - IndependentTag.GetTaggedLocalElementIds() → TaggedLocalElementId (single)
+//   - Category.BuiltInCategory → (BuiltInCategory)Category.Id.IntegerValue
+//   - ElementId.Value → ElementId.IntegerValue
+//   - Linked pass is dead code (LinkedTagHelpers stubbed) — kept for parity.
 // ============================================================================
 
 using Autodesk.Revit.DB;
@@ -166,7 +172,154 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
                 }
             }
 
+            // ====================================================================
+            // LINKED PASS — REVIT 2021: stubbed via LinkedTagHelpers (yields nothing).
+            // Loop body never executes. Kept for structural parity with revit-addin/.
+            // ====================================================================
+            foreach (var link in LinkedTagHelpers.EnumerateLinks(doc, view))
+            {
+                HashSet<long> linkedAlreadyTagged = skipTagged
+                    ? LinkedTagHelpers.CollectAlreadyTaggedLinkedIds(doc, view, link.Instance.Id, TargetCategory)
+                    : new HashSet<long>();
+
+                FilteredElementCollector linkedWalls;
+                try
+                {
+                    linkedWalls = new FilteredElementCollector(link.Document)
+                        .OfCategory(TargetCategory)
+                        .OfClass(typeof(Wall));
+                }
+                catch (Exception ex)
+                {
+                    result.Errors.Add($"Linked doc '{link.Document.Title}': {ex.Message}");
+                    continue;
+                }
+
+                // Per-link openings (doors+windows hosted on linked walls — all
+                // in the same link doc). Indexed by the linked wall's element id.
+                var linkedWallOpenings = new Dictionary<long, List<double>>();
+                CollectOpeningsOnLinkedWalls(link.Document, BuiltInCategory.OST_Doors, linkedWallOpenings);
+                CollectOpeningsOnLinkedWalls(link.Document, BuiltInCategory.OST_Windows, linkedWallOpenings);
+
+                foreach (Wall wall in linkedWalls)
+                {
+                    try
+                    {
+                        if (skipTagged && linkedAlreadyTagged.Contains(wall.Id.IntegerValue))
+                        {
+                            result.Skipped++;
+                            continue;
+                        }
+
+                        LocationCurve locCurve = wall.Location as LocationCurve;
+                        if (locCurve == null) continue;
+                        Curve curve = locCurve.Curve;
+                        if (curve == null) continue;
+                        double wallLength = curve.Length;
+                        if (wallLength < 0.01) continue;
+
+                        XYZ tangentLink = (curve.GetEndPoint(1) - curve.GetEndPoint(0)).Normalize();
+                        XYZ perpLink = tangentLink.CrossProduct(XYZ.BasisZ).Normalize();
+                        XYZ perpHost = link.Transform.OfVector(perpLink).Normalize();
+
+                        List<double> openings = linkedWallOpenings.ContainsKey(wall.Id.IntegerValue)
+                            ? linkedWallOpenings[wall.Id.IntegerValue]
+                            : new List<double>();
+
+                        var segments = SegmentWallByRooms(link.Document, curve, wallLength, null);
+
+                        foreach (var segment in segments)
+                        {
+                            var tagParams = FindAllTagsInSegment(segment.StartT, segment.EndT, wallLength, openings);
+
+                            foreach (double tagT in tagParams)
+                            {
+                                XYZ anchorLink = curve.Evaluate(tagT, true);
+                                XYZ anchorHost = link.Transform.OfPoint(anchorLink);
+
+                                if (!TagHelpers.IsElementInCropRegion(view, anchorHost)) continue;
+
+                                XYZ tagHeadHost = anchorHost + perpHost.Multiply(TAG_OFFSET_FEET);
+                                tagHeadHost = TagHelpers.ClampTagPointToCropRegion(view, tagHeadHost, CROP_MARGIN_FEET);
+
+                                Reference linkedRef = LinkedTagHelpers.BuildLinkedReference(wall, link.Instance);
+                                if (linkedRef == null)
+                                {
+                                    // Revit 2021: BuildLinkedReference always returns null. Silent skip.
+                                    continue;
+                                }
+
+                                var newTag = IndependentTag.Create(
+                                    doc, tagSymbol.Id, view.Id,
+                                    linkedRef, true, TagOrientation.Horizontal, tagHeadHost);
+
+                                if (newTag != null)
+                                {
+                                    newTag.LeaderEndCondition = LeaderEndCondition.Free;
+                                    newTag.TagHeadPosition = tagHeadHost;
+                                    result.Tagged++;
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        result.Errors.Add($"Linked wall {wall.Id.IntegerValue}: {ex.Message}");
+                    }
+                }
+            }
+
             return result;
+        }
+
+        // ============================================================================
+        // COLLECT OPENINGS ON LINKED WALLS (dead code in 2021)
+        // ============================================================================
+        private void CollectOpeningsOnLinkedWalls(
+            Document linkDoc, BuiltInCategory openingCategory,
+            Dictionary<long, List<double>> wallOpenings)
+        {
+            FilteredElementCollector collector;
+            try
+            {
+                collector = new FilteredElementCollector(linkDoc)
+                    .OfCategory(openingCategory)
+                    .OfClass(typeof(FamilyInstance));
+            }
+            catch
+            {
+                return;
+            }
+
+            foreach (FamilyInstance fi in collector)
+            {
+                try
+                {
+                    Wall hostWall = fi.Host as Wall;
+                    if (hostWall == null) continue;
+                    LocationPoint fiLoc = fi.Location as LocationPoint;
+                    if (fiLoc == null) continue;
+                    LocationCurve wallLocCurve = hostWall.Location as LocationCurve;
+                    if (wallLocCurve == null) continue;
+                    Curve wallCurve = wallLocCurve.Curve;
+                    if (wallCurve == null) continue;
+
+                    IntersectionResult projection = wallCurve.Project(fiLoc.Point);
+                    if (projection == null) continue;
+
+                    double rawParam = projection.Parameter;
+                    double startParam = wallCurve.GetEndParameter(0);
+                    double endParam = wallCurve.GetEndParameter(1);
+                    double paramRange = endParam - startParam;
+                    double normalizedT = paramRange > 0 ? (rawParam - startParam) / paramRange : 0.5;
+
+                    long wallId = hostWall.Id.IntegerValue;
+                    if (!wallOpenings.ContainsKey(wallId))
+                        wallOpenings[wallId] = new List<double>();
+                    wallOpenings[wallId].Add(normalizedT);
+                }
+                catch { }
+            }
         }
 
         // ============================================================================

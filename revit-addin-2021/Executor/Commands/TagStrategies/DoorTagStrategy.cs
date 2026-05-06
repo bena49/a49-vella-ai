@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 // A49AIRevitAssistant/Executor/Commands/TagStrategies/DoorTagStrategy.cs
 // ============================================================================
 // Tags doors in Plan, Elevation, and Section views.
@@ -23,6 +23,13 @@
 //   - Skips doors on side walls and doors beyond the far clip
 //   - Tag at door bounding-box center in the view
 //   - No leader
+//
+// Revit 2021 adaptations vs canonical (revit-addin/):
+//   - IndependentTag.GetTaggedLocalElementIds() → TaggedLocalElementId (single)
+//   - Category.BuiltInCategory → (BuiltInCategory)Category.Id.IntegerValue
+//   - ElementId.Value → ElementId.IntegerValue
+//   - LinkedTagHelpers.EnumerateLinks() yields empty in 2021, so the linked
+//     pass loop body never executes. Source structure preserved for parity.
 // ============================================================================
 
 using System;
@@ -168,7 +175,187 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
                 }
             }
 
+            // ====================================================================
+            // LINKED PASS — REVIT 2021: stubbed via LinkedTagHelpers.EnumerateLinks
+            // returning empty. Loop body below never executes in 2021. Kept here
+            // for structural parity with revit-addin/ so future ports drop in
+            // cleanly. See LinkedTagHelpers.cs header for the full reasoning.
+            // ====================================================================
+            foreach (var link in LinkedTagHelpers.EnumerateLinks(doc, view))
+            {
+                HashSet<long> linkedAlreadyTagged = skipTagged
+                    ? LinkedTagHelpers.CollectAlreadyTaggedLinkedIds(doc, view, link.Instance.Id, TargetCategory)
+                    : new HashSet<long>();
+
+                FilteredElementCollector linkedDoors;
+                try
+                {
+                    linkedDoors = new FilteredElementCollector(link.Document)
+                        .OfCategory(TargetCategory)
+                        .OfClass(typeof(FamilyInstance));
+                }
+                catch (Exception ex)
+                {
+                    result.Errors.Add($"Linked doc '{link.Document.Title}': {ex.Message}");
+                    continue;
+                }
+
+                foreach (FamilyInstance door in linkedDoors)
+                {
+                    try
+                    {
+                        if (skipTagged && linkedAlreadyTagged.Contains(door.Id.IntegerValue))
+                        {
+                            result.Skipped++;
+                            continue;
+                        }
+
+                        LocationPoint lp = door.Location as LocationPoint;
+                        XYZ ptHost = lp != null ? link.Transform.OfPoint(lp.Point) : null;
+
+                        if (isPlan)
+                        {
+                            if (ptHost != null && !TagHelpers.IsElementInCropRegion(view, ptHost))
+                            {
+                                result.Skipped++;
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            if (ptHost == null) { result.Skipped++; continue; }
+
+                            if (view.ViewType == ViewType.Section &&
+                                !TagHelpers.IsElementVisibleInSection(view, door, ptHost))
+                            {
+                                result.Skipped++;
+                                continue;
+                            }
+                            if (view.ViewType == ViewType.Elevation &&
+                                !IsLinkedElementOnFacingWall(view, door, link.Transform))
+                            {
+                                result.Skipped++;
+                                continue;
+                            }
+                        }
+
+                        XYZ tagPoint = isPlan
+                            ? CalculatePlanTagPositionLinked(door, link.Transform)
+                            : CalculateElevSectionTagPositionLinked(door, link.Transform);
+
+                        if (tagPoint == null)
+                        {
+                            result.Errors.Add($"Could not calculate position for linked door {door.Id.IntegerValue} in '{view.Name}'.");
+                            continue;
+                        }
+
+                        if (isPlan)
+                            tagPoint = TagHelpers.ClampTagPointToCropRegion(view, tagPoint, CROP_MARGIN_FEET);
+
+                        Reference linkedRef = LinkedTagHelpers.BuildLinkedReference(door, link.Instance);
+                        if (linkedRef == null)
+                        {
+                            // Revit 2021: BuildLinkedReference always returns null,
+                            // so we silently skip — no error log noise.
+                            continue;
+                        }
+
+                        var newTag = IndependentTag.Create(
+                            doc, tagSymbol.Id, view.Id,
+                            linkedRef, false, TagOrientation.Horizontal, tagPoint);
+
+                        if (newTag != null) result.Tagged++;
+                    }
+                    catch (Exception ex)
+                    {
+                        result.Errors.Add($"Linked door {door.Id.IntegerValue}: {ex.Message}");
+                    }
+                }
+            }
+
             return result;
+        }
+
+        // ============================================================================
+        // LINKED-PASS PLACEMENT — mirror of the host helpers but with the link
+        // transform applied to every coordinate / direction we read from the
+        // linked document. Dead code in Revit 2021 (linked pass never enters)
+        // but kept for structural parity with revit-addin/.
+        // ============================================================================
+        private XYZ CalculatePlanTagPositionLinked(FamilyInstance door, Transform xform)
+        {
+            LocationPoint locPt = door.Location as LocationPoint;
+            if (locPt == null) return null;
+
+            XYZ doorPointHost = xform.OfPoint(locPt.Point);
+            XYZ tagSideDirHost = xform.OfVector(door.FacingOrientation);
+
+            Wall hostWall = door.Host as Wall;
+            double wallHalfWidth = hostWall != null ? hostWall.Width / 2.0 : 0.0;
+
+            double faceOffset = IsHorizontalWallLinked(hostWall, xform)
+                ? PARALLEL_OFFSET_FEET
+                : PERPENDICULAR_OFFSET_FEET;
+
+            return doorPointHost + tagSideDirHost.Multiply(wallHalfWidth + faceOffset);
+        }
+
+        private XYZ CalculateElevSectionTagPositionLinked(FamilyInstance door, Transform xform)
+        {
+            // Linked elements: the (view) overload is unsafe (view belongs to
+            // host doc, element to link doc). Read the element's intrinsic bbox
+            // in link coordinates and transform corners into host coords, then
+            // average to a centroid.
+            BoundingBoxXYZ bbox = door.get_BoundingBox(null);
+            if (bbox == null) return null;
+            XYZ centerLink = (bbox.Min + bbox.Max) * 0.5;
+            return xform.OfPoint(centerLink);
+        }
+
+        private bool IsHorizontalWallLinked(Wall wall, Transform xform)
+        {
+            if (wall == null) return false;
+            LocationCurve locCurve = wall.Location as LocationCurve;
+            if (locCurve == null) return false;
+            Line line = locCurve.Curve as Line;
+            if (line == null) return false;
+
+            // Direction is a vector — rotate it through the link transform so
+            // we evaluate horizontality in *host* (= screen) coordinates.
+            XYZ dirHost = xform.OfVector(line.Direction);
+            double absX = Math.Abs(dirHost.X);
+            double absY = Math.Abs(dirHost.Y);
+
+            const double HORIZONTAL_TOLERANCE = 0.9; // cos(~25°)
+            return absX >= HORIZONTAL_TOLERANCE && absX > absY;
+        }
+
+        // Linked-aware version of TagHelpers.IsElementOnFacingWall — the wall's
+        // direction lives in linkDoc coords, so we transform it before comparing
+        // against the host elevation's ViewDirection.
+        private bool IsLinkedElementOnFacingWall(View elevView, FamilyInstance elem, Transform xform)
+        {
+            try
+            {
+                if (elevView.ViewType != ViewType.Elevation) return true;
+                Wall hostWall = elem.Host as Wall;
+                if (hostWall == null) return true;
+                LocationCurve locCurve = hostWall.Location as LocationCurve;
+                if (locCurve == null) return true;
+                Line wallLine = locCurve.Curve as Line;
+                if (wallLine == null) return true;
+
+                XYZ wallDirHost = xform.OfVector(wallLine.Direction);
+                XYZ wallNormalHost = new XYZ(-wallDirHost.Y, wallDirHost.X, 0).Normalize();
+                XYZ viewDir = elevView.ViewDirection;
+
+                double dot = Math.Abs(wallNormalHost.DotProduct(viewDir));
+                return dot > 0.7;
+            }
+            catch
+            {
+                return true;
+            }
         }
 
         // ============================================================================

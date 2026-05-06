@@ -244,7 +244,8 @@ def ai_router(request):
         # Recognised replies (case-insensitive):
         #   "cancel" / "abort" / "stop" / "nevermind"        → cancel
         #   "skip" / "skip duplicates" / "skip dup"          → skip
-        #   "sub-parts" / "subparts" / "create as sub-parts" → subparts
+        #   "sub-sheets" / "subsheets" / "sub-parts" / "subparts"
+        #   / "create as sub-sheets" / "create as sub-parts"  → subparts
         # ==========================================================
         if request.session.get("ai_expecting_duplicate_choice"):
             import re as _re
@@ -252,7 +253,7 @@ def ai_router(request):
             choice = None
             if _re.search(r'\b(cancel|abort|stop|nevermind|never\s*mind)\b', cleaned):
                 choice = "cancel"
-            elif _re.search(r'\b(sub[\s\-]?parts?)\b', cleaned) or "create as sub" in cleaned:
+            elif _re.search(r'\b(sub[\s\-]?(?:parts?|sheets?))\b', cleaned) or "create as sub" in cleaned:
                 choice = "subparts"
             elif _re.search(r'\bskip(\s+dup\w*)?\b', cleaned):
                 choice = "skip"

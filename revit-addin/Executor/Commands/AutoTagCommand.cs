@@ -412,6 +412,10 @@ namespace A49AIRevitAssistant.Executor.Commands
                     continue;
                 }
 
+                int planFoundFloor = 0;
+                int planMissingFloor = 0;
+                int planSpotNull = 0;
+
                 foreach (Room room in linkedRooms)
                 {
                     try
@@ -424,17 +428,21 @@ namespace A49AIRevitAssistant.Executor.Commands
                         if (view.CropBoxActive && !TagHelpers.IsElementInCropRegion(view, pointHost))
                             continue;
 
-                        var (faceRef, floorTopZLink, _) = GetLinkedFloorTopFaceInfo(link, room, locPt.Point);
-                        if (faceRef == null) continue;
-
-                        // Translate the floor-top Z from link coords into host
-                        // coords by transforming a point on the floor's top
-                        // plane (using room XY for accuracy under link rotation).
-                        XYZ originLink = new XYZ(locPt.Point.X, locPt.Point.Y, floorTopZLink);
-                        XYZ originHost = link.Transform.OfPoint(originLink);
+                        var (faceRef, originHost, foundLabel) = FindLinkedRoomFloorRef(doc, view, link, room, locPt.Point);
+                        if (faceRef == null)
+                        {
+                            planMissingFloor++;
+                            continue;
+                        }
+                        planFoundFloor++;
 
                         SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, originHost, originHost, originHost, originHost, true);
-                        if (sd == null) continue;
+                        if (sd == null)
+                        {
+                            planSpotNull++;
+                            A49Logger.Log($"⚠️ SpotElev plan: NewSpotElevation returned null for linked room {room.Id.Value} (floor source: {foundLabel})");
+                            continue;
+                        }
 
                         try { sd.ChangeTypeId(spotType.Id); } catch { }
                         newSpotIds.Add(sd.Id);
@@ -445,6 +453,9 @@ namespace A49AIRevitAssistant.Executor.Commands
                         A49Logger.Log($"⚠️ SpotElev linked room {room.Id.Value}: {ex.Message}");
                     }
                 }
+
+                if (planMissingFloor > 0 || planSpotNull > 0)
+                    A49Logger.Log($"📐 SpotElev plan from link '{link.Document.Title}': {planFoundFloor} floors found, {planMissingFloor} missing, {planSpotNull} create-failed");
             }
 
             // Phase 2: batch-move all newly placed tags 500 mm down on screen.
@@ -574,6 +585,10 @@ namespace A49AIRevitAssistant.Executor.Commands
                     continue;
                 }
 
+                int secFoundFloor = 0;
+                int secMissingFloor = 0;
+                int secSpotNull = 0;
+
                 foreach (Room room in linkedRooms)
                 {
                     try
@@ -586,16 +601,24 @@ namespace A49AIRevitAssistant.Executor.Commands
                         XYZ pointHost = link.Transform.OfPoint(locPt.Point);
                         if (!IsPointInSectionView(pointHost, view)) continue;
 
-                        var (faceRef, floorTopZLink, _) = GetLinkedFloorTopFaceInfo(link, room, locPt.Point);
-                        if (faceRef == null) continue;
+                        var (faceRef, originHost, foundLabel) = FindLinkedRoomFloorRef(doc, view, link, room, locPt.Point);
+                        if (faceRef == null)
+                        {
+                            secMissingFloor++;
+                            continue;
+                        }
+                        secFoundFloor++;
 
-                        XYZ originLink = new XYZ(locPt.Point.X, locPt.Point.Y, floorTopZLink);
-                        XYZ originHost = link.Transform.OfPoint(originLink);
                         XYZ end  = originHost + downDir * offsetFt;
                         XYZ bend = originHost + downDir * (offsetFt * 0.5);
 
                         SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, originHost, bend, end, originHost, false);
-                        if (sd == null) continue;
+                        if (sd == null)
+                        {
+                            secSpotNull++;
+                            A49Logger.Log($"⚠️ SpotElev section: NewSpotElevation returned null for linked room {room.Id.Value} (floor source: {foundLabel})");
+                            continue;
+                        }
 
                         try { sd.ChangeTypeId(spotType.Id); } catch { }
                         tagged++;
@@ -605,36 +628,145 @@ namespace A49AIRevitAssistant.Executor.Commands
                         A49Logger.Log($"⚠️ SpotElev section linked room {room.Id.Value}: {ex.Message}");
                     }
                 }
+
+                if (secMissingFloor > 0 || secSpotNull > 0)
+                    A49Logger.Log($"📐 SpotElev section from link '{link.Document.Title}': {secFoundFloor} floors found, {secMissingFloor} missing, {secSpotNull} create-failed");
             }
 
             return tagged;
         }
 
         // ============================================================================
-        // LINKED FLOOR LOOKUP — mirror of GetFloorTopFaceInfo for linked rooms.
-        // Searches the SAME link doc for the floor under the room. The face
-        // Reference is built local-to-link, then converted to a host-valid
-        // link reference via Reference.CreateLinkReference. The returned Z
-        // is in LINK coords (caller transforms it to host).
+        // LINKED FLOOR LOOKUP — finds the slab under a linked room across all
+        // available documents, in priority order:
+        //   1. The room's own link doc (rooms+slab in same architectural link).
+        //   2. The host doc (rooms in arch link, slab in host model — common
+        //      A49 pattern when the structural firm owns the host).
+        //   3. Any OTHER loaded link doc (rooms in arch link, slab in struct link).
+        //
+        // For host-doc hits the face reference is used as-is. For link-doc
+        // hits the face reference is wrapped via CreateLinkReference so it's
+        // valid in the host transaction.
+        //
+        // Returns (faceRef, originHost, foundDocLabel) where:
+        //   faceRef       — host-valid Reference suitable for NewSpotElevation
+        //   originHost    — point on the floor's top face in host coords
+        //   foundDocLabel — diagnostic label (e.g. "host", "linked: ARCH.rvt")
         // ============================================================================
-        private (Reference faceRef, double topZLink, XYZ facePointLink) GetLinkedFloorTopFaceInfo(
-            TagStrategies.LinkContext link, Room room, XYZ roomCenterLink)
+        private (Reference faceRef, XYZ originHost, string foundLabel) FindLinkedRoomFloorRef(
+            Document hostDoc, View view, TagStrategies.LinkContext roomLink, Room room, XYZ roomCenterLink)
         {
-            Floor floor = FindFloorUnderRoomInDoc(link.Document, room);
-            if (floor == null) return (null, 0.0, null);
+            // Build the search list. Each entry: (doc, link transform applied
+            // to face Z when found, optional link instance for face-ref wrapping).
+            // searchTransform is the link→host transform; for the host search it's identity.
+            var searches = new List<(Document doc, Transform xform, RevitLinkInstance link, string label)>
+            {
+                // 1. Same link as the room.
+                (roomLink.Document, roomLink.Transform, roomLink.Instance, $"linked: {roomLink.Document.Title}"),
+                // 2. Host doc.
+                (hostDoc, Transform.Identity, null, "host"),
+            };
 
-            var (localFaceRef, topZ, point) = GetFloorTopFaceAtPoint(link.Document, floor, roomCenterLink);
-            if (localFaceRef == null) return (null, 0.0, null);
-
+            // 3. Other loaded links (excluding the room's own link).
             try
             {
-                Reference linkRef = localFaceRef.CreateLinkReference(link.Instance);
-                return (linkRef, topZ, point);
+                foreach (var other in TagStrategies.LinkedTagHelpers.EnumerateLinks(hostDoc, view))
+                {
+                    if (other.Instance.Id == roomLink.Instance.Id) continue;
+                    searches.Add((other.Document, other.Transform, other.Instance, $"linked: {other.Document.Title}"));
+                }
             }
-            catch
+            catch { }
+
+            // Each search tries to locate a floor under the room. The room's
+            // bbox (via room.get_BoundingBox(null)) is in LINK coords; for any
+            // search target whose space differs, transform the room's bbox into
+            // the search doc's coords first. For host: roomLink.Transform.OfPoint.
+            // For other-link: search.xform.Inverse * roomLink.Transform.OfPoint.
+            BoundingBoxXYZ roomBBLink = null;
+            try { roomBBLink = room.get_BoundingBox(null); } catch { }
+            if (roomBBLink == null) return (null, null, null);
+
+            foreach (var s in searches)
             {
-                return (null, 0.0, null);
+                try
+                {
+                    // Transform roomBB from link coords → search.doc coords.
+                    Transform linkToSearch = s.xform.Inverse.Multiply(roomLink.Transform);
+                    XYZ minSearch = linkToSearch.OfPoint(roomBBLink.Min);
+                    XYZ maxSearch = linkToSearch.OfPoint(roomBBLink.Max);
+                    XYZ minN = new XYZ(Math.Min(minSearch.X, maxSearch.X), Math.Min(minSearch.Y, maxSearch.Y), Math.Min(minSearch.Z, maxSearch.Z));
+                    XYZ maxN = new XYZ(Math.Max(minSearch.X, maxSearch.X), Math.Max(minSearch.Y, maxSearch.Y), Math.Max(minSearch.Z, maxSearch.Z));
+
+                    Floor floor = FindFloorByBBox(s.doc, minN, maxN);
+                    if (floor == null) continue;
+
+                    // Pick the room center in the search doc's coords for the
+                    // "near point" used by GetFloorTopFaceAtPoint.
+                    XYZ centerSearch = linkToSearch.OfPoint(roomCenterLink);
+                    var (localFaceRef, topZ, _) = GetFloorTopFaceAtPoint(s.doc, floor, centerSearch);
+                    if (localFaceRef == null) continue;
+
+                    // Build host-valid face reference.
+                    Reference hostFaceRef;
+                    if (s.link == null)
+                    {
+                        hostFaceRef = localFaceRef;     // host search → already valid
+                    }
+                    else
+                    {
+                        try { hostFaceRef = localFaceRef.CreateLinkReference(s.link); }
+                        catch { continue; }
+                        if (hostFaceRef == null) continue;
+                    }
+
+                    // Origin point on the face, expressed in HOST coords.
+                    XYZ originSearch = new XYZ(centerSearch.X, centerSearch.Y, topZ);
+                    XYZ originHost = s.xform.OfPoint(originSearch);
+
+                    return (hostFaceRef, originHost, s.label);
+                }
+                catch (Exception ex)
+                {
+                    A49Logger.Log($"⚠️ SpotElev floor search '{s.label}' for linked room {room.Id.Value}: {ex.Message}");
+                }
             }
+
+            return (null, null, null);
+        }
+
+        // BBox-first floor search shared by host and link doc lookups.
+        private Floor FindFloorByBBox(Document searchDoc, XYZ minPt, XYZ maxPt)
+        {
+            try
+            {
+                // Expand the search 2 ft below to catch slabs beneath the room.
+                var expandedMin = new XYZ(minPt.X, minPt.Y, minPt.Z - 2.0);
+                var expandedMax = new XYZ(maxPt.X, maxPt.Y, maxPt.Z);
+                var outline = new Outline(expandedMin, expandedMax);
+                var bbFilter = new BoundingBoxIntersectsFilter(outline);
+
+                var floors = new FilteredElementCollector(searchDoc)
+                    .OfClass(typeof(Floor))
+                    .WherePasses(bbFilter)
+                    .Cast<Floor>()
+                    .ToList();
+
+                if (floors.Count == 0) return null;
+
+                double roomBaseZ = minPt.Z;
+                Floor best = null;
+                double bestDelta = double.MaxValue;
+                foreach (Floor f in floors)
+                {
+                    BoundingBoxXYZ fbb = f.get_BoundingBox(null);
+                    if (fbb == null) continue;
+                    double delta = Math.Abs(fbb.Max.Z - roomBaseZ);
+                    if (delta < bestDelta) { bestDelta = delta; best = f; }
+                }
+                return best;
+            }
+            catch { return null; }
         }
 
         // Same algorithm as FindFloorUnderRoom but takes the doc explicitly so

@@ -21,6 +21,14 @@ namespace A49AIRevitAssistant.Executor.Commands
         private readonly UIApplication _uiapp;
         private readonly JObject _rawPayload;
 
+        // Carried from the first transaction (where we resolve the room's
+        // bbox in host coords) into the deferred ContinueAfterMarkerPick
+        // step. Lets us tightly crop each generated elevation to the room
+        // — eliminates the "default crop is the entire model" problem,
+        // especially for linked rooms where Revit's auto-crop heuristic
+        // can't introspect the linked geometry the same way.
+        private BoundingBoxXYZ _roomBboxFullHost;
+
         public InteractiveRoomPackageCommand(UIApplication uiapp, JObject rawPayload)
         {
             _uiapp = uiapp;
@@ -69,19 +77,21 @@ namespace A49AIRevitAssistant.Executor.Commands
                 }
 
                 // --- 3. INTERACTIVE PICK 1: THE ROOM ---
+                // Filter accepts both host-doc rooms and linked-doc rooms via
+                // the RevitLinkInstance branch + AllowReference resolution.
                 Reference roomRef = uidoc.Selection.PickObject(
                     ObjectType.Element,
-                    new RoomSelectionFilter(),
+                    new RoomSelectionFilter(doc),
                     "Vella: Click a Room (or Room Tag) to create an Enlarged Plan.");
 
-                Element clickedElem = doc.GetElement(roomRef);
-                Room targetRoom = clickedElem as Room;
-
-                if (clickedElem is RoomTag tag)
-                {
-                    targetRoom = tag.Room;
-                }
-
+                // Resolve picked element into a Room. Handles four cases:
+                //   1. Host Room   2. Host RoomTag → tag.Room
+                //   3. Linked Room 4. Linked RoomTag → tag.Room (in link doc)
+                //
+                // roomToHost transform converts coords from the room's own doc
+                // into host coords. Identity for host rooms; the link's
+                // GetTotalTransform for linked rooms.
+                var (targetRoom, roomToHost) = ResolveRoomFromReference(doc, roomRef);
                 if (targetRoom == null)
                 {
                     return "{\"status\":\"error\", \"message\":\"❌ Invalid selection. Command cancelled.\"}";
@@ -94,14 +104,53 @@ namespace A49AIRevitAssistant.Executor.Commands
                 {
                     t1.Start();
 
-                    BoundingBoxXYZ bb = targetRoom.get_BoundingBox(activePlan);
+                    // For a host room we can pass activePlan to get the bbox
+                    // clipped to the view's depth — this is what was here
+                    // before. For a LINKED room, get_BoundingBox(view) returns
+                    // null because the view belongs to a different doc, so we
+                    // fall back to the intrinsic bbox and transform corners
+                    // into host coords.
+                    BoundingBoxXYZ bb = targetRoom.get_BoundingBox(activePlan)
+                                       ?? targetRoom.get_BoundingBox(null);
                     if (bb == null)
                     {
                         throw new Exception("Could not determine the selected room bounding box.");
                     }
 
-                    XYZ minPt = new XYZ(bb.Min.X - offsetFt, bb.Min.Y - offsetFt, bb.Min.Z);
-                    XYZ maxPt = new XYZ(bb.Max.X + offsetFt, bb.Max.Y + offsetFt, bb.Max.Z);
+                    // Transform the room bbox corners into host coords. For
+                    // host rooms roomToHost is identity → values unchanged.
+                    XYZ bbMinHost = roomToHost.OfPoint(bb.Min);
+                    XYZ bbMaxHost = roomToHost.OfPoint(bb.Max);
+                    // Re-normalize after transform — link rotation about Z can
+                    // swap X/Y min↔max so we have to take per-axis min/max.
+                    double minX = Math.Min(bbMinHost.X, bbMaxHost.X);
+                    double minY = Math.Min(bbMinHost.Y, bbMaxHost.Y);
+                    double minZ = Math.Min(bbMinHost.Z, bbMaxHost.Z);
+                    double maxX = Math.Max(bbMinHost.X, bbMaxHost.X);
+                    double maxY = Math.Max(bbMinHost.Y, bbMaxHost.Y);
+                    double maxZ = Math.Max(bbMinHost.Z, bbMaxHost.Z);
+
+                    XYZ minPt = new XYZ(minX - offsetFt, minY - offsetFt, minZ);
+                    XYZ maxPt = new XYZ(maxX + offsetFt, maxY + offsetFt, maxZ);
+
+                    // Stash the room's FULL 3D bbox in host coords for the
+                    // elevation-crop step (later transaction). The plan-clipped
+                    // bbox above was good enough for the callout (a 2D crop)
+                    // but elevations need the room's true vertical extent —
+                    // get_BoundingBox(activePlan) may have clipped it to the
+                    // plan view's depth.
+                    BoundingBoxXYZ bbFull = targetRoom.get_BoundingBox(null) ?? bb;
+                    XYZ fmin = roomToHost.OfPoint(bbFull.Min);
+                    XYZ fmax = roomToHost.OfPoint(bbFull.Max);
+                    _roomBboxFullHost = new BoundingBoxXYZ
+                    {
+                        Min = new XYZ(Math.Min(fmin.X, fmax.X),
+                                      Math.Min(fmin.Y, fmax.Y),
+                                      Math.Min(fmin.Z, fmax.Z)),
+                        Max = new XYZ(Math.Max(fmin.X, fmax.X),
+                                      Math.Max(fmin.Y, fmax.Y),
+                                      Math.Max(fmin.Z, fmax.Z)),
+                    };
 
                     ViewFamilyType calloutType = new FilteredElementCollector(doc)
                         .OfClass(typeof(ViewFamilyType))
@@ -254,6 +303,15 @@ namespace A49AIRevitAssistant.Executor.Commands
                     {
                         elevView.ViewTemplateId = elevTemplate.Id;
                     }
+
+                    // Crop the elevation to the room's actual bounds. Revit's
+                    // default crop after CreateElevation extends to whatever
+                    // geometry the marker can "see" in 3D, which for linked
+                    // rooms is usually the entire model — hence the staff
+                    // report of "elevation height crop and view limits are
+                    // off." Setting it explicitly makes the result tight and
+                    // identical for host vs linked rooms.
+                    SetElevationCropToRoom(elevView, _roomBboxFullHost);
 
                     generatedElevations.Add(elevView);
                 }
@@ -428,6 +486,131 @@ namespace A49AIRevitAssistant.Executor.Commands
         }
 
         // ============================================================================
+        // SET ELEVATION CROP TO ROOM BOUNDS
+        // ============================================================================
+        // After ElevationMarker.CreateElevation, Revit's default crop is a
+        // model-wide guess. For a linked room the heuristic doesn't introspect
+        // the linked geometry the same way, so the crop blows out to the
+        // entire visible model. We explicitly pin the crop to the room's
+        // actual bounds (in host coords), with small XY/Z paddings so wall
+        // thickness stays visible.
+        //
+        // Method: take the 8 corners of the room's host-coord bbox, project
+        // them into the elevation view's local frame, and use the per-axis
+        // min/max as the new crop extents. This is invariant under arbitrary
+        // elevation orientation (north/south/east/west and any in-between).
+        // No-op (try/catch swallow) if Revit rejects the new bbox — better to
+        // leave the default crop than to crash mid-creation.
+        // ============================================================================
+        private void SetElevationCropToRoom(ViewSection elevView, BoundingBoxXYZ roomBboxHost)
+        {
+            if (elevView == null || roomBboxHost == null) return;
+            try
+            {
+                BoundingBoxXYZ crop = elevView.CropBox;
+                if (crop == null || crop.Transform == null) return;
+
+                // 8 corners of the room's bbox in host (world) coords.
+                XYZ rmin = roomBboxHost.Min;
+                XYZ rmax = roomBboxHost.Max;
+                XYZ[] corners = new[]
+                {
+                    new XYZ(rmin.X, rmin.Y, rmin.Z),
+                    new XYZ(rmin.X, rmin.Y, rmax.Z),
+                    new XYZ(rmin.X, rmax.Y, rmin.Z),
+                    new XYZ(rmin.X, rmax.Y, rmax.Z),
+                    new XYZ(rmax.X, rmin.Y, rmin.Z),
+                    new XYZ(rmax.X, rmin.Y, rmax.Z),
+                    new XYZ(rmax.X, rmax.Y, rmin.Z),
+                    new XYZ(rmax.X, rmax.Y, rmax.Z),
+                };
+
+                // Project into elevation-view-local frame:
+                //   X = horizontal across screen
+                //   Y = vertical (up = positive)
+                //   Z = depth (negative = into model, away from viewer)
+                Transform inv = crop.Transform.Inverse;
+                double minX = double.MaxValue, minY = double.MaxValue, minZ = double.MaxValue;
+                double maxX = double.MinValue, maxY = double.MinValue, maxZ = double.MinValue;
+                foreach (XYZ c in corners)
+                {
+                    XYZ p = inv.OfPoint(c);
+                    if (p.X < minX) minX = p.X;
+                    if (p.X > maxX) maxX = p.X;
+                    if (p.Y < minY) minY = p.Y;
+                    if (p.Y > maxY) maxY = p.Y;
+                    if (p.Z < minZ) minZ = p.Z;
+                    if (p.Z > maxZ) maxZ = p.Z;
+                }
+
+                // Padding — 200mm horizontal/vertical so wall thickness shows;
+                // 300mm depth so far clip extends just past the back wall.
+                double padXY = 200.0 / 304.8;
+                double padZ = 300.0 / 304.8;
+
+                crop.Min = new XYZ(minX - padXY, minY - padXY, minZ - padZ);
+                crop.Max = new XYZ(maxX + padXY, maxY + padXY, maxZ + padZ);
+                elevView.CropBox = crop;
+                elevView.CropBoxActive = true;
+            }
+            catch
+            {
+                // Leave Revit's default crop in place if the API rejects ours.
+            }
+        }
+
+        // ============================================================================
+        // RESOLVE PICKED REFERENCE → (Room, transform-from-room-doc-to-host)
+        // ============================================================================
+        // Handles all four combinations the RoomSelectionFilter admits:
+        //   • Host Room        → (room, Identity)
+        //   • Host RoomTag     → (tag.Room, Identity)
+        //   • Linked Room      → (linkedRoom, link.GetTotalTransform())
+        //   • Linked RoomTag   → (tagInLinkDoc.Room, link.GetTotalTransform())
+        //
+        // For host paths returns Transform.Identity so downstream OfPoint
+        // calls leave coords untouched. For linked paths returns the link's
+        // total transform so callers can map the room's bbox / location into
+        // host coords before passing to host-doc APIs (CreateCallout, etc.).
+        // Returns (null, null) when the reference can't be resolved into a Room.
+        // ============================================================================
+        private (Room room, Transform roomToHost) ResolveRoomFromReference(Document hostDoc, Reference roomRef)
+        {
+            if (hostDoc == null || roomRef == null) return (null, null);
+
+            // Host pick: LinkedElementId is the invalid sentinel.
+            if (roomRef.LinkedElementId == ElementId.InvalidElementId)
+            {
+                Element clicked = hostDoc.GetElement(roomRef);
+                Room hostRoom = clicked as Room;
+                if (clicked is RoomTag tag) hostRoom = tag.Room;
+                return (hostRoom, Transform.Identity);
+            }
+
+            // Linked pick: walk through the link instance to its document.
+            try
+            {
+                var link = hostDoc.GetElement(roomRef.ElementId) as RevitLinkInstance;
+                if (link == null) return (null, null);
+                Document linkDoc = link.GetLinkDocument();
+                if (linkDoc == null) return (null, null);
+
+                Element linkedElem = linkDoc.GetElement(roomRef.LinkedElementId);
+                Room linkedRoom = linkedElem as Room;
+                // RoomTag in linked doc — its Room property returns the linked Room.
+                if (linkedElem is RoomTag linkedTag) linkedRoom = linkedTag.Room;
+                if (linkedRoom == null) return (null, null);
+
+                Transform xform = link.GetTotalTransform() ?? Transform.Identity;
+                return (linkedRoom, xform);
+            }
+            catch
+            {
+                return (null, null);
+            }
+        }
+
+        // ============================================================================
         // HELPER 1: SMART VIEW NAMING (" Copy X")
         // ============================================================================
         private void SetUniqueViewName(Document doc, View view, string desiredName)
@@ -565,18 +748,57 @@ namespace A49AIRevitAssistant.Executor.Commands
     }
 
     // ============================================================================
-    // SELECTION FILTER: Forces user to ONLY click on Rooms or Room Tags
+    // SELECTION FILTER: Forces user to ONLY click on Rooms or Room Tags.
+    // Accepts both HOST elements and LINKED elements — for a linked Revit model
+    // the picker's hit-test surfaces a RevitLinkInstance, so we say "yes" to
+    // the link instance in AllowElement and then narrow to Room/RoomTag in
+    // AllowReference by resolving the linked element through the link's doc.
     // ============================================================================
     public class RoomSelectionFilter : ISelectionFilter
     {
+        private readonly Document _hostDoc;
+
+        public RoomSelectionFilter(Document hostDoc)
+        {
+            _hostDoc = hostDoc;
+        }
+
         public bool AllowElement(Element elem)
         {
-            return elem is Room || elem is RoomTag;
+            // Host-doc Rooms / RoomTags pass directly. RevitLinkInstance also
+            // passes so the picker doesn't reject the click outright — the
+            // linked-element check happens in AllowReference below.
+            return elem is Room
+                || elem is RoomTag
+                || elem is RevitLinkInstance;
         }
 
         public bool AllowReference(Reference reference, XYZ position)
         {
-            return false;
+            if (reference == null || _hostDoc == null) return false;
+
+            // Host references: nothing to narrow — AllowElement already gated
+            // to Room/RoomTag for non-link picks.
+            if (reference.LinkedElementId == ElementId.InvalidElementId)
+                return true;
+
+            // Link references: walk to the linked element and confirm it's a
+            // Room or RoomTag. Reject everything else (walls, doors, etc. in
+            // the linked file would otherwise pass AllowElement via the
+            // RevitLinkInstance branch).
+            try
+            {
+                var link = _hostDoc.GetElement(reference.ElementId) as RevitLinkInstance;
+                if (link == null) return false;
+                Document linkDoc = link.GetLinkDocument();
+                if (linkDoc == null) return false;     // unloaded
+                Element linkedElem = linkDoc.GetElement(reference.LinkedElementId);
+                return linkedElem is Room || linkedElem is RoomTag;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }

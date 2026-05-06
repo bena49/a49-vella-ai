@@ -106,6 +106,80 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
                 }
             }
 
+            // ====================================================================
+            // LINKED PASS — ceilings in linked Revit models. Tag at the
+            // bbox centroid (same as host pass) but in host coords.
+            // ====================================================================
+            foreach (var link in LinkedTagHelpers.EnumerateLinks(doc, view))
+            {
+                HashSet<long> linkedAlreadyTagged = skipTagged
+                    ? LinkedTagHelpers.CollectAlreadyTaggedLinkedIds(doc, view, link.Instance.Id, TargetCategory)
+                    : new HashSet<long>();
+
+                FilteredElementCollector linkedCeilings;
+                try
+                {
+                    linkedCeilings = new FilteredElementCollector(link.Document)
+                        .OfCategory(TargetCategory)
+                        .WhereElementIsNotElementType();
+                }
+                catch (Exception ex)
+                {
+                    result.Errors.Add($"Linked doc '{link.Document.Title}': {ex.Message}");
+                    continue;
+                }
+
+                foreach (Element ceiling in linkedCeilings)
+                {
+                    try
+                    {
+                        if (skipTagged && linkedAlreadyTagged.Contains(ceiling.Id.Value))
+                        {
+                            result.Skipped++;
+                            continue;
+                        }
+
+                        // The (view) overload is unsafe across docs — read the
+                        // intrinsic bbox in link coords, take centroid, then
+                        // transform to host.
+                        BoundingBoxXYZ bbox = ceiling.get_BoundingBox(null);
+                        if (bbox == null)
+                        {
+                            result.Errors.Add($"No bounding box for linked ceiling {ceiling.Id.Value}.");
+                            continue;
+                        }
+                        XYZ centroidLink = (bbox.Min + bbox.Max) * 0.5;
+                        XYZ centroidHost = link.Transform.OfPoint(centroidLink);
+
+                        // Skip ceilings whose centroid falls outside this view's
+                        // crop region (best-effort visibility check — ceiling
+                        // plans usually don't crop, but scope-boxed views do).
+                        if (!TagHelpers.IsElementInCropRegion(view, centroidHost))
+                        {
+                            result.Skipped++;
+                            continue;
+                        }
+
+                        Reference linkedRef = LinkedTagHelpers.BuildLinkedReference(ceiling, link.Instance);
+                        if (linkedRef == null)
+                        {
+                            result.Errors.Add($"Could not build link reference for ceiling {ceiling.Id.Value}.");
+                            continue;
+                        }
+
+                        var newTag = IndependentTag.Create(
+                            doc, tagSymbol.Id, view.Id,
+                            linkedRef, false, TagOrientation.Horizontal, centroidHost);
+
+                        if (newTag != null) result.Tagged++;
+                    }
+                    catch (Exception ex)
+                    {
+                        result.Errors.Add($"Linked ceiling {ceiling.Id.Value}: {ex.Message}");
+                    }
+                }
+            }
+
             return result;
         }
     }

@@ -180,7 +180,177 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
                 }
             }
 
+            // ====================================================================
+            // LINKED PASS — windows in linked Revit models. Room-based smart
+            // placement uses the *link's own document* for GetRoomAtPoint (the
+            // host phase isn't valid in the link doc). If the link has no rooms
+            // defined, falls back to FacingOrientation — same fallback the host
+            // pass uses when no rooms surround the window.
+            // ====================================================================
+            foreach (var link in LinkedTagHelpers.EnumerateLinks(doc, view))
+            {
+                HashSet<long> linkedAlreadyTagged = skipTagged
+                    ? LinkedTagHelpers.CollectAlreadyTaggedLinkedIds(doc, view, link.Instance.Id, TargetCategory)
+                    : new HashSet<long>();
+
+                FilteredElementCollector linkedWindows;
+                try
+                {
+                    linkedWindows = new FilteredElementCollector(link.Document)
+                        .OfCategory(TargetCategory)
+                        .OfClass(typeof(FamilyInstance));
+                }
+                catch (Exception ex)
+                {
+                    result.Errors.Add($"Linked doc '{link.Document.Title}': {ex.Message}");
+                    continue;
+                }
+
+                foreach (FamilyInstance window in linkedWindows)
+                {
+                    try
+                    {
+                        if (skipTagged && linkedAlreadyTagged.Contains(window.Id.Value))
+                        {
+                            result.Skipped++;
+                            continue;
+                        }
+
+                        LocationPoint lp = window.Location as LocationPoint;
+                        XYZ ptHost = lp != null ? link.Transform.OfPoint(lp.Point) : null;
+
+                        if (isPlan)
+                        {
+                            if (ptHost != null && !TagHelpers.IsElementInCropRegion(view, ptHost))
+                            {
+                                result.Skipped++;
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            if (ptHost == null) { result.Skipped++; continue; }
+
+                            if (view.ViewType == ViewType.Section &&
+                                !TagHelpers.IsElementVisibleInSection(view, window, ptHost))
+                            {
+                                result.Skipped++;
+                                continue;
+                            }
+                            if (view.ViewType == ViewType.Elevation &&
+                                !IsLinkedElementOnFacingWall(view, window, link.Transform))
+                            {
+                                result.Skipped++;
+                                continue;
+                            }
+                        }
+
+                        XYZ tagPoint = isPlan
+                            ? CalculatePlanTagPositionLinked(link.Document, window, link.Transform)
+                            : CalculateElevSectionTagPositionLinked(window, link.Transform);
+
+                        if (tagPoint == null)
+                        {
+                            result.Errors.Add($"Could not calculate position for linked window {window.Id.Value} in '{view.Name}'.");
+                            continue;
+                        }
+
+                        if (isPlan)
+                            tagPoint = TagHelpers.ClampTagPointToCropRegion(view, tagPoint, CROP_MARGIN_FEET);
+
+                        Reference linkedRef = LinkedTagHelpers.BuildLinkedReference(window, link.Instance);
+                        if (linkedRef == null)
+                        {
+                            result.Errors.Add($"Could not build link reference for window {window.Id.Value}.");
+                            continue;
+                        }
+
+                        var newTag = IndependentTag.Create(
+                            doc, tagSymbol.Id, view.Id,
+                            linkedRef, false, TagOrientation.Horizontal, tagPoint);
+
+                        if (newTag != null) result.Tagged++;
+                    }
+                    catch (Exception ex)
+                    {
+                        result.Errors.Add($"Linked window {window.Id.Value}: {ex.Message}");
+                    }
+                }
+            }
+
             return result;
+        }
+
+        // ============================================================================
+        // LINKED-PASS PLACEMENT HELPERS
+        // ============================================================================
+        private XYZ CalculatePlanTagPositionLinked(Document linkDoc, FamilyInstance window, Transform xform)
+        {
+            LocationPoint locPt = window.Location as LocationPoint;
+            if (locPt == null) return null;
+
+            XYZ windowPointLink = locPt.Point;
+            XYZ facingDirLink = window.FacingOrientation;
+
+            // Room lookups use the link's own document — no host phase. If the
+            // link doesn't have rooms placed, both queries return null and we
+            // fall through to the FacingOrientation fallback.
+            XYZ facingTestLink = windowPointLink + facingDirLink.Multiply(ROOM_TEST_DISTANCE_FEET);
+            XYZ oppositeTestLink = windowPointLink - facingDirLink.Multiply(ROOM_TEST_DISTANCE_FEET);
+            Room facingRoom = GetRoomAtPointSafe(linkDoc, facingTestLink);
+            Room oppositeRoom = GetRoomAtPointSafe(linkDoc, oppositeTestLink);
+
+            XYZ tagSideDirLink;
+            if (facingRoom != null && oppositeRoom == null)
+                tagSideDirLink = facingDirLink.Negate();
+            else if (facingRoom == null && oppositeRoom != null)
+                tagSideDirLink = facingDirLink;
+            else
+                tagSideDirLink = facingDirLink;     // both-rooms (interior) OR no-rooms (fallback)
+
+            Wall hostWall = window.Host as Wall;
+            double wallHalfWidth = hostWall != null ? hostWall.Width / 2.0 : 0.0;
+
+            XYZ tagPointLink = windowPointLink + tagSideDirLink.Multiply(wallHalfWidth + PLAN_OFFSET_FEET);
+            return xform.OfPoint(tagPointLink);
+        }
+
+        private XYZ CalculateElevSectionTagPositionLinked(FamilyInstance window, Transform xform)
+        {
+            BoundingBoxXYZ bbox = window.get_BoundingBox(null);
+            if (bbox == null) return null;
+            XYZ centerLink = (bbox.Min + bbox.Max) * 0.5;
+            return xform.OfPoint(centerLink);
+        }
+
+        private Room GetRoomAtPointSafe(Document d, XYZ pointInD)
+        {
+            try { return d.GetRoomAtPoint(pointInD); } catch { return null; }
+        }
+
+        private bool IsLinkedElementOnFacingWall(View elevView, FamilyInstance elem, Transform xform)
+        {
+            try
+            {
+                if (elevView.ViewType != ViewType.Elevation) return true;
+                Wall hostWall = elem.Host as Wall;
+                if (hostWall == null) return true;
+                LocationCurve locCurve = hostWall.Location as LocationCurve;
+                if (locCurve == null) return true;
+                Line wallLine = locCurve.Curve as Line;
+                if (wallLine == null) return true;
+
+                XYZ wallDirHost = xform.OfVector(wallLine.Direction);
+                XYZ wallNormalHost = new XYZ(-wallDirHost.Y, wallDirHost.X, 0).Normalize();
+                XYZ viewDir = elevView.ViewDirection;
+
+                double dot = Math.Abs(wallNormalHost.DotProduct(viewDir));
+                return dot > 0.7;
+            }
+            catch
+            {
+                return true;
+            }
         }
 
         // ============================================================================

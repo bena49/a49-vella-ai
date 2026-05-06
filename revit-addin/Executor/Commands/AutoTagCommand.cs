@@ -386,6 +386,67 @@ namespace A49AIRevitAssistant.Executor.Commands
                 }
             }
 
+            // ────────────────────────────────────────────────────────────
+            // LINKED PASS — rooms in linked Revit models. We look for the
+            // floor in the SAME link doc (most A49 projects keep architecture
+            // rooms+floors together in one link). The face Reference is built
+            // local-to-link, then turned into a host-valid link reference via
+            // CreateLinkReference. The placement origin is in host coords.
+            // Mixed-doc cases (linked room over host floor, or vice-versa) are
+            // out of scope for v1 — they fall through and produce no spot.
+            // ────────────────────────────────────────────────────────────
+            foreach (var link in TagStrategies.LinkedTagHelpers.EnumerateLinks(doc, view))
+            {
+                IEnumerable<Room> linkedRooms;
+                try
+                {
+                    linkedRooms = new FilteredElementCollector(link.Document)
+                        .OfCategory(BuiltInCategory.OST_Rooms)
+                        .WhereElementIsNotElementType()
+                        .Cast<Room>()
+                        .Where(r => r.Area > 0 && r.Location != null);
+                }
+                catch (Exception ex)
+                {
+                    A49Logger.Log($"⚠️ SpotElev linked doc '{link.Document.Title}': {ex.Message}");
+                    continue;
+                }
+
+                foreach (Room room in linkedRooms)
+                {
+                    try
+                    {
+                        var locPt = room.Location as LocationPoint;
+                        if (locPt == null) continue;
+
+                        // Crop check in host coords.
+                        XYZ pointHost = link.Transform.OfPoint(locPt.Point);
+                        if (view.CropBoxActive && !TagHelpers.IsElementInCropRegion(view, pointHost))
+                            continue;
+
+                        var (faceRef, floorTopZLink, _) = GetLinkedFloorTopFaceInfo(link, room, locPt.Point);
+                        if (faceRef == null) continue;
+
+                        // Translate the floor-top Z from link coords into host
+                        // coords by transforming a point on the floor's top
+                        // plane (using room XY for accuracy under link rotation).
+                        XYZ originLink = new XYZ(locPt.Point.X, locPt.Point.Y, floorTopZLink);
+                        XYZ originHost = link.Transform.OfPoint(originLink);
+
+                        SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, originHost, originHost, originHost, originHost, true);
+                        if (sd == null) continue;
+
+                        try { sd.ChangeTypeId(spotType.Id); } catch { }
+                        newSpotIds.Add(sd.Id);
+                        tagged++;
+                    }
+                    catch (Exception ex)
+                    {
+                        A49Logger.Log($"⚠️ SpotElev linked room {room.Id.Value}: {ex.Message}");
+                    }
+                }
+            }
+
             // Phase 2: batch-move all newly placed tags 500 mm down on screen.
             // view.UpDirection.Negate() = "down on screen" regardless of view rotation.
             if (newSpotIds.Count > 0)
@@ -489,7 +550,145 @@ namespace A49AIRevitAssistant.Executor.Commands
                 }
             }
 
+            // ────────────────────────────────────────────────────────────
+            // LINKED PASS (section) — same shape as the floor-plan branch
+            // above. We collect rooms from each link, filter by section
+            // crop volume (in host coords), find the floor in the same link
+            // doc, and place the spot using a host-coord origin and a
+            // link-aware face reference.
+            // ────────────────────────────────────────────────────────────
+            foreach (var link in TagStrategies.LinkedTagHelpers.EnumerateLinks(doc, view))
+            {
+                IEnumerable<Room> linkedRooms;
+                try
+                {
+                    linkedRooms = new FilteredElementCollector(link.Document)
+                        .OfCategory(BuiltInCategory.OST_Rooms)
+                        .WhereElementIsNotElementType()
+                        .Cast<Room>()
+                        .Where(r => r.Area > 0 && r.Location != null);
+                }
+                catch (Exception ex)
+                {
+                    A49Logger.Log($"⚠️ SpotElev section linked doc '{link.Document.Title}': {ex.Message}");
+                    continue;
+                }
+
+                foreach (Room room in linkedRooms)
+                {
+                    try
+                    {
+                        var locPt = room.Location as LocationPoint;
+                        if (locPt == null) continue;
+
+                        // Visibility: re-use the section crop volume check on the
+                        // transformed (host-coord) location point.
+                        XYZ pointHost = link.Transform.OfPoint(locPt.Point);
+                        if (!IsPointInSectionView(pointHost, view)) continue;
+
+                        var (faceRef, floorTopZLink, _) = GetLinkedFloorTopFaceInfo(link, room, locPt.Point);
+                        if (faceRef == null) continue;
+
+                        XYZ originLink = new XYZ(locPt.Point.X, locPt.Point.Y, floorTopZLink);
+                        XYZ originHost = link.Transform.OfPoint(originLink);
+                        XYZ end  = originHost + downDir * offsetFt;
+                        XYZ bend = originHost + downDir * (offsetFt * 0.5);
+
+                        SpotDimension sd = doc.Create.NewSpotElevation(view, faceRef, originHost, bend, end, originHost, false);
+                        if (sd == null) continue;
+
+                        try { sd.ChangeTypeId(spotType.Id); } catch { }
+                        tagged++;
+                    }
+                    catch (Exception ex)
+                    {
+                        A49Logger.Log($"⚠️ SpotElev section linked room {room.Id.Value}: {ex.Message}");
+                    }
+                }
+            }
+
             return tagged;
+        }
+
+        // ============================================================================
+        // LINKED FLOOR LOOKUP — mirror of GetFloorTopFaceInfo for linked rooms.
+        // Searches the SAME link doc for the floor under the room. The face
+        // Reference is built local-to-link, then converted to a host-valid
+        // link reference via Reference.CreateLinkReference. The returned Z
+        // is in LINK coords (caller transforms it to host).
+        // ============================================================================
+        private (Reference faceRef, double topZLink, XYZ facePointLink) GetLinkedFloorTopFaceInfo(
+            TagStrategies.LinkContext link, Room room, XYZ roomCenterLink)
+        {
+            Floor floor = FindFloorUnderRoomInDoc(link.Document, room);
+            if (floor == null) return (null, 0.0, null);
+
+            var (localFaceRef, topZ, point) = GetFloorTopFaceAtPoint(link.Document, floor, roomCenterLink);
+            if (localFaceRef == null) return (null, 0.0, null);
+
+            try
+            {
+                Reference linkRef = localFaceRef.CreateLinkReference(link.Instance);
+                return (linkRef, topZ, point);
+            }
+            catch
+            {
+                return (null, 0.0, null);
+            }
+        }
+
+        // Same algorithm as FindFloorUnderRoom but takes the doc explicitly so
+        // we can search a link's document instead of the host.
+        private Floor FindFloorUnderRoomInDoc(Document searchDoc, Room room)
+        {
+            try
+            {
+                BoundingBoxXYZ roomBB = room.get_BoundingBox(null);
+                if (roomBB == null) return null;
+
+                var expandedMin = new XYZ(roomBB.Min.X, roomBB.Min.Y, roomBB.Min.Z - 2.0);
+                var expandedMax = new XYZ(roomBB.Max.X, roomBB.Max.Y, roomBB.Max.Z);
+                var outline  = new Outline(expandedMin, expandedMax);
+                var bbFilter = new BoundingBoxIntersectsFilter(outline);
+
+                var floors = new FilteredElementCollector(searchDoc)
+                    .OfClass(typeof(Floor))
+                    .WherePasses(bbFilter)
+                    .Cast<Floor>()
+                    .ToList();
+
+                if (floors.Count == 0) return null;
+
+                double roomBaseZ = roomBB.Min.Z;
+                Floor  best      = null;
+                double bestDelta = double.MaxValue;
+                foreach (Floor f in floors)
+                {
+                    BoundingBoxXYZ fbb = f.get_BoundingBox(null);
+                    if (fbb == null) continue;
+                    double delta = Math.Abs(fbb.Max.Z - roomBaseZ);
+                    if (delta < bestDelta) { bestDelta = delta; best = f; }
+                }
+                return best;
+            }
+            catch { return null; }
+        }
+
+        // Crop-volume containment for a host-coord point in a section view.
+        // Mirror of IsRoomInSectionView but takes the point directly so the
+        // linked branch can pre-transform.
+        private bool IsPointInSectionView(XYZ pointHost, View view)
+        {
+            BoundingBoxXYZ crop = view.CropBox;
+            if (crop == null) return true;
+            try
+            {
+                XYZ localPt = crop.Transform.Inverse.OfPoint(pointHost);
+                return localPt.X >= crop.Min.X && localPt.X <= crop.Max.X &&
+                       localPt.Y >= crop.Min.Y && localPt.Y <= crop.Max.Y &&
+                       localPt.Z >= crop.Min.Z && localPt.Z <= crop.Max.Z;
+            }
+            catch { return false; }
         }
 
         // Returns true if the room's location point lies inside the section view's

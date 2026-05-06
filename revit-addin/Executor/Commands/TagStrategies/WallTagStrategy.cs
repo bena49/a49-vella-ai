@@ -165,7 +165,168 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
                 }
             }
 
+            // ====================================================================
+            // LINKED PASS — walls in linked Revit models. Segmentation/opening
+            // logic is rerun against each link's own document (rooms in the link
+            // segment its own walls; openings hosted on a linked wall live in
+            // the same link doc). Tag anchor + head are computed in link coords
+            // then transformed to host coords for the crop-region check and the
+            // final IndependentTag.Create call.
+            // ====================================================================
+            foreach (var link in LinkedTagHelpers.EnumerateLinks(doc, view))
+            {
+                HashSet<long> linkedAlreadyTagged = skipTagged
+                    ? LinkedTagHelpers.CollectAlreadyTaggedLinkedIds(doc, view, link.Instance.Id, TargetCategory)
+                    : new HashSet<long>();
+
+                FilteredElementCollector linkedWalls;
+                try
+                {
+                    linkedWalls = new FilteredElementCollector(link.Document)
+                        .OfCategory(TargetCategory)
+                        .OfClass(typeof(Wall));
+                }
+                catch (Exception ex)
+                {
+                    result.Errors.Add($"Linked doc '{link.Document.Title}': {ex.Message}");
+                    continue;
+                }
+
+                // Per-link openings (doors+windows hosted on linked walls — all
+                // in the same link doc). Indexed by the linked wall's element id.
+                var linkedWallOpenings = new Dictionary<long, List<double>>();
+                CollectOpeningsOnLinkedWalls(link.Document, BuiltInCategory.OST_Doors, linkedWallOpenings);
+                CollectOpeningsOnLinkedWalls(link.Document, BuiltInCategory.OST_Windows, linkedWallOpenings);
+
+                foreach (Wall wall in linkedWalls)
+                {
+                    try
+                    {
+                        if (skipTagged && linkedAlreadyTagged.Contains(wall.Id.Value))
+                        {
+                            result.Skipped++;
+                            continue;
+                        }
+
+                        LocationCurve locCurve = wall.Location as LocationCurve;
+                        if (locCurve == null) continue;
+                        Curve curve = locCurve.Curve;
+                        if (curve == null) continue;
+                        double wallLength = curve.Length;
+                        if (wallLength < 0.01) continue;
+
+                        // Wall tangent in link coords; rotate the perpendicular
+                        // vector through the link transform to get a host-space
+                        // perpendicular for the tag-head offset.
+                        XYZ tangentLink = (curve.GetEndPoint(1) - curve.GetEndPoint(0)).Normalize();
+                        XYZ perpLink = tangentLink.CrossProduct(XYZ.BasisZ).Normalize();
+                        XYZ perpHost = link.Transform.OfVector(perpLink).Normalize();
+
+                        List<double> openings = linkedWallOpenings.ContainsKey(wall.Id.Value)
+                            ? linkedWallOpenings[wall.Id.Value]
+                            : new List<double>();
+
+                        // Segment using the link's own doc (no phase) — rooms
+                        // that segment a linked wall live in the linked file.
+                        var segments = SegmentWallByRooms(link.Document, curve, wallLength, null);
+
+                        foreach (var segment in segments)
+                        {
+                            var tagParams = FindAllTagsInSegment(segment.StartT, segment.EndT, wallLength, openings);
+
+                            foreach (double tagT in tagParams)
+                            {
+                                XYZ anchorLink = curve.Evaluate(tagT, true);
+                                XYZ anchorHost = link.Transform.OfPoint(anchorLink);
+
+                                if (!TagHelpers.IsElementInCropRegion(view, anchorHost)) continue;
+
+                                XYZ tagHeadHost = anchorHost + perpHost.Multiply(TAG_OFFSET_FEET);
+                                tagHeadHost = TagHelpers.ClampTagPointToCropRegion(view, tagHeadHost, CROP_MARGIN_FEET);
+
+                                Reference linkedRef = LinkedTagHelpers.BuildLinkedReference(wall, link.Instance);
+                                if (linkedRef == null)
+                                {
+                                    result.Errors.Add($"Could not build link reference for wall {wall.Id.Value}.");
+                                    continue;
+                                }
+
+                                var newTag = IndependentTag.Create(
+                                    doc, tagSymbol.Id, view.Id,
+                                    linkedRef, true, TagOrientation.Horizontal, tagHeadHost);
+
+                                if (newTag != null)
+                                {
+                                    newTag.LeaderEndCondition = LeaderEndCondition.Free;
+                                    newTag.TagHeadPosition = tagHeadHost;
+                                    result.Tagged++;
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        result.Errors.Add($"Linked wall {wall.Id.Value}: {ex.Message}");
+                    }
+                }
+            }
+
             return result;
+        }
+
+        // ============================================================================
+        // COLLECT OPENINGS ON LINKED WALLS
+        // ============================================================================
+        // Same logic as CollectOpeningsOnWalls but operates on a *single* link
+        // document (no view filter — the host view doesn't belong to the link).
+        // Both the wall and the door/window are in the same link doc, so
+        // parameter math runs in pure link coords.
+        // ============================================================================
+        private void CollectOpeningsOnLinkedWalls(
+            Document linkDoc, BuiltInCategory openingCategory,
+            Dictionary<long, List<double>> wallOpenings)
+        {
+            FilteredElementCollector collector;
+            try
+            {
+                collector = new FilteredElementCollector(linkDoc)
+                    .OfCategory(openingCategory)
+                    .OfClass(typeof(FamilyInstance));
+            }
+            catch
+            {
+                return;
+            }
+
+            foreach (FamilyInstance fi in collector)
+            {
+                try
+                {
+                    Wall hostWall = fi.Host as Wall;
+                    if (hostWall == null) continue;
+                    LocationPoint fiLoc = fi.Location as LocationPoint;
+                    if (fiLoc == null) continue;
+                    LocationCurve wallLocCurve = hostWall.Location as LocationCurve;
+                    if (wallLocCurve == null) continue;
+                    Curve wallCurve = wallLocCurve.Curve;
+                    if (wallCurve == null) continue;
+
+                    IntersectionResult projection = wallCurve.Project(fiLoc.Point);
+                    if (projection == null) continue;
+
+                    double rawParam = projection.Parameter;
+                    double startParam = wallCurve.GetEndParameter(0);
+                    double endParam = wallCurve.GetEndParameter(1);
+                    double paramRange = endParam - startParam;
+                    double normalizedT = paramRange > 0 ? (rawParam - startParam) / paramRange : 0.5;
+
+                    long wallId = hostWall.Id.Value;
+                    if (!wallOpenings.ContainsKey(wallId))
+                        wallOpenings[wallId] = new List<double>();
+                    wallOpenings[wallId].Add(normalizedT);
+                }
+                catch { }
+            }
         }
 
         // ============================================================================

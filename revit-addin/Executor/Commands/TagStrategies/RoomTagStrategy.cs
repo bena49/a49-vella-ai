@@ -136,7 +136,170 @@ namespace A49AIRevitAssistant.Executor.Commands.TagStrategies
                 }
             }
 
+            // ====================================================================
+            // LINKED PASS — rooms in linked Revit models.
+            //
+            // Plan views: NewRoomTag accepts LinkElementId(linkInstanceId,
+            //   linkedRoomId) directly — Revit's "tag rooms in linked file"
+            //   feature exposes exactly this.
+            // Elev/Section: IndependentTag.Create with a link reference, tag
+            //   point assembled from transformed room location + room.Level
+            //   elevation (transformed) + AFF height.
+            // ====================================================================
+            foreach (var link in LinkedTagHelpers.EnumerateLinks(doc, view))
+            {
+                // Pre-collect already-tagged linked rooms (BOTH paths). For
+                // plan tags we inspect SpatialElementTag.TaggedRoomId which
+                // is a LinkElementId carrying link instance + linked room id.
+                // For elev/section IndependentTag we use the generic helper.
+                HashSet<long> linkedAlreadyTagged = new HashSet<long>();
+                if (skipTagged)
+                {
+                    try
+                    {
+                        var roomTagCollector = new FilteredElementCollector(doc, view.Id)
+                            .OfClass(typeof(SpatialElementTag));
+                        foreach (SpatialElementTag existingTag in roomTagCollector)
+                        {
+                            try
+                            {
+                                if (!(existingTag is RoomTag rt)) continue;
+                                LinkElementId leid = rt.TaggedRoomId;
+                                if (leid == null) continue;
+                                if (leid.LinkInstanceId == link.Instance.Id &&
+                                    leid.LinkedElementId != ElementId.InvalidElementId)
+                                {
+                                    linkedAlreadyTagged.Add(leid.LinkedElementId.Value);
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                    catch { }
+
+                    // Plus IndependentTag references (elev/section room tags
+                    // we placed in earlier runs).
+                    foreach (long id in LinkedTagHelpers.CollectAlreadyTaggedLinkedIds(
+                                 doc, view, link.Instance.Id, TargetCategory))
+                    {
+                        linkedAlreadyTagged.Add(id);
+                    }
+                }
+
+                FilteredElementCollector linkedRooms;
+                try
+                {
+                    linkedRooms = new FilteredElementCollector(link.Document)
+                        .OfCategory(TargetCategory)
+                        .WhereElementIsNotElementType();
+                }
+                catch (Exception ex)
+                {
+                    result.Errors.Add($"Linked doc '{link.Document.Title}': {ex.Message}");
+                    continue;
+                }
+
+                foreach (Room room in linkedRooms)
+                {
+                    try
+                    {
+                        if (room.Area <= 0 || room.Location == null) continue;
+
+                        if (skipTagged && linkedAlreadyTagged.Contains(room.Id.Value))
+                        {
+                            result.Skipped++;
+                            continue;
+                        }
+
+                        if (isPlan)
+                        {
+                            if (TagLinkedRoomInPlan(doc, view, room, tagSymbol, link))
+                                result.Tagged++;
+                        }
+                        else
+                        {
+                            if (TagLinkedRoomInElevSection(doc, view, room, tagSymbol, cropBox, link))
+                                result.Tagged++;
+                            else
+                                result.Skipped++;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        result.Errors.Add($"Linked room {room.Id.Value}: {ex.Message}");
+                    }
+                }
+            }
+
             return result;
+        }
+
+        // ============================================================================
+        // LINKED ROOM — PLAN VIEW
+        // ============================================================================
+        // Uses NewRoomTag with a LinkElementId that carries (linkInstanceId,
+        // linkedRoomId). The UV is in host-world coords (transform applied to
+        // the room's location point first).
+        // ============================================================================
+        private bool TagLinkedRoomInPlan(Document hostDoc, View view, Room room,
+                                        FamilySymbol tagSymbol, LinkContext link)
+        {
+            var locPt = room.Location as LocationPoint;
+            if (locPt == null) return false;
+
+            XYZ pointHost = link.Transform.OfPoint(locPt.Point);
+            var linkId = new LinkElementId(link.Instance.Id, room.Id);
+            var uv = new UV(pointHost.X, pointHost.Y);
+
+            RoomTag newTag = hostDoc.Create.NewRoomTag(linkId, uv, view.Id);
+            if (newTag == null) return false;
+
+            try
+            {
+                if (newTag.GetTypeId() != tagSymbol.Id)
+                    newTag.ChangeTypeId(tagSymbol.Id);
+            }
+            catch { }
+            try { newTag.HasLeader = false; } catch { }
+
+            return true;
+        }
+
+        // ============================================================================
+        // LINKED ROOM — ELEVATION / SECTION
+        // ============================================================================
+        private bool TagLinkedRoomInElevSection(Document hostDoc, View view, Room room,
+                                                FamilySymbol tagSymbol, BoundingBoxXYZ cropBox,
+                                                LinkContext link)
+        {
+            var locPt = room.Location as LocationPoint;
+            if (locPt == null) return false;
+
+            // XY: transform the room's location point into host coords.
+            XYZ pointHost = link.Transform.OfPoint(locPt.Point);
+
+            // Z: room.Level lives in the link doc. Build a link-coord point at
+            // (locPt.X, locPt.Y, level.Elevation + AFF) and transform that —
+            // the link transform handles any link Z-offset uniformly.
+            double levelZLink = (room.Level != null)
+                ? room.Level.Elevation + TAG_HEIGHT_AFF_FEET
+                : locPt.Point.Z + TAG_HEIGHT_AFF_FEET;
+            XYZ tagPointLink = new XYZ(locPt.Point.X, locPt.Point.Y, levelZLink);
+            XYZ tagPointHost = link.Transform.OfPoint(tagPointLink);
+
+            // Use the transformed point for both XY (matches pointHost above
+            // since the transform is consistent) and Z. Crop box check uses host coords.
+            if (cropBox != null && !IsPointInCropBox(tagPointHost, view, cropBox))
+                return false;
+
+            Reference linkedRef = LinkedTagHelpers.BuildLinkedReference(room, link.Instance);
+            if (linkedRef == null) return false;
+
+            var newTag = IndependentTag.Create(
+                hostDoc, tagSymbol.Id, view.Id,
+                linkedRef, false, TagOrientation.Horizontal, tagPointHost);
+
+            return newTag != null;
         }
 
         // ============================================================================

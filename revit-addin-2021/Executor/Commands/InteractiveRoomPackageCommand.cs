@@ -312,16 +312,23 @@ namespace A49AIRevitAssistant.Executor.Commands
                         elevView.ViewTemplateId = elevTemplate.Id;
                     }
 
-                    // Crop the elevation to the room's actual bounds. Revit's
-                    // default crop after CreateElevation extends to whatever
-                    // geometry the marker can "see" in 3D, which for linked
-                    // rooms is usually the entire model — hence the staff
-                    // report of "elevation height crop and view limits are
-                    // off." Setting it explicitly makes the result tight and
-                    // identical for host vs linked rooms.
-                    SetElevationCropToRoom(elevView, _roomBboxFullHost);
-
                     generatedElevations.Add(elevView);
+                }
+
+                // 💥 REVIT 2021 SAFETY: regenerate BEFORE modifying CropBox on the
+                // freshly-created elevations. Without this, Revit 2021's view state
+                // for the new elevations is partially-resolved when we set the crop
+                // box, which can leave the views in a corrupted internal state and
+                // trigger seemingly-random crashes later (during render, view
+                // activation, or saving). The regen forces Revit to fully resolve
+                // the elevations' geometry first, then we apply the room-bound crop
+                // safely. Revit 2024/2025 tolerate the unsafe order; 2021 doesn't.
+                try { doc.Regenerate(); } catch { /* defensive: continue with default crop */ }
+
+                foreach (View elev in generatedElevations)
+                {
+                    if (elev is ViewSection elevSec)
+                        SetElevationCropToRoom(elevSec, _roomBboxFullHost);
                 }
 
                 // B. CREATE SHEET & PLACE VIEWS
@@ -554,8 +561,21 @@ namespace A49AIRevitAssistant.Executor.Commands
                 double padXY = 200.0 / 304.8;
                 double padZ = 300.0 / 304.8;
 
-                crop.Min = new XYZ(minX - padXY, minY - padXY, minZ - padZ);
-                crop.Max = new XYZ(maxX + padXY, maxY + padXY, maxZ + padZ);
+                XYZ newMin = new XYZ(minX - padXY, minY - padXY, minZ - padZ);
+                XYZ newMax = new XYZ(maxX + padXY, maxY + padXY, maxZ + padZ);
+
+                // Defensive: if any axis collapsed to zero (e.g. degenerate room
+                // bbox or the projected room sat entirely behind the elevation
+                // cut plane), don't write a degenerate CropBox — that's the
+                // classic recipe for corrupting the view's internal state.
+                const double MIN_EXTENT_FT = 0.05; // ~15mm
+                if ((newMax.X - newMin.X) < MIN_EXTENT_FT ||
+                    (newMax.Y - newMin.Y) < MIN_EXTENT_FT ||
+                    (newMax.Z - newMin.Z) < MIN_EXTENT_FT)
+                    return;
+
+                crop.Min = newMin;
+                crop.Max = newMax;
                 elevView.CropBox = crop;
                 elevView.CropBoxActive = true;
             }

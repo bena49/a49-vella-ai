@@ -42,7 +42,7 @@
 	<ItemGroup>
 		<PackageReference Include="Revit_All_Main_Versions_API_x64" Version="2021.*" />
 		<Reference Include="A49LicenseManager">
-		  <HintPath>..\..\..\Users\Ben Pongprot\OneDrive\00_REVIT API\00_A49 License Manager\A49LicenseManager.dll</HintPath>
+		  <HintPath>C:\Users\Bunda.A49local\OneDrive\00_REVIT API\00_A49 License Manager\A49LicenseManager.dll</HintPath>
 		</Reference>
 		<Reference Include="System.Net.Http" />
 	</ItemGroup>
@@ -52,11 +52,7 @@
 	</ItemGroup>
 
 	<Target Name="CopyWebView2Loader" AfterTargets="Build">
-		<Copy
-			SourceFiles="$(OutDir)runtimes\win-x64\native\WebView2Loader.dll"
-			DestinationFolder="$(OutDir)"
-			SkipUnchangedFiles="true"
-			ContinueOnError="true" />
+		<Copy SourceFiles="$(OutDir)runtimes\win-x64\native\WebView2Loader.dll" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" ContinueOnError="true" />
 	</Target>
 
 	<!--
@@ -70,14 +66,7 @@
 			<RevitVersion Condition="'$(Configuration)' == 'RR2021'">2021</RevitVersion>
 			<RevitAddinDir>C:\ProgramData\Autodesk\Revit\Addins\$(RevitVersion)\A49AIRevitAssistantAddin</RevitAddinDir>
 		</PropertyGroup>
-		<Exec
-			Command='xcopy /Y /I /E /Q "$(TargetDir)*" "$(RevitAddinDir)\"'
-			Condition="'$(RevitVersion)' != '' And Exists('C:\ProgramData\Autodesk\Revit\Addins\$(RevitVersion)\')"
-			ContinueOnError="true"
-			IgnoreExitCode="true" />
-		<Message
-			Condition="'$(RevitVersion)' != '' And Exists('C:\ProgramData\Autodesk\Revit\Addins\$(RevitVersion)\')"
-			Text="Vella → deployed $(TargetFramework) build to $(RevitAddinDir)\"
-			Importance="high" />
+		<Exec Command="xcopy /Y /I /E /Q &quot;$(TargetDir)*&quot; &quot;$(RevitAddinDir)\&quot;" Condition="'$(RevitVersion)' != '' And Exists('C:\ProgramData\Autodesk\Revit\Addins\$(RevitVersion)\')" ContinueOnError="true" IgnoreExitCode="true" />
+		<Message Condition="'$(RevitVersion)' != '' And Exists('C:\ProgramData\Autodesk\Revit\Addins\$(RevitVersion)\')" Text="Vella → deployed $(TargetFramework) build to $(RevitAddinDir)\" Importance="high" />
 	</Target>
 </Project>

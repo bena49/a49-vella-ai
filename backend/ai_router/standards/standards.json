@@ -61,7 +61,7 @@
       "stage": "PD",
       "discipline": "ARCHITECTURE",
       "project_phase": "01 - PRE-DESIGN",
-      "view_set": "A1_FLOOR PLANS"
+      "view_set": "05_PR"
     },
     {
       "name": "A49_PD_SITE PLAN",
@@ -139,7 +139,7 @@
       "stage": "DD",
       "discipline": "ARCHITECTURE",
       "project_phase": "02 - DESIGN DEVELOPMENT",
-      "view_set": "A1_FLOOR PLANS"
+      "view_set": "05_PR"
     },
     {
       "name": "A49_DD_SITE PLAN",
